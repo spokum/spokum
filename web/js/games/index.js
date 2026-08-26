@@ -92,7 +92,7 @@ function orbit(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     const stars = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.6 + 0.4 }));
     let state = {
-      x: w / 2, lives: 3, score: 0, cool: 0, wave: 0, spawn: 0, over: false,
+      x: w / 2, lives: 3, score: 0, cool: 0, wave: 0, spawn: 0, over: false, missed: 0,
       bullets: [], enemies: [], shots: [], sparks: []
     };
     let width = w;
@@ -101,7 +101,7 @@ function orbit(canvas, report) {
     let target = null;
 
     const reset = () => {
-      state = { x: width / 2, lives: 3, score: 0, cool: 0, wave: 0, spawn: 0, over: false, bullets: [], enemies: [], shots: [], sparks: [] };
+      state = { x: width / 2, lives: 3, score: 0, cool: 0, wave: 0, spawn: 0, over: false, missed: 0, bullets: [], enemies: [], shots: [], sparks: [] };
     };
 
     const boom = (x, y, color) => {
@@ -151,19 +151,25 @@ function orbit(canvas, report) {
           state.wave += 1;
           state.spawn = Math.max(0.35, 1.25 - state.wave * 0.02);
           const tough = state.wave > 12 && Math.random() < 0.3;
+          const hunter = Math.random() < 0.45;
           state.enemies.push({
             x: 30 + Math.random() * (width - 60),
             y: -30,
             vx: (Math.random() - 0.5) * 90,
             hp: tough ? 3 : 1,
             r: tough ? 20 : 15,
-            fire: Math.random() * 2 + 0.6,
-            tough
+            fire: Math.random() * 1.6 + 0.5,
+            tough,
+            hunter
           });
         }
 
         state.bullets = state.bullets.filter((b) => (b.y -= 620 * dt) > -20);
-        state.shots = state.shots.filter((s) => (s.y += 260 * dt) < height + 20);
+        for (const shot of state.shots) {
+          shot.x += shot.vx * dt;
+          shot.y += shot.vy * dt;
+        }
+        state.shots = state.shots.filter((s) => s.y < height + 20 && s.x > -30 && s.x < width + 30);
         state.sparks = state.sparks.filter((p) => {
           p.x += p.vx * dt;
           p.y += p.vy * dt;
@@ -171,14 +177,35 @@ function orbit(canvas, report) {
           return p.life > 0;
         });
 
+        const gunY = height - 46;
         for (const enemy of state.enemies) {
           enemy.y += (60 + state.wave * 1.4) * dt;
+          if (enemy.hunter) {
+            enemy.vx += Math.sign(state.x - enemy.x) * 150 * dt;
+            enemy.vx = Math.max(-190, Math.min(190, enemy.vx));
+          }
           enemy.x += enemy.vx * dt;
-          if (enemy.x < 24 || enemy.x > width - 24) enemy.vx *= -1;
+          if (enemy.x < 24) {
+            enemy.x = 24;
+            enemy.vx = Math.abs(enemy.vx);
+          }
+          if (enemy.x > width - 24) {
+            enemy.x = width - 24;
+            enemy.vx = -Math.abs(enemy.vx);
+          }
           enemy.fire -= dt;
           if (enemy.fire <= 0) {
-            enemy.fire = 1.4 + Math.random() * 1.6;
-            state.shots.push({ x: enemy.x, y: enemy.y + 16 });
+            enemy.fire = 1.1 + Math.random() * 1.4;
+            const dx = state.x - enemy.x;
+            const dy = gunY - (enemy.y + 16);
+            const length = Math.hypot(dx, dy) || 1;
+            const speed = 250 + state.wave * 2;
+            state.shots.push({
+              x: enemy.x,
+              y: enemy.y + 16,
+              vx: (dx / length) * speed,
+              vy: Math.max(60, (dy / length) * speed)
+            });
           }
           for (const bullet of state.bullets) {
             if (Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) < enemy.r + 4) {
@@ -195,6 +222,12 @@ function orbit(canvas, report) {
             state.lives -= 1;
             boom(state.x, height - 46, '#ff8080');
           }
+        }
+        const escaped = state.enemies.filter((e) => e.hp > 0 && e.y >= height + 40).length;
+        if (escaped) {
+          state.lives -= escaped;
+          state.missed += escaped;
+          boom(width / 2, height - 20, '#ff8080');
         }
         state.enemies = state.enemies.filter((e) => e.hp > 0 && e.y < height + 40);
 
@@ -253,7 +286,11 @@ function orbit(canvas, report) {
         ctx.closePath();
         ctx.fill();
 
-        hud(ctx, cw, [`Очки ${state.score}`, `Жизни ${'|'.repeat(Math.max(0, state.lives))}`]);
+        hud(ctx, cw, [
+          `Очки ${state.score}`,
+          `Жизни ${'|'.repeat(Math.max(0, state.lives))}`,
+          'Не пропускай врагов вниз'
+        ]);
         if (state.over) overText(ctx, cw, ch, `Итог ${state.score}`, 'Нажмите, чтобы сыграть снова');
       }
     };
