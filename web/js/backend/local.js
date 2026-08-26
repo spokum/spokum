@@ -107,6 +107,26 @@ function log(actorId, action, meta) {
   state.audit = state.audit.slice(0, 300);
 }
 
+function normalizePins(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((pin, index) => {
+      if (typeof pin === 'string') {
+        return { image: pin, x: [12, 78, 12, 78][index] ?? 50, y: [16, 16, 66, 66][index] ?? 50 };
+      }
+      if (pin && typeof pin.image === 'string') {
+        return {
+          image: pin.image,
+          x: Math.min(94, Math.max(2, Number(pin.x) || 50)),
+          y: Math.min(90, Math.max(2, Number(pin.y) || 50))
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function pub(user) {
   if (!user) return null;
   return {
@@ -125,7 +145,8 @@ function pub(user) {
     mutedUntil: user.mutedUntil,
     createdAt: user.createdAt,
     lastSeen: user.lastSeen,
-    pins: Array.isArray(user.pins) ? user.pins : [],
+    pins: normalizePins(user.pins),
+    banner: user.banner || null,
     statusIcon: user.statusIcon || null,
     premiumUntil: user.premiumUntil || 0,
     premiumReason: user.premiumReason || '',
@@ -250,7 +271,8 @@ export const local = {
       premiumReason: '',
       premiumGrantedAt: 0,
       pins: [],
-      statusIcon: null
+      statusIcon: null,
+      banner: null
     };
     state.users.push(user);
     const token = uid() + uid();
@@ -313,7 +335,8 @@ export const local = {
     if (patch.theme != null) user.theme = patch.theme;
     if (patch.accent != null) user.accent = patch.accent;
     if (patch.avatar !== undefined) user.avatar = patch.avatar;
-    if (patch.pins !== undefined) user.pins = Array.isArray(patch.pins) ? patch.pins.slice(0, 4) : [];
+    if (patch.pins !== undefined) user.pins = normalizePins(patch.pins);
+    if (patch.banner !== undefined) user.banner = patch.banner;
     if (patch.statusIcon !== undefined) user.statusIcon = patch.statusIcon;
     save();
     return { user: priv(user) };

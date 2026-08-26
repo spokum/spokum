@@ -11,6 +11,7 @@ function fit(canvas) {
 function runner(canvas, setup) {
   let frame = 0;
   let stopped = false;
+  let paused = false;
   let size = fit(canvas);
   let game = setup(size);
   const cleanups = [];
@@ -27,13 +28,36 @@ function runner(canvas, setup) {
   };
   game.bind?.(bind, canvas);
 
+  const swallow = (event) => event.preventDefault();
+  for (const type of ['touchstart', 'touchmove', 'touchend', 'gesturestart', 'contextmenu']) {
+    bind(type, swallow);
+  }
+
+  const onHide = () => {
+    if (document.hidden) paused = true;
+  };
+  const onBlur = () => {
+    paused = true;
+  };
+  const resume = () => {
+    if (!paused) return;
+    paused = false;
+    last = performance.now();
+  };
+  document.addEventListener('visibilitychange', onHide);
+  window.addEventListener('blur', onBlur);
+  bind('pointerdown', resume);
+  cleanups.push(() => document.removeEventListener('visibilitychange', onHide));
+  cleanups.push(() => window.removeEventListener('blur', onBlur));
+
   let last = performance.now();
   const tick = (now) => {
     if (stopped) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    game.update(dt, size);
+    if (!paused) game.update(dt, size);
     game.draw(size.ctx, size);
+    if (paused) pauseOverlay(size.ctx, size);
     frame = requestAnimationFrame(tick);
   };
   frame = requestAnimationFrame(tick);
@@ -48,6 +72,19 @@ function runner(canvas, setup) {
       game.destroy?.();
     }
   };
+}
+
+function pauseOverlay(ctx, size) {
+  ctx.fillStyle = 'rgba(5,7,13,.78)';
+  ctx.fillRect(0, 0, size.w, size.h);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#eef2fb';
+  ctx.font = '700 24px Inter, system-ui, sans-serif';
+  ctx.fillText('Пауза', size.w / 2, size.h / 2 - 6);
+  ctx.font = '500 14px Inter, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(238,242,251,.65)';
+  ctx.fillText('Коснитесь экрана, чтобы продолжить', size.w / 2, size.h / 2 + 22);
+  ctx.textAlign = 'start';
 }
 
 function pointerX(canvas, event) {
@@ -120,10 +157,23 @@ function orbit(canvas, report) {
         height = size.h;
       },
       bind(bind, node) {
-        bind('pointermove', (event) => {
+        const aim = (event) => {
+          event.preventDefault();
+          target = pointerX(node, event);
+        };
+        bind('pointermove', aim);
+        bind('touchmove', aim);
+        bind('touchstart', (event) => {
+          event.preventDefault();
+          if (state.over) {
+            reset();
+            return;
+          }
           target = pointerX(node, event);
         });
         bind('pointerdown', (event) => {
+          event.preventDefault();
+          node.setPointerCapture?.(event.pointerId);
           if (state.over) {
             reset();
             return;

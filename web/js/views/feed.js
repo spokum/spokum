@@ -192,7 +192,7 @@ export function postCard(post, refresh, options = {}) {
           </div>
           <div class="tiny muted truncate">@${esc(post.author.username)} · ${timeAgo(post.createdAt)}</div>
         </div>
-        <span class="mood-tag" style="${moodStyle(post.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span>
+        <span class="mood-tag" style="${moodStyle(post.mood)}" title="${esc(mood.label)}"><i class="mood-dot"></i><span class="mood-label">${esc(mood.label)}</span></span>
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 18)}</button>
       </div>
       ${post.text ? `<p class="post-text">${esc(post.text)}</p>` : ''}

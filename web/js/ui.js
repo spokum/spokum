@@ -29,21 +29,27 @@ export function hasStory(user) {
   return !!user && storyOwners.has(String(user.id));
 }
 
-export function avatar(user, size = 40, options = {}) {
+export function avatar(user, size = 40) {
   if (!user) return `<div class="avatar avatar-${size}" style="--h:220">?</div>`;
   const inner = user.avatar
     ? `<img src="${esc(user.avatar)}" alt="">`
     : esc(initials(user.displayName || user.username));
   const premium = isPremium(user) ? ' avatar-premium' : '';
   const ring = hasStory(user) ? ' avatar-story' : '';
-  const face = `<div class="avatar avatar-${size}${premium}${ring}" style="--h:${Number(user.hue) || 220}">${inner}</div>`;
+  return `<div class="avatar avatar-${size}${premium}${ring}" style="--h:${Number(user.hue) || 220}">${inner}</div>`;
+}
 
-  const pins = options.pins === false ? [] : (Array.isArray(user.pins) ? user.pins.filter(Boolean).slice(0, 4) : []);
-  if (!pins.length) return face;
+export function bannerStyle(user) {
+  if (user?.banner) return `background-image:url('${esc(user.banner)}')`;
+  const hue = Number(user?.hue) || 220;
+  return `background-image:linear-gradient(135deg, hsl(${hue} 30% 26%), hsl(${(hue + 50) % 360} 28% 16%))`;
+}
 
-  const slots = ['pin-tl', 'pin-tr', 'pin-bl', 'pin-br'];
-  const marks = pins.map((pin, index) => `<img class="avatar-pin ${slots[index]}" src="${esc(pin)}" alt="">`).join('');
-  return `<span class="avatar-wrap avatar-wrap-${size}">${face}${marks}</span>`;
+export function bannerPins(user) {
+  const pins = Array.isArray(user?.pins) ? user.pins : [];
+  return pins
+    .map((pin) => `<img class="banner-pin" src="${esc(pin.image)}" alt="" style="left:${Number(pin.x) || 50}%;top:${Number(pin.y) || 50}%">`)
+    .join('');
 }
 
 export function badges(user) {

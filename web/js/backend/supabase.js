@@ -4,6 +4,26 @@ const EMAIL_DOMAIN = 'spokum.app';
 const ms = (value) => (value ? Date.parse(value) : 0);
 const emailFor = (username) => `${username}@${EMAIL_DOMAIN}`;
 
+function normalizePins(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((pin, index) => {
+      if (typeof pin === 'string') {
+        return { image: pin, x: [12, 78, 12, 78][index] ?? 50, y: [16, 16, 66, 66][index] ?? 50 };
+      }
+      if (pin && typeof pin.image === 'string') {
+        return {
+          image: pin.image,
+          x: Math.min(94, Math.max(2, Number(pin.x) || 50)),
+          y: Math.min(90, Math.max(2, Number(pin.y) || 50))
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function shapeProfile(row, extra = {}) {
   if (!row) return null;
   return {
@@ -24,7 +44,8 @@ function shapeProfile(row, extra = {}) {
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
     lastSeen: ms(row.last_seen),
-    pins: Array.isArray(row.pins) ? row.pins : [],
+    pins: normalizePins(row.pins),
+    banner: row.banner || null,
     statusIcon: row.status_icon || null,
     premiumUntil: ms(row.premium_until),
     premiumReason: row.premium_reason || '',
@@ -203,7 +224,8 @@ export async function createSupabase(url, key) {
       if (patch.theme != null) fields.theme = patch.theme;
       if (patch.accent != null) fields.accent = patch.accent;
       if (patch.avatar !== undefined) fields.avatar = patch.avatar;
-      if (patch.pins !== undefined) fields.pins = patch.pins;
+      if (patch.pins !== undefined) fields.pins = normalizePins(patch.pins);
+      if (patch.banner !== undefined) fields.banner = patch.banner;
       if (patch.statusIcon !== undefined) fields.status_icon = patch.statusIcon;
       const { error } = await sb.from('profiles').update(fields).eq('id', id);
       guard(error);

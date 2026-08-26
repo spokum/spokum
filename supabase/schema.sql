@@ -167,6 +167,7 @@ create index if not exists game_scores_idx on public.game_scores (game, score de
 alter table public.profiles add column if not exists premium_until timestamptz;
 alter table public.profiles add column if not exists pins jsonb not null default '[]'::jsonb;
 alter table public.profiles add column if not exists status_icon text;
+alter table public.profiles add column if not exists banner text;
 alter table public.profiles add column if not exists premium_reason text not null default '';
 alter table public.profiles add column if not exists premium_granted_at timestamptz;
 
