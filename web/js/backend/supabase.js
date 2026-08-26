@@ -66,6 +66,12 @@ function guard(error) {
   if (/duplicate key/i.test(text) && /username/i.test(text)) throw new Error('Юзернейм занят');
   if (/already registered|User already/i.test(text)) throw new Error('Такой аккаунт уже есть');
   if (/Invalid login credentials/i.test(text)) throw new Error('Неверный логин или пароль');
+  if (/signups? (are )?disabled|signups not allowed/i.test(text)) {
+    throw new Error('В Supabase выключена регистрация: Authentication → Sign In / Providers → Email → включить Allow new users to sign up');
+  }
+  if (/email logins are disabled|email provider/i.test(text)) {
+    throw new Error('В Supabase выключен вход по почте: Authentication → Sign In / Providers → включить Email');
+  }
   throw new Error(text);
 }
 
