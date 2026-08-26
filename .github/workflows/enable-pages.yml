@@ -1,0 +1,66 @@
+name: Enable Pages
+
+on:
+  push:
+    branches:
+      - main
+      - Main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  administration: write
+  id-token: write
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check current Pages state
+        run: |
+          echo "=== GET pages ==="
+          curl -s -o body.json -w "status=%{http_code}\n" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages"
+          cat body.json
+          echo
+
+      - name: Create Pages site from gh-pages
+        continue-on-error: true
+        run: |
+          echo "=== POST pages ==="
+          curl -s -o create.json -w "status=%{http_code}\n" -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" \
+            -d '{"source":{"branch":"gh-pages","path":"/"}}'
+          cat create.json
+          echo
+
+      - name: Point existing site at gh-pages
+        continue-on-error: true
+        run: |
+          echo "=== PUT pages ==="
+          curl -s -o update.json -w "status=%{http_code}\n" -X PUT \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" \
+            -d '{"source":{"branch":"gh-pages","path":"/"}}'
+          cat update.json
+          echo
+
+      - name: Final Pages state
+        run: |
+          echo "=== GET pages again ==="
+          curl -s -o final.json -w "status=%{http_code}\n" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages"
+          cat final.json
+          echo
+          echo "=== repo visibility ==="
+          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}" \
+            | grep -E '"(private|visibility)"' || true
