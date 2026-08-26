@@ -12,7 +12,6 @@ permissions:
 
 concurrency:
   group: publish-site
-  cancel-in-progress: true
 
 jobs:
   publish:
