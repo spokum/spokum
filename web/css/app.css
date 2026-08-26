@@ -445,7 +445,7 @@ svg { display: block; flex: none; }
 
 [data-logo='custom'] .auth-logo,
 [data-logo='custom'] .brand-mark { background: none; box-shadow: none; padding: 0; }
-[data-logo='custom'] .auth-logo { width: 74px; height: 74px; border-radius: 22px; overflow: hidden; }
+[data-logo='custom'] .auth-logo { width: 74px; height: 74px; border-radius: 0; overflow: hidden; }
 [data-logo='custom'] .auth-logo img { width: 100%; height: 100%; }
 
 .empty { text-align: center; padding: 40px 20px; color: var(--muted); }

@@ -80,7 +80,7 @@ export function icon(name, size = 20, stroke = 1.9) {
 
 export function logoMark(size = 22) {
   if (logoSource) {
-    return `<img src="${logoSource}" alt="СпокУм" width="${size}" height="${size}" style="border-radius:26%;object-fit:cover;display:block">`;
+    return `<img src="${logoSource}" alt="СпокУм" width="${size}" height="${size}" style="object-fit:contain;display:block">`;
   }
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 14c2.5 0 2.5-4 5-4s2.5 4 5 4 2.5-4 5-4"/><path d="M6 18.5c2 0 2-2.5 4-2.5s2 2.5 4 2.5 2-2.5 4-2.5"/><circle cx="12" cy="5.5" r="2"/></svg>`;
 }
