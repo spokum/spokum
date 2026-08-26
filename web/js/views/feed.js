@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState } from '../ui.js';
@@ -39,7 +39,7 @@ function renderComposer(root) {
     <div class="card composer">
       <div class="row" style="align-items:flex-start">
         ${avatar(state.user, 40)}
-        <textarea class="textarea grow" maxlength="2000" placeholder="Поделись состоянием. Здесь не осудят"></textarea>
+        <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="Поделись состоянием. Здесь не осудят"></textarea>
       </div>
       <div data-preview></div>
       <div class="chips" data-moods style="margin:12px 0 10px"></div>
@@ -83,7 +83,7 @@ function renderComposer(root) {
   drawPreview();
 
   card.querySelector('[data-image]').onclick = async () => {
-    const image = await pickImage();
+    const image = await pickImage(isPremium(state.user) ? 2000 : 1400);
     if (image) {
       draft.image = image;
       drawPreview();

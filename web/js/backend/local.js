@@ -123,6 +123,9 @@ function pub(user) {
     mutedUntil: user.mutedUntil,
     createdAt: user.createdAt,
     lastSeen: user.lastSeen,
+    premiumUntil: user.premiumUntil || 0,
+    premiumReason: user.premiumReason || '',
+    premiumGrantedAt: user.premiumGrantedAt || 0,
     likes: state.likes.filter((l) => {
       const post = state.posts.find((p) => p.id === l.postId);
       return post && !post.removed && post.authorId === user.id;
@@ -238,7 +241,10 @@ export const local = {
       mutedUntil: 0,
       banReason: '',
       createdAt: Date.now(),
-      lastSeen: Date.now()
+      lastSeen: Date.now(),
+      premiumUntil: 0,
+      premiumReason: '',
+      premiumGrantedAt: 0
     };
     state.users.push(user);
     const token = uid() + uid();
@@ -372,7 +378,7 @@ export const local = {
   async createPost({ text, image, mood }) {
     const user = need();
     notMuted(user);
-    const body = String(text || '').trim().slice(0, 2000);
+    const body = String(text || '').trim().slice(0, 5000);
     if (!body && !image) fail('Пустой пост');
     const post = {
       id: next('posts'),
@@ -760,6 +766,32 @@ export const local = {
     log(admin.id, 'admin.state', { id, action, minutes });
     save();
     return { user: pub(target) };
+  },
+
+  async grantPremium(id, days, reason) {
+    const admin = needAdmin();
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Пользователь не найден');
+    if (!days || days < 1 || days > 365) fail('Срок от 1 до 365 дней');
+    const base = Math.max(target.premiumUntil || 0, Date.now());
+    target.premiumUntil = base + days * 86400000;
+    target.premiumReason = String(reason || '').trim() || 'Без причины';
+    target.premiumGrantedAt = Date.now();
+    log(admin.id, 'admin.premium.grant', { id, days, reason });
+    save();
+    return { until: target.premiumUntil };
+  },
+
+  async revokePremium(id) {
+    const admin = needAdmin();
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Пользователь не найден');
+    target.premiumUntil = 0;
+    target.premiumReason = '';
+    target.premiumGrantedAt = 0;
+    log(admin.id, 'admin.premium.revoke', { id });
+    save();
+    return { ok: true };
   },
 
   async adminActions() {

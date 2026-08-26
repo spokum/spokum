@@ -1,7 +1,7 @@
 import { api, state, setUser, applyAppearance, subscribe, initBackend, emit } from './store.js';
-import { el } from './util.js';
-import { icon, logoMark, setLogoSource } from './icons.js';
-import { toast } from './ui.js';
+import { el, esc, plural } from './util.js';
+import { icon, logoMark, setLogoSource, solidIcon } from './icons.js';
+import { toast, openSheet } from './ui.js';
 import { renderAuth } from './views/auth.js';
 
 const TABS = [
@@ -91,7 +91,10 @@ async function boot() {
     setUser(null);
   }
   if (!state.user) renderAuth(root, start);
-  else start();
+  else {
+    start();
+    announcePremium(state.user);
+  }
 }
 
 function start() {
@@ -118,12 +121,48 @@ function buildShell() {
   });
 }
 
+const PREMIUM_SEEN = 'spokum.premium.seen';
+
+function announcePremium(user) {
+  if (!user?.premiumUntil || user.premiumUntil <= Date.now()) return;
+  let seen = 0;
+  try {
+    seen = Number(localStorage.getItem(PREMIUM_SEEN) || 0);
+  } catch {}
+  if (seen >= user.premiumUntil) return;
+  try {
+    localStorage.setItem(PREMIUM_SEEN, String(user.premiumUntil));
+  } catch {}
+
+  const until = new Date(user.premiumUntil);
+  const days = Math.max(1, Math.ceil((user.premiumUntil - Date.now()) / 86400000));
+  const body = el(`
+    <div class="col center" style="text-align:center">
+      <div style="display:flex;justify-content:center;color:#c6b083">${solidIcon('crown', 46)}</div>
+      <div class="strong" style="font-size:20px">Вам выдали СпокУм Премиум</div>
+      <div class="col" style="gap:8px;text-align:left;margin-top:6px">
+        <div class="card" style="padding:12px">
+          <div class="tiny muted">Срок</div>
+          <div class="small strong" style="margin-top:2px">${days} ${plural(days, 'день', 'дня', 'дней').split(' ')[1]}, до ${esc(until.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+        </div>
+        <div class="card" style="padding:12px">
+          <div class="tiny muted">Причина</div>
+          <div class="small" style="margin-top:2px;line-height:1.45">${esc(user.premiumReason || 'Без причины')}</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" data-ok style="margin-top:6px">Спасибо</button>
+    </div>`);
+  const sheet = openSheet('', body);
+  body.querySelector('[data-ok]').onclick = () => sheet.close();
+}
+
 export async function refreshUser() {
   if (!state.user) return;
   try {
     const { user } = await api.me();
     if (!user) return;
-    const changed = ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified', 'mutedUntil', 'bannedUntil']
+    announcePremium(user);
+    const changed = ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified', 'mutedUntil', 'bannedUntil', 'premiumUntil']
       .some((key) => user[key] !== state.user[key]);
     setUser(user);
     if (changed && state.tab) openTab(state.tab);

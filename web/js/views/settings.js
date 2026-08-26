@@ -1,22 +1,26 @@
-import { api, state, setUser, applyAppearance } from '../store.js';
+import { api, state, setUser, applyAppearance, isPremium, PREMIUM_PERKS } from '../store.js';
 import { el, esc, fullDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, confirmSheet, emptyState } from '../ui.js';
 
 const THEMES = [
-  ['calm', 'Спокойная', 'linear-gradient(140deg,#161b22,#242c36)', '#dde2e8'],
-  ['paper', 'Бумага', 'linear-gradient(140deg,#fbfaf8,#e6e4de)', '#23272e'],
-  ['deep', 'Глубина', 'linear-gradient(140deg,#191624,#2c2640)', '#e2dded'],
-  ['dawn', 'Рассвет', 'linear-gradient(140deg,#1f1a16,#3a2c22)', '#ece2d9'],
-  ['neon', 'Неон', 'linear-gradient(140deg,#0d1220,#1b2f52)', '#5be6c7']
+  ['calm', 'Спокойная', 'linear-gradient(140deg,#161b22,#242c36)', '#dde2e8', false],
+  ['paper', 'Бумага', 'linear-gradient(140deg,#fbfaf8,#e6e4de)', '#23272e', false],
+  ['deep', 'Глубина', 'linear-gradient(140deg,#191624,#2c2640)', '#e2dded', false],
+  ['dawn', 'Рассвет', 'linear-gradient(140deg,#1f1a16,#3a2c22)', '#ece2d9', false],
+  ['neon', 'Неон', 'linear-gradient(140deg,#0d1220,#1b2f52)', '#5be6c7', false],
+  ['aurora', 'Аврора', 'linear-gradient(140deg,#101d23,#1d3f42)', '#8fe3c8', true],
+  ['sunset', 'Закат', 'linear-gradient(140deg,#211622,#4a2436)', '#e8a9a0', true]
 ];
 
 const ACCENTS = [
-  ['mint', '#87b7a3'],
-  ['violet', '#9c93c2'],
-  ['coral', '#c79486'],
-  ['sky', '#8badca'],
-  ['amber', '#c6b083']
+  ['mint', '#87b7a3', false],
+  ['violet', '#9c93c2', false],
+  ['coral', '#c79486', false],
+  ['sky', '#8badca', false],
+  ['amber', '#c6b083', false],
+  ['gold', '#d8b45c', true],
+  ['rose', '#d98fae', true]
 ];
 
 const PREF_KEY = 'spokum.prefs.v1';
@@ -52,6 +56,8 @@ export async function render(root) {
       </div>
     </div>
 
+    ${premiumCard()}
+
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('spark', 18)}<span class="strong small">Интерфейс</span></div>
       <label class="row between" style="padding:8px 0"><span class="small">Компактная лента</span><input type="checkbox" data-pref="compact" ${current.compact ? 'checked' : ''}></label>
@@ -78,12 +84,16 @@ export async function render(root) {
       <div class="tiny muted" style="margin-top:8px">версия 1.0</div>
     </div>`;
 
+  const premium = isPremium(state.user);
   const themes = root.querySelector('[data-themes]');
   themes.innerHTML = THEMES.map(
-    ([key, label, bg, ink]) => `<button class="swatch" data-theme="${key}" style="background:${bg}" aria-pressed="${document.documentElement.dataset.theme === key}"><span style="color:${ink}">${label}</span></button>`
+    ([key, label, bg, ink, locked]) => `<button class="swatch ${locked && !premium ? 'locked' : ''}" data-theme="${key}" data-locked="${locked && !premium}" style="background:${bg}" aria-pressed="${document.documentElement.dataset.theme === key}">
+      ${locked && !premium ? `<span class="swatch-lock">${icon('lock', 11, 2.4)}</span>` : ''}
+      <span style="color:${ink}">${label}</span></button>`
   ).join('');
   themes.querySelectorAll('[data-theme]').forEach((button) => {
     button.onclick = async () => {
+      if (button.dataset.locked === 'true') return toast('Тема доступна с подпиской СпокУм Премиум', 'err');
       document.documentElement.dataset.theme = button.dataset.theme;
       localStorage.setItem('spokum.theme', button.dataset.theme);
       themes.querySelectorAll('[data-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
@@ -98,10 +108,11 @@ export async function render(root) {
 
   const accents = root.querySelector('[data-accents]');
   accents.innerHTML = ACCENTS.map(
-    ([key, color]) => `<button class="accent-dot" data-accent="${key}" style="background:${color}" aria-pressed="${document.documentElement.dataset.accent === key}"></button>`
+    ([key, color, locked]) => `<button class="accent-dot ${locked && !premium ? 'locked' : ''}" data-accent="${key}" data-locked="${locked && !premium}" style="background:${color}" aria-pressed="${document.documentElement.dataset.accent === key}"></button>`
   ).join('');
   accents.querySelectorAll('[data-accent]').forEach((button) => {
     button.onclick = async () => {
+      if (button.dataset.locked === 'true') return toast('Цвет доступен с подпиской СпокУм Премиум', 'err');
       document.documentElement.dataset.accent = button.dataset.accent;
       localStorage.setItem('spokum.accent', button.dataset.accent);
       accents.querySelectorAll('[data-accent]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
@@ -132,6 +143,32 @@ export async function render(root) {
     local.reset();
     location.reload();
   });
+}
+
+function premiumCard() {
+  const user = state.user;
+  const active = isPremium(user);
+  const perks = PREMIUM_PERKS
+    .map(([glyph, title, text]) => `<div class="row" style="align-items:flex-start;gap:10px;padding:6px 0">
+      <span style="color:${active ? '#d8b45c' : 'var(--muted)'}">${icon(glyph, 17)}</span>
+      <div class="grow"><div class="small strong">${esc(title)}</div><div class="tiny muted">${esc(text)}</div></div></div>`)
+    .join('');
+
+  const head = active
+    ? `<div class="tiny muted">Действует до ${esc(new Date(user.premiumUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+       ${user.premiumReason ? `<div class="tiny muted" style="margin-top:2px">Выдан за: ${esc(user.premiumReason)}</div>` : ''}`
+    : '<div class="tiny muted">Подписку выдаёт администрация за вклад в сообщество</div>';
+
+  return `<div class="card appear ${active ? 'premium-card' : ''}">
+    <div class="row" style="margin-bottom:8px">
+      <span style="color:${active ? '#d8b45c' : 'var(--muted)'}">${icon('crown', 18)}</span>
+      <div class="grow"><span class="strong small">СпокУм Премиум</span></div>
+      <span class="pill ${active ? 'warn' : ''}">${active ? 'активен' : 'нет'}</span>
+    </div>
+    ${head}
+    <div class="divider"></div>
+    ${perks}
+  </div>`;
 }
 
 function openPassword() {

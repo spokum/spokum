@@ -316,7 +316,7 @@ export const routes = [
   ['POST', '/api/posts', (ctx) => {
     const user = requireUser(ctx);
     assertNotMuted(user);
-    const text = str(ctx.body.text || '', { max: 2000 });
+    const text = str(ctx.body.text || '', { max: 5000 });
     const image = media(ctx.body.image);
     if (!text && !image) bad('Пустой пост');
     const mood = oneOf(ctx.body.mood || 'calm', MOODS, 'mood');

@@ -1,5 +1,6 @@
 import { el, esc, initials } from './util.js';
 import { icon, solidIcon } from './icons.js';
+import { isPremium } from './store.js';
 
 let toastHost;
 
@@ -22,12 +23,14 @@ export function avatar(user, size = 40) {
   const inner = user.avatar
     ? `<img src="${esc(user.avatar)}" alt="">`
     : esc(initials(user.displayName || user.username));
-  return `<div class="avatar avatar-${size}" style="--h:${Number(user.hue) || 220}">${inner}</div>`;
+  const premium = isPremium(user) ? ' avatar-premium' : '';
+  return `<div class="avatar avatar-${size}${premium}" style="--h:${Number(user.hue) || 220}">${inner}</div>`;
 }
 
 export function badges(user) {
   if (!user) return '';
   const items = [];
+  if (isPremium(user)) items.push(badgeButton('badge-premium', solidIcon('crown', 12), 'СпокУм Премиум'));
   if (user.isVerified) items.push(badgeButton('badge-verified', icon('verified', 12, 2.4), 'Пользователь верифицирован'));
   if (user.isModerator) items.push(badgeButton('badge-mod', solidIcon('shield', 12), 'Модератор СпокУма'));
   if (user.isDeveloper) items.push(badgeButton('badge-dev', solidIcon('hammer', 12), 'Разработчик СпокУма'));

@@ -24,6 +24,9 @@ function shapeProfile(row, extra = {}) {
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
     lastSeen: ms(row.last_seen),
+    premiumUntil: ms(row.premium_until),
+    premiumReason: row.premium_reason || '',
+    premiumGrantedAt: ms(row.premium_granted_at),
     likes: Number(row.like_count ?? extra.likes ?? 0),
     posts: Number(row.post_count ?? extra.posts ?? 0),
     strikes: Number(row.strikes ?? 0)
@@ -281,7 +284,7 @@ export async function createSupabase(url, key) {
 
     async createPost({ text, image, mood }) {
       const id = requireUid();
-      const body = String(text || '').trim().slice(0, 2000);
+      const body = String(text || '').trim().slice(0, 5000);
       if (!body && !image) throw new Error('Пустой пост');
       const { data, error } = await sb
         .from('posts')
@@ -590,6 +593,18 @@ export async function createSupabase(url, key) {
       });
       guard(error);
       return { user: await profileById(id) };
+    },
+
+    async grantPremium(id, days, reason) {
+      const { data, error } = await sb.rpc('admin_grant_premium', { target: id, days, reason });
+      guard(error);
+      return { until: ms(data) };
+    },
+
+    async revokePremium(id) {
+      const { error } = await sb.rpc('admin_revoke_premium', { target: id });
+      guard(error);
+      return { ok: true };
     },
 
     async adminActions() {

@@ -87,14 +87,16 @@ function launch(game, done) {
     }
   };
 
-  let stop = () => {};
+  let handle = null;
   requestAnimationFrame(() => {
-    stop = game.mount(canvas, report);
+    handle = game.mount(canvas, report);
   });
 
-  stage.querySelector('[data-back]').onclick = () => {
-    stop();
+  stage.querySelector('[data-back]').onclick = async () => {
+    const current = handle ? handle.score() : 0;
+    handle?.stop();
     stage.remove();
+    if (current > 0) await report(current);
     done?.();
   };
 }

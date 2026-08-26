@@ -66,6 +66,22 @@ export function readFeedCache() {
   }
 }
 
+export function isPremium(user) {
+  return !!(user && user.premiumUntil && user.premiumUntil > Date.now());
+}
+
+export const PREMIUM_THEMES = ['aurora', 'sunset'];
+export const PREMIUM_ACCENTS = ['gold', 'rose'];
+
+export const PREMIUM_PERKS = [
+  ['crown', 'Значок премиума', 'Корона рядом с ником во всей сети'],
+  ['palette', 'Закрытые темы', 'Аврора и Закат, недоступные остальным'],
+  ['spark', 'Особые акценты', 'Золотой и розовый цвета интерфейса'],
+  ['profile', 'Свечение аватара', 'Мягкая подсветка вокруг фото профиля'],
+  ['feed', 'Длинные записи', 'До 5000 символов в посте вместо 2000'],
+  ['image', 'Фото без потерь', 'Снимки грузятся в максимальном качестве']
+];
+
 export function isOffline() {
   return !navigator.onLine;
 }

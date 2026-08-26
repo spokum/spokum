@@ -46,6 +46,7 @@ const paths = {
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>',
   pause: '<rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  crown: '<path d="M3 8.5l4.2 3.2L12 4.6l4.8 7.1L21 8.5l-1.7 9.9H4.7z"/><path d="M4.7 20.4h14.6"/>',
   star: '<path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z"/>',
   wave: '<path d="M2 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5 2-3 4-3"/>',
   leaf: '<path d="M11 20A7 7 0 0 1 4 13c0-6 8-10 16-10 0 8-4 15-9 15z"/><path d="M4 21c2-6 5-9 9-11"/>',
@@ -65,7 +66,8 @@ export function setLogoSource(url) {
 const solid = {
   hammer: '<path d="M13.9 1.6l8.5 8.5-3.3 3.3-8.5-8.5z"/><path d="M10.2 6.2L2.4 14a2.7 2.7 0 0 0 0 3.8l1.8 1.8a2.7 2.7 0 0 0 3.8 0l7.8-7.8z"/>',
   shield: '<path d="M12 1.6l9 3.9v6.1c0 5.5-3.8 10.3-9 11.6-5.2-1.3-9-6.1-9-11.6V5.5z"/>',
-  verified: '<circle cx="12" cy="12" r="10"/>'
+  verified: '<circle cx="12" cy="12" r="10"/>',
+  crown: '<path d="M2.4 7.7l4.9 3.6L12 3.9l4.7 7.4 4.9-3.6-2 11.1H4.4z"/><rect x="4.4" y="19.5" width="15.2" height="2.4" rx="1.2"/>'
 };
 
 export function solidIcon(name, size = 16) {

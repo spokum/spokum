@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS } from '../store.js';
+import { api, state, setUser, MOODS, isPremium } from '../store.js';
 import { el, esc, timeAgo, fullDate, debounce, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, promptSheet, emptyState } from '../ui.js';
@@ -154,7 +154,8 @@ function openUserActions(user, refresh) {
     <div class="col" style="gap:6px">
       <div class="row" style="padding:0 4px 8px">${avatar(user, 46)}
         <div class="grow"><div class="row" style="gap:6px"><span class="strong">${esc(user.displayName)}</span>${badges(user)}</div>
-        <div class="tiny muted">@${esc(user.username)}${user.strikes ? ` · предупреждений ${user.strikes}/3` : ''}</div></div></div>
+        <div class="tiny muted">@${esc(user.username)}${user.strikes ? ` · предупреждений ${user.strikes}/3` : ''}</div>
+        ${isPremium(user) ? `<div class="pill warn" style="margin-top:4px;display:inline-block">Премиум до ${esc(new Date(user.premiumUntil).toLocaleDateString('ru-RU'))}</div>` : ''}</div></div>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Открыть профиль</span></button>
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-flag="isVerified">${icon('verified', 18)}<span>${user.isVerified ? 'Снять галочку' : 'Выдать галочку'}</span></button>
@@ -162,6 +163,9 @@ function openUserActions(user, refresh) {
       <button class="list-item" data-flag="isDeveloper">${icon('hammer', 18)}<span>${user.isDeveloper ? 'Снять молоток' : 'Выдать молоток разработчика'}</span></button>
       <button class="list-item" data-flag="isAdmin">${icon('star', 18)}<span>${user.isAdmin ? 'Снять админку' : 'Выдать админку'}</span></button>
       <button class="list-item" data-clear>${icon('close', 18)}<span>Снять все статусы</span></button>
+      <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-premium style="color:#c6b083">${icon('crown', 18)}<span>Выдать СпокУм Премиум</span></button>
+      ${isPremium(user) ? `<button class="list-item" data-premium-off>${icon('close', 18)}<span>Забрать премиум</span></button>` : ''}
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-mute style="color:#c6b083">${icon('mute', 18)}<span>${user.mutedUntil > Date.now() ? 'Снять мут' : 'Замутить'}</span></button>
       <button class="list-item" data-ban style="color:#c98b8b">${icon('ban', 18)}<span>${user.bannedUntil > Date.now() ? 'Разблокировать' : 'Заблокировать'}</span></button>
@@ -220,8 +224,68 @@ function openUserActions(user, refresh) {
     }
   };
 
+  body.querySelector('[data-premium]').onclick = async () => {
+    sheet.close();
+    const days = await pickPremiumDays();
+    if (days == null) return;
+    const reason = await promptSheet({
+      title: 'За что премиум',
+      label: 'Причину увидит пользователь',
+      placeholder: 'Например: за помощь новичкам',
+      multiline: true
+    });
+    if (!reason) return;
+    try {
+      const { until } = await api.grantPremium(user.id, days, reason);
+      toast(`Премиум выдан до ${new Date(until).toLocaleDateString('ru-RU')}`);
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-premium-off]')?.addEventListener('click', async () => {
+    sheet.close();
+    if (!(await confirmSheet({ title: 'Забрать премиум', text: `${user.displayName} потеряет все привилегии`, confirm: 'Забрать', danger: true }))) return;
+    try {
+      await api.revokePremium(user.id);
+      toast('Премиум забран');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  });
+
   body.querySelector('[data-mute]').onclick = () => restrict('mute', user.mutedUntil > Date.now() ? 'unmute' : null);
   body.querySelector('[data-ban]').onclick = () => restrict('ban', user.bannedUntil > Date.now() ? 'unban' : null);
+}
+
+export function pickPremiumDays() {
+  return new Promise((done) => {
+    const options = [
+      [1, '1 день'],
+      [2, '2 дня'],
+      [3, '3 дня'],
+      [7, 'Неделя'],
+      [14, '2 недели'],
+      [30, 'Месяц'],
+      [90, '3 месяца'],
+      [180, 'Полгода'],
+      [365, 'Год']
+    ];
+    const body = el(`<div class="col" style="gap:6px">
+      <p class="tiny muted" style="margin:0 4px 4px">Если премиум уже есть, срок прибавится к текущему</p>
+      ${options.map(([value, label]) => `<button class="list-item" data-value="${value}">${icon('crown', 18)}<span>${label}</span></button>`).join('')}
+    </div>`);
+    const sheet = openSheet('На сколько выдать премиум', body, { onClose: () => done(null) });
+    body.querySelectorAll('[data-value]').forEach((button) => {
+      button.onclick = () => {
+        done(Number(button.dataset.value));
+        document.body.style.overflow = '';
+        sheet.sheet.parentElement.remove();
+      };
+    });
+  });
 }
 
 export function pickDuration() {

@@ -144,6 +144,10 @@ create table if not exists public.game_scores (
 );
 create index if not exists game_scores_idx on public.game_scores (game, score desc);
 
+alter table public.profiles add column if not exists premium_until timestamptz;
+alter table public.profiles add column if not exists premium_reason text not null default '';
+alter table public.profiles add column if not exists premium_granted_at timestamptz;
+
 create or replace function public.viewer_is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce((select is_admin from public.profiles where id = auth.uid()), false);
@@ -215,6 +219,9 @@ begin
   new.muted_until := old.muted_until;
   new.ban_reason := old.ban_reason;
   new.created_at := old.created_at;
+  new.premium_until := old.premium_until;
+  new.premium_reason := old.premium_reason;
+  new.premium_granted_at := old.premium_granted_at;
   return new;
 end;
 $$;
@@ -605,6 +612,51 @@ begin
 end;
 $$;
 
+create or replace function public.admin_grant_premium(target uuid, days integer, reason text)
+returns timestamptz language plpgsql security definer set search_path = public as $$
+declare
+  base timestamptz;
+  result timestamptz;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  if days is null or days < 1 or days > 365 then raise exception 'Срок от 1 до 365 дней'; end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+
+  select greatest(coalesce(premium_until, now()), now()) into base
+    from public.profiles where id = target;
+  if base is null then raise exception 'Пользователь не найден'; end if;
+
+  result := base + make_interval(days => days);
+
+  update public.profiles
+     set premium_until = result,
+         premium_reason = coalesce(nullif(trim(reason), ''), 'Без причины'),
+         premium_granted_at = now()
+   where id = target;
+
+  perform public.log_action('admin.premium.grant',
+    jsonb_build_object('user', target, 'days', days, 'reason', reason, 'until', result));
+
+  return result;
+end;
+$$;
+
+create or replace function public.admin_revoke_premium(target uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+
+  update public.profiles
+     set premium_until = null, premium_reason = '', premium_granted_at = null
+   where id = target;
+
+  perform public.log_action('admin.premium.revoke', jsonb_build_object('user', target));
+end;
+$$;
+
 create or replace function public.touch_presence()
 returns void language sql security definer set search_path = public as $$
   update public.profiles set last_seen = now() where id = auth.uid();
@@ -619,6 +671,8 @@ grant execute on function public.admin_set_state(uuid, text, integer, text) to a
 grant execute on function public.admin_revert(bigint, boolean, text) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
 grant execute on function public.admin_users(text) to authenticated;
+grant execute on function public.admin_grant_premium(uuid, integer, text) to authenticated;
+grant execute on function public.admin_revoke_premium(uuid) to authenticated;
 grant execute on function public.touch_presence() to authenticated;
 
 do $$

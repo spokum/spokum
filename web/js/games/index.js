@@ -38,12 +38,15 @@ function runner(canvas, setup) {
   };
   frame = requestAnimationFrame(tick);
 
-  return () => {
-    stopped = true;
-    cancelAnimationFrame(frame);
-    window.removeEventListener('resize', onResize);
-    cleanups.forEach((fn) => fn());
-    game.destroy?.();
+  return {
+    score: () => (game.score ? game.score() : 0),
+    stop: () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', onResize);
+      cleanups.forEach((fn) => fn());
+      game.destroy?.();
+    }
   };
 }
 
@@ -111,6 +114,7 @@ function orbit(canvas, report) {
     };
 
     return {
+      score: () => state.score,
       resize(size) {
         width = size.w;
         height = size.h;
@@ -392,6 +396,7 @@ function drift(canvas, report) {
     reset();
 
     return {
+      score: () => Math.round(state.score + state.dist / 12),
       resize(size) {
         width = size.w;
         height = size.h;
@@ -524,6 +529,7 @@ function pulse(canvas, report) {
     };
 
     return {
+      score: () => state.score,
       resize(size) {
         width = size.w;
         height = size.h;
@@ -616,6 +622,7 @@ function echo(canvas, report) {
     reset();
 
     return {
+      score: () => state.score,
       resize(size) {
         width = size.w;
         height = size.h;
@@ -691,6 +698,7 @@ function flow(canvas, report) {
     let state = { phase: 0, holding: false, score: 0, accuracy: 1, elapsed: 0, over: false };
 
     return {
+      score: () => Math.round(state.score),
       resize(size) {
         width = size.w;
         height = size.h;
