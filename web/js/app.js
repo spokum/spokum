@@ -24,19 +24,26 @@ const root = document.getElementById('app');
 let shell = null;
 let socket = null;
 
-function detectLogo() {
+const LOGO_FILES = ['logo.png', 'logo.jpg', 'logo.jpeg', 'logo.webp', 'logo.svg'];
+
+function tryLogo(url) {
   return new Promise((done) => {
     const probe = new Image();
-    probe.onload = () => {
-      setLogoSource('logo.png');
-      document.documentElement.dataset.logo = 'custom';
-      const link = document.querySelector('link[rel="icon"]');
-      if (link) link.href = 'logo.png';
-      done();
-    };
-    probe.onerror = () => done();
-    probe.src = 'logo.png';
+    probe.onload = () => done(true);
+    probe.onerror = () => done(false);
+    probe.src = url;
   });
+}
+
+async function detectLogo() {
+  for (const file of LOGO_FILES) {
+    if (!(await tryLogo(file))) continue;
+    setLogoSource(file);
+    document.documentElement.dataset.logo = 'custom';
+    const link = document.querySelector('link[rel="icon"]');
+    if (link) link.href = file;
+    return;
+  }
 }
 
 async function boot() {
