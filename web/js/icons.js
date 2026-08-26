@@ -20,7 +20,7 @@ const paths = {
   shield: '<path d="M12 2l8 3.5v6c0 5-3.4 9.3-8 10.5-4.6-1.2-8-5.5-8-10.5v-6z"/>',
   hammer: '<path d="M13.7 2.3l8 8-3 3-8-8z"/><path d="M10.9 6.1l-7.7 7.7a2.5 2.5 0 0 0 0 3.5l1.5 1.5a2.5 2.5 0 0 0 3.5 0l7.7-7.7"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
-  verified: '<path d="M12 2.5l2.4 2 3.1-.3 1.3 2.9 2.8 1.4-1 3 1 3-2.8 1.4-1.3 2.9-3.1-.3-2.4 2-2.4-2-3.1.3-1.3-2.9L2.4 16l1-3-1-3 2.8-1.4 1.3-2.9 3.1.3z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.4"/>',
+  verified: '<circle cx="12" cy="12" r="9"/><path d="M8.1 12.2l2.7 2.7 5.1-5.4"/>',
   ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
   mute: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/>',
   warn: '<path d="M12 3l9.5 16.5H2.5z"/><path d="M12 9v5M12 17.5h.01"/>',
@@ -55,10 +55,16 @@ const paths = {
   compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>'
 };
 
+let logoSource = null;
+
+export function setLogoSource(url) {
+  logoSource = url;
+}
+
 const solid = {
   hammer: '<path d="M13.9 1.6l8.5 8.5-3.3 3.3-8.5-8.5z"/><path d="M10.2 6.2L2.4 14a2.7 2.7 0 0 0 0 3.8l1.8 1.8a2.7 2.7 0 0 0 3.8 0l7.8-7.8z"/>',
   shield: '<path d="M12 1.6l9 3.9v6.1c0 5.5-3.8 10.3-9 11.6-5.2-1.3-9-6.1-9-11.6V5.5z"/>',
-  verified: '<path d="M12 1.4l2.7 2.2 3.5-.3 1.4 3.2 3.2 1.5-1.2 3.3 1.2 3.3-3.2 1.5-1.4 3.2-3.5-.3-2.7 2.2-2.7-2.2-3.5.3-1.4-3.2L1.2 15l1.2-3.3-1.2-3.3 3.2-1.5 1.4-3.2 3.5.3z"/>'
+  verified: '<circle cx="12" cy="12" r="10"/>'
 };
 
 export function solidIcon(name, size = 16) {
@@ -73,5 +79,8 @@ export function icon(name, size = 20, stroke = 1.9) {
 }
 
 export function logoMark(size = 22) {
+  if (logoSource) {
+    return `<img src="${logoSource}" alt="СпокУм" width="${size}" height="${size}" style="border-radius:26%;object-fit:cover;display:block">`;
+  }
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 14c2.5 0 2.5-4 5-4s2.5 4 5 4 2.5-4 5-4"/><path d="M6 18.5c2 0 2-2.5 4-2.5s2 2.5 4 2.5 2-2.5 4-2.5"/><circle cx="12" cy="5.5" r="2"/></svg>`;
 }

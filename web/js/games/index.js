@@ -260,6 +260,55 @@ function orbit(canvas, report) {
   });
 }
 
+function runnerFigure(ctx, x, y, phase, airborne) {
+  const swing = airborne ? 0.55 : Math.sin(phase) * 1.15;
+  const lift = airborne ? 5 : 0;
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#eef2fb';
+  ctx.beginPath();
+  ctx.moveTo(x, y + 3 - lift);
+  ctx.lineTo(x + swing * 9, y + 18 - lift * 1.7);
+  ctx.moveTo(x, y + 3 - lift);
+  ctx.lineTo(x - swing * 9, y + 18 - lift * 1.2);
+  ctx.stroke();
+
+  ctx.lineWidth = 9;
+  ctx.strokeStyle = '#5be6c7';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 14);
+  ctx.lineTo(x, y + 4);
+  ctx.stroke();
+
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#eef2fb';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 11);
+  ctx.lineTo(x - swing * 8, y - 1 - lift * 2);
+  ctx.moveTo(x, y - 11);
+  ctx.lineTo(x + swing * 8, y - 3 - lift * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#eef2fb';
+  ctx.beginPath();
+  ctx.arc(x, y - 24, 9, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#0f1420';
+  ctx.beginPath();
+  ctx.arc(x + 3.5, y - 25.5, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#5be6c7';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y - 27, 9, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.stroke();
+}
+
 function drift(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     let width = w;
@@ -393,10 +442,7 @@ function drift(canvas, report) {
           ctx.fill();
         }
 
-        ctx.fillStyle = '#eef2fb';
-        ctx.beginPath();
-        ctx.roundRect(state.x - 13, state.y - 18, 26, 34, 9);
-        ctx.fill();
+        runnerFigure(ctx, state.x, state.y, state.dist / 24, !state.onGround);
 
         hud(ctx, cw, [`Очки ${Math.round(state.score + state.dist / 12)}`, 'Тап или пробел — прыжок, можно двойной']);
         if (state.over) overText(ctx, cw, ch, `Итог ${Math.round(state.score + state.dist / 12)}`, 'Нажмите, чтобы начать заново');

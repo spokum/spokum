@@ -21,6 +21,7 @@ jobs:
 
       - name: Push web folder to gh-pages
         run: |
+          if [ -f logo.png ] && [ ! -f web/logo.png ]; then cp logo.png web/logo.png; fi
           cd web
           touch .nojekyll
           rm -rf .git

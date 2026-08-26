@@ -219,7 +219,13 @@ svg { display: block; flex: none; }
 .avatar-88 { width: 88px; height: 88px; font-size: 32px; border-radius: 30px; }
 
 .badges { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; }
-.badge-icon { width: 17px; height: 17px; border-radius: 6px; display: grid; place-items: center; flex: none; }
+.badge-icon {
+  width: 18px; height: 18px; border-radius: 6px;
+  display: grid; place-items: center; flex: none;
+  padding: 0; border: none; cursor: pointer;
+  transition: transform .16s var(--ease);
+}
+.badge-icon:active { transform: scale(.86); }
 .badge-verified { background: rgba(139,173,202,.16); color: #8badca; }
 .badge-mod { background: rgba(135,183,163,.16); color: #87b7a3; }
 .badge-dev { background: rgba(198,176,131,.16); color: #c6b083; }
@@ -436,6 +442,11 @@ svg { display: block; flex: none; }
 [data-theme='paper'] .badge-dev { color: #7d6837; background: rgba(198,176,131,.26); }
 [data-theme='paper'] .btn-danger { color: #9b5b5b; }
 [data-theme='paper'] .icon-btn.on { color: #a85f74; }
+
+[data-logo='custom'] .auth-logo,
+[data-logo='custom'] .brand-mark { background: none; box-shadow: none; padding: 0; }
+[data-logo='custom'] .auth-logo { width: 74px; height: 74px; border-radius: 22px; overflow: hidden; }
+[data-logo='custom'] .auth-logo img { width: 100%; height: 100%; }
 
 .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
 .empty svg { margin: 0 auto 12px; opacity: .5; }

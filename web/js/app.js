@@ -1,6 +1,6 @@
 import { api, state, setUser, applyAppearance, subscribe, initBackend } from './store.js';
 import { el } from './util.js';
-import { icon, logoMark } from './icons.js';
+import { icon, logoMark, setLogoSource } from './icons.js';
 import { toast } from './ui.js';
 import { renderAuth } from './views/auth.js';
 
@@ -24,8 +24,24 @@ const root = document.getElementById('app');
 let shell = null;
 let socket = null;
 
+function detectLogo() {
+  return new Promise((done) => {
+    const probe = new Image();
+    probe.onload = () => {
+      setLogoSource('logo.png');
+      document.documentElement.dataset.logo = 'custom';
+      const link = document.querySelector('link[rel="icon"]');
+      if (link) link.href = 'logo.png';
+      done();
+    };
+    probe.onerror = () => done();
+    probe.src = 'logo.png';
+  });
+}
+
 async function boot() {
   applyAppearance(null);
+  await detectLogo();
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(30)}</div></div>`;
   await initBackend();
   try {
@@ -120,6 +136,14 @@ function connectSocket() {
     }, 4000);
   };
 }
+
+document.addEventListener('click', (event) => {
+  const badge = event.target.closest?.('[data-badge]');
+  if (!badge) return;
+  event.preventDefault();
+  event.stopPropagation();
+  toast(badge.dataset.badge);
+}, true);
 
 window.addEventListener('spokum:message', () => refreshUnread());
 setInterval(refreshUnread, 15000);

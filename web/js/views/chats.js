@@ -48,7 +48,7 @@ export async function render(root) {
     results.querySelectorAll('[data-user]').forEach((button) => {
       button.onclick = async () => {
         try {
-          const { chat } = await api.createChat({ kind: 'dm', members: [Number(button.dataset.user)] });
+          const { chat } = await api.createChat({ kind: 'dm', members: [button.dataset.user] });
           search.value = '';
           results.innerHTML = '';
           await load(root);

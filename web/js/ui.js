@@ -28,10 +28,14 @@ export function avatar(user, size = 40) {
 export function badges(user) {
   if (!user) return '';
   const items = [];
-  if (user.isVerified) items.push(`<i class="badge-icon badge-verified" title="Верифицированный пользователь">${icon('verified', 12, 2.2)}</i>`);
-  if (user.isModerator) items.push(`<i class="badge-icon badge-mod" title="Модератор">${solidIcon('shield', 12)}</i>`);
-  if (user.isDeveloper) items.push(`<i class="badge-icon badge-dev" title="Разработчик">${solidIcon('hammer', 12)}</i>`);
+  if (user.isVerified) items.push(badgeButton('badge-verified', icon('verified', 12, 2.4), 'Пользователь верифицирован'));
+  if (user.isModerator) items.push(badgeButton('badge-mod', solidIcon('shield', 12), 'Модератор СпокУма'));
+  if (user.isDeveloper) items.push(badgeButton('badge-dev', solidIcon('hammer', 12), 'Разработчик СпокУма'));
   return items.length ? `<span class="badges">${items.join('')}</span>` : '';
+}
+
+function badgeButton(className, glyph, label) {
+  return `<button type="button" class="badge-icon ${className}" data-badge="${esc(label)}" title="${esc(label)}" aria-label="${esc(label)}">${glyph}</button>`;
 }
 
 export function nameLine(user, extra = '') {

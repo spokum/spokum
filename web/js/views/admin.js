@@ -133,7 +133,7 @@ async function drawUsers(body) {
       .join('') || emptyState('users', 'Никого нет', 'Попробуйте другой запрос');
     list.querySelectorAll('[data-user]').forEach((node) => {
       node.onclick = () => {
-        const user = users.find((u) => u.id === Number(node.dataset.user));
+        const user = users.find((u) => String(u.id) === node.dataset.user);
         openUserActions(user, () => load(body.querySelector('[data-search]').value.trim()));
       };
     });

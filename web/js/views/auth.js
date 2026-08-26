@@ -8,7 +8,7 @@ export function renderAuth(root, done) {
   const view = el(`
     <div class="auth-wrap">
       <div class="auth-card card appear">
-        <div class="auth-logo">${logoMark(30)}</div>
+        <div class="auth-logo">${logoMark(34)}</div>
         <div class="center">
           <div class="strong" style="font-size:24px;letter-spacing:-.02em">СпокУм</div>
           <div class="small muted" style="margin-top:6px">Соцсеть, где настроение важнее охватов</div>
