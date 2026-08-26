@@ -1,3 +1,3 @@
-window.SPOKUM_SUPABASE_URL = '';
-window.SPOKUM_SUPABASE_KEY = '';
+window.SPOKUM_SUPABASE_URL = 'https://ddjwxsoxnumwsisokboc.supabase.co';
+window.SPOKUM_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkand4c294bnVtd3Npc29rYm9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NTYzMzQsImV4cCI6MjEwMzEzMjMzNH0.8I-5JzByZwtMkh6ECeBzOlC0IdKWyI_v_sP9q_ihBjg';
 window.SPOKUM_API = '';
