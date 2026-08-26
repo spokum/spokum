@@ -1,0 +1,14 @@
+{
+  "name": "СпокУм",
+  "short_name": "СпокУм",
+  "description": "Соцсеть про спокойствие и настроение",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#101318",
+  "theme_color": "#101318",
+  "lang": "ru",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

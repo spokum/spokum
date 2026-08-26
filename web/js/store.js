@@ -1,0 +1,84 @@
+import { local } from './backend/local.js';
+import { createRemote } from './backend/remote.js';
+
+let backend = local;
+
+export const api = new Proxy({}, {
+  get(_target, prop) {
+    const value = backend[prop];
+    return typeof value === 'function' ? value.bind(backend) : value;
+  },
+  has(_target, prop) {
+    return prop in backend;
+  }
+});
+
+export async function initBackend() {
+  const params = new URLSearchParams(location.search);
+  const supabaseUrl = window.SPOKUM_SUPABASE_URL || params.get('supabaseUrl') || '';
+  const supabaseKey = window.SPOKUM_SUPABASE_KEY || params.get('supabaseKey') || '';
+  const apiBase = window.SPOKUM_API || params.get('api') || '';
+
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const { createSupabase } = await import('./backend/supabase.js');
+      backend = await createSupabase(supabaseUrl, supabaseKey);
+      return backend.mode;
+    } catch (error) {
+      console.error(error);
+      backend = local;
+      return 'local';
+    }
+  }
+
+  if (apiBase) backend = createRemote(apiBase);
+  return backend.mode;
+}
+
+export const state = {
+  user: null,
+  moodFilter: null,
+  tab: 'feed',
+  unread: 0
+};
+
+const listeners = new Set();
+
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function emit(event, payload) {
+  for (const fn of listeners) fn(event, payload);
+}
+
+export function setUser(user) {
+  state.user = user;
+  applyAppearance(user);
+  emit('user', user);
+}
+
+export function applyAppearance(user) {
+  const root = document.documentElement;
+  root.dataset.theme = user?.theme || localStorage.getItem('spokum.theme') || 'calm';
+  root.dataset.accent = user?.accent || localStorage.getItem('spokum.accent') || 'mint';
+  localStorage.setItem('spokum.theme', root.dataset.theme);
+  localStorage.setItem('spokum.accent', root.dataset.accent);
+}
+
+export const MOODS = {
+  calm:     { label: 'Спокойствие', color: 'rgba(127,179,160,.14)', ink: '#7fb3a0' },
+  joy:      { label: 'Радость',     color: 'rgba(204,176,121,.15)', ink: '#ccb079' },
+  sad:      { label: 'Грусть',      color: 'rgba(138,171,199,.15)', ink: '#8aabc7' },
+  anger:    { label: 'Злость',      color: 'rgba(197,130,121,.15)', ink: '#c58279' },
+  anxiety:  { label: 'Тревога',     color: 'rgba(159,150,194,.15)', ink: '#9f96c2' },
+  tired:    { label: 'Усталость',   color: 'rgba(152,160,173,.15)', ink: '#98a0ad' },
+  love:     { label: 'Нежность',    color: 'rgba(199,143,164,.15)', ink: '#c78fa4' },
+  inspired: { label: 'Подъём',      color: 'rgba(147,185,141,.15)', ink: '#93b98d' }
+};
+
+export function moodStyle(mood) {
+  const item = MOODS[mood] || MOODS.calm;
+  return `--mood-color:${item.color};--mood-ink:${item.ink}`;
+}

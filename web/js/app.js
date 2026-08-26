@@ -1,0 +1,130 @@
+import { api, state, setUser, applyAppearance, subscribe, initBackend } from './store.js';
+import { el } from './util.js';
+import { icon, logoMark } from './icons.js';
+import { toast } from './ui.js';
+import { renderAuth } from './views/auth.js';
+
+const TABS = [
+  ['feed', 'Лента', 'feed'],
+  ['chats', 'Чаты', 'chats'],
+  ['games', 'Игры', 'games'],
+  ['settings', 'Настройки', 'settings'],
+  ['profile', 'Профиль', 'profile']
+];
+
+const views = {
+  feed: () => import('./views/feed.js'),
+  chats: () => import('./views/chats.js'),
+  games: () => import('./views/games.js'),
+  settings: () => import('./views/settings.js'),
+  profile: () => import('./views/profile.js')
+};
+
+const root = document.getElementById('app');
+let shell = null;
+let socket = null;
+
+async function boot() {
+  applyAppearance(null);
+  root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(30)}</div></div>`;
+  await initBackend();
+  try {
+    const { user } = await api.me();
+    setUser(user);
+  } catch {
+    setUser(null);
+  }
+  if (!state.user) renderAuth(root, start);
+  else start();
+}
+
+function start() {
+  buildShell();
+  openTab(state.tab || 'feed');
+  connectSocket();
+}
+
+function buildShell() {
+  shell = el(`
+    <div>
+      <main class="shell" data-view></main>
+      <nav class="nav" data-nav></nav>
+    </div>`);
+  root.innerHTML = '';
+  root.appendChild(shell);
+
+  const nav = shell.querySelector('[data-nav]');
+  nav.innerHTML = TABS.map(
+    ([key, label, glyph]) => `<button class="nav-item" data-tab="${key}">${icon(glyph, 21, 1.8)}<span>${label}</span></button>`
+  ).join('');
+  nav.querySelectorAll('[data-tab]').forEach((button) => {
+    button.onclick = () => openTab(button.dataset.tab);
+  });
+}
+
+async function openTab(tab) {
+  state.tab = tab;
+  const host = shell.querySelector('[data-view]');
+  shell.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
+  host.scrollTop = 0;
+  window.scrollTo({ top: 0 });
+  host.innerHTML = '';
+  try {
+    const module = await views[tab]();
+    await module.render(host);
+  } catch (error) {
+    host.innerHTML = `<div class="empty">${error.message}</div>`;
+  }
+  refreshUnread();
+}
+
+async function refreshUnread() {
+  if (!state.user) return;
+  try {
+    const { chats } = await api.chats();
+    const total = chats.reduce((sum, chat) => sum + chat.unread, 0);
+    const button = shell?.querySelector('[data-tab="chats"]');
+    if (!button) return;
+    button.querySelector('.nav-dot')?.remove();
+    if (total > 0) button.appendChild(el(`<span class="nav-dot">${total > 99 ? '99' : total}</span>`));
+  } catch {}
+}
+
+function connectSocket() {
+  if (api.mode !== 'remote' || !api.socketUrl) return;
+  const url = api.socketUrl();
+  if (!url) return;
+  try {
+    socket = new WebSocket(url);
+  } catch {
+    return;
+  }
+  socket.onmessage = (event) => {
+    let payload;
+    try {
+      payload = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (payload.type === 'message') {
+      window.dispatchEvent(new CustomEvent('spokum:message', { detail: payload.message }));
+      refreshUnread();
+    }
+    if (payload.type === 'call' && payload.action === 'ring' && payload.from?.id !== state.user?.id) {
+      toast(`${payload.from.displayName} звонит`);
+    }
+  };
+  socket.onclose = () => {
+    setTimeout(() => {
+      if (state.user) connectSocket();
+    }, 4000);
+  };
+}
+
+window.addEventListener('spokum:message', () => refreshUnread());
+setInterval(refreshUnread, 15000);
+subscribe((event) => {
+  if (event === 'user') applyAppearance(state.user);
+});
+
+boot();

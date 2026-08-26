@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: spokum-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    healthCheckPath: /api/posts
+    envVars:
+      - key: SPOKUM_DB
+        value: /data/spokum.db
+      - key: SPOKUM_ADMIN
+        value: vanya8
+      - key: SPOKUM_ORIGINS
+        value: ''
+    disk:
+      name: spokum-data
+      mountPath: /data
+      sizeGB: 1
