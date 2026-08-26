@@ -89,8 +89,10 @@ function openEditor(done) {
     <div class="col">
       <div class="row">
         <div data-avatar>${avatar(user, 54)}</div>
-        <button class="btn btn-sm" data-pick>${icon('camera', 16)} Сменить фото</button>
-        ${user.avatar ? '<button class="btn btn-sm btn-ghost" data-clear>Убрать</button>' : ''}
+        <div class="col grow" style="gap:6px">
+          <button class="btn btn-sm" data-pick>${icon('image', 16)} Сменить фото</button>
+          <button class="btn btn-sm btn-danger hidden" data-clear>${icon('trash', 15)} Убрать фото</button>
+        </div>
       </div>
       <div><div class="tiny muted" style="margin-bottom:6px">Имя</div><input class="input" data-name maxlength="40" value="${esc(user.displayName)}"></div>
       <div><div class="tiny muted" style="margin-bottom:6px">О себе</div><textarea class="textarea" data-bio maxlength="300">${esc(user.bio || '')}</textarea></div>
@@ -101,9 +103,12 @@ function openEditor(done) {
   let avatarData = user.avatar;
   let hue = Number(user.hue) || 220;
   const preview = body.querySelector('[data-avatar]');
+  const clearButton = body.querySelector('[data-clear]');
   const redraw = () => {
     preview.innerHTML = avatar({ ...user, avatar: avatarData, hue }, 54);
+    clearButton.classList.toggle('hidden', !avatarData);
   };
+  redraw();
   body.querySelector('[data-hue]').oninput = (event) => {
     hue = Number(event.target.value);
     redraw();
@@ -115,7 +120,7 @@ function openEditor(done) {
       redraw();
     }
   };
-  body.querySelector('[data-clear]')?.addEventListener('click', () => {
+  clearButton.addEventListener('click', () => {
     avatarData = null;
     redraw();
   });
