@@ -114,7 +114,7 @@ function guard(error) {
   throw new Error(text);
 }
 
-const REQUEST_TIMEOUT = 20000;
+const REQUEST_TIMEOUT = 30000;
 
 function timedFetch(input, init = {}) {
   const controller = new AbortController();

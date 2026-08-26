@@ -359,16 +359,23 @@ function openMoodPicker(done) {
   body.querySelectorAll('[data-mood]').forEach((button) => {
     button.onclick = async () => {
       const mood = button.dataset.mood;
-      const { user } = await api.updateMe({ mood });
-      setUser(user);
       sheet.close();
+
       const { HEAVY_MOODS } = await import('./safe.js');
-      if (HEAVY_MOODS.includes(mood)) {
-        enterSafeZone(mood, done);
-        return;
-      }
-      toast('Записал');
-      done?.();
+      const heavy = HEAVY_MOODS.includes(mood);
+      if (heavy) enterSafeZone(mood, done);
+
+      api.updateMe({ mood })
+        .then(({ user }) => {
+          setUser(user);
+          if (!heavy) {
+            toast('Записал');
+            done?.();
+          }
+        })
+        .catch((error) => {
+          if (!heavy) toast(error.message, 'err');
+        });
     };
   });
 }

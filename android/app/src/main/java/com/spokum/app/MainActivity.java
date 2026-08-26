@@ -80,7 +80,6 @@ public class MainActivity extends AppCompatActivity {
     webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
     final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
-        .setDomain("spokum.local")
         .addPathHandler("/", new WebViewAssetLoader.AssetsPathHandler(this))
         .build();
 
@@ -111,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
       @Override
       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
         Uri url = request.getUrl();
-        if ("spokum.local".equals(url.getHost())) {
+        if ("appassets.androidplatform.net".equals(url.getHost())) {
           return false;
         }
         try {
@@ -185,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
     if (savedInstanceState != null) {
       webView.restoreState(savedInstanceState);
     } else {
-      webView.loadUrl("https://spokum.local/www/index.html");
+      webView.loadUrl("https://appassets.androidplatform.net/www/index.html");
     }
   }
 

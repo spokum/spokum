@@ -65,7 +65,7 @@ function watchNetwork() {
   networkBar();
 }
 
-const IN_APP = location.hostname === 'spokum.local';
+const IN_APP = location.hostname === 'spokum.local' || location.hostname === 'appassets.androidplatform.net';
 
 function registerWorker() {
   if (!('serviceWorker' in navigator)) return;

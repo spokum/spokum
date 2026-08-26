@@ -3,6 +3,72 @@ import { el, esc, initials } from '../util.js';
 import { icon, logoMark } from '../icons.js';
 import { toast, pickImage } from '../ui.js';
 
+async function probe(label, run) {
+  const started = Date.now();
+  try {
+    const detail = await run();
+    return { label, ok: true, detail: `${detail} · ${Date.now() - started} мс` };
+  } catch (error) {
+    return { label, ok: false, detail: `${error.message} · ${Date.now() - started} мс` };
+  }
+}
+
+async function runDiagnostics() {
+  const { openSheet } = await import('../ui.js');
+  const body = el('<div class="col"><div class="small muted center">Проверяем</div></div>');
+  openSheet('Связь с базой', body);
+
+  const url = String(window.SPOKUM_SUPABASE_URL || '').replace(/\/$/, '');
+  const key = window.SPOKUM_SUPABASE_KEY || '';
+  const results = [];
+
+  results.push({
+    label: 'Ключи в приложении',
+    ok: !!(url && key),
+    detail: url ? `${url.slice(0, 34)}...` : 'не заданы в config.js'
+  });
+
+  results.push({
+    label: 'Библиотека внутри',
+    ok: !!window.supabase?.createClient,
+    detail: window.supabase?.createClient ? 'подключена' : 'не загрузилась'
+  });
+
+  results.push({
+    label: 'Сеть устройства',
+    ok: navigator.onLine,
+    detail: navigator.onLine ? 'есть' : 'нет'
+  });
+
+  if (url && key) {
+    results.push(await probe('Ответ сервера базы', async () => {
+      const response = await fetch(`${url}/auth/v1/health`, { headers: { apikey: key } });
+      return `код ${response.status}`;
+    }));
+
+    results.push(await probe('Чтение данных', async () => {
+      const response = await fetch(`${url}/rest/v1/profiles?select=id&limit=1`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` }
+      });
+      if (!response.ok) throw new Error(`код ${response.status}`);
+      return 'доступно';
+    }));
+  }
+
+  body.innerHTML = `
+    <div class="col" style="gap:8px">
+      ${results.map((row) => `
+        <div class="card" style="padding:12px">
+          <div class="row" style="gap:10px">
+            <span style="color:${row.ok ? 'var(--accent)' : '#c98b8b'}">${icon(row.ok ? 'check' : 'close', 16)}</span>
+            <div class="grow"><div class="small strong">${esc(row.label)}</div>
+            <div class="tiny muted" style="margin-top:2px;word-break:break-all">${esc(row.detail)}</div></div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <p class="tiny muted" style="margin:4px 0 0">Если сервер не отвечает, проверьте проект в Supabase: бесплатные проекты засыпают после долгой паузы и просыпаются по кнопке Restore в панели.</p>`;
+}
+
 export function renderAuth(root, done) {
   let mode = 'login';
   let avatar = null;
@@ -21,6 +87,7 @@ export function renderAuth(root, done) {
         <div class="col" data-form></div>
         <div class="divider"></div>
         <button class="btn btn-ghost" data-guest style="width:100%">${icon('eye', 17)} Посмотреть без входа</button>
+        <button class="btn btn-ghost btn-sm" data-check style="width:100%;margin-top:6px;color:var(--muted)">${icon('compass', 15)} Проверить связь</button>
       </div>
     </div>`);
   root.innerHTML = '';
@@ -106,5 +173,6 @@ export function renderAuth(root, done) {
     };
   });
   view.querySelector('[data-guest]').onclick = () => done();
+  view.querySelector('[data-check]').onclick = () => runDiagnostics();
   draw();
 }
