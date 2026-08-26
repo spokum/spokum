@@ -60,9 +60,16 @@ function watchNetwork() {
   networkBar();
 }
 
+const IN_APP = location.hostname === 'spokum.local';
+
 function registerWorker() {
   if (!('serviceWorker' in navigator)) return;
-  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.protocol !== 'http:') return;
+  if (IN_APP) {
+    navigator.serviceWorker.getRegistrations?.()
+      .then((list) => list.forEach((registration) => registration.unregister()))
+      .catch(() => {});
+    return;
+  }
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 

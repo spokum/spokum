@@ -1,8 +1,7 @@
-const VERSION = 'spokum-v2';
+const VERSION = 'spokum-v4';
 const CORE = [
   './',
   './index.html',
-  './config.js',
   './manifest.webmanifest',
   './css/app.css',
   './js/app.js',
@@ -22,7 +21,16 @@ const CORE = [
   './js/views/profile.js',
   './js/views/admin.js',
   './js/views/mod.js',
-  './js/views/stories.js'
+  './js/views/stories.js',
+  './vendor/supabase.js',
+  './fonts/inter-cyrillic-400.woff2',
+  './fonts/inter-cyrillic-500.woff2',
+  './fonts/inter-cyrillic-600.woff2',
+  './fonts/inter-cyrillic-700.woff2',
+  './fonts/inter-latin-400.woff2',
+  './fonts/inter-latin-500.woff2',
+  './fonts/inter-latin-600.woff2',
+  './fonts/inter-latin-700.woff2'
 ];
 
 self.addEventListener('install', (event) => {
@@ -45,6 +53,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
+
+  if (sameOrigin && url.pathname.endsWith('/config.js')) {
+    event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(request)));
+    return;
+  }
   const isModuleCdn = url.hostname === 'esm.sh' || url.hostname === 'cdn.jsdelivr.net';
 
   if (!sameOrigin && !isModuleCdn) return;

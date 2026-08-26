@@ -23,7 +23,10 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.webkit.ServiceWorkerClientCompat;
+import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
+import androidx.webkit.WebViewFeature;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -80,6 +83,24 @@ public class MainActivity extends AppCompatActivity {
         .setDomain("spokum.local")
         .addPathHandler("/", new WebViewAssetLoader.AssetsPathHandler(this))
         .build();
+
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE)) {
+      ServiceWorkerControllerCompat controller = ServiceWorkerControllerCompat.getInstance();
+      if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_CONTENT_ACCESS)) {
+        controller.getServiceWorkerWebSettings().setAllowContentAccess(false);
+      }
+      if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_FILE_ACCESS)) {
+        controller.getServiceWorkerWebSettings().setAllowFileAccess(false);
+      }
+      if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
+        controller.setServiceWorkerClient(new ServiceWorkerClientCompat() {
+          @Override
+          public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
+            return loader.shouldInterceptRequest(request.getUrl());
+          }
+        });
+      }
+    }
 
     webView.setWebViewClient(new WebViewClient() {
       @Override

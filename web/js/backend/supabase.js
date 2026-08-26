@@ -88,6 +88,13 @@ function shapeMessage(row, authors) {
 function guard(error) {
   if (!error) return;
   const text = error.message || 'Ошибка запроса';
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(text)) {
+    throw new Error(
+      navigator.onLine
+        ? 'Сервер не отвечает. Проверьте адрес базы в config.js или попробуйте позже'
+        : 'Нет интернета'
+    );
+  }
   if (/row-level security|permission denied/i.test(text)) throw new Error('Недостаточно прав');
   if (/duplicate key/i.test(text) && /username/i.test(text)) throw new Error('Юзернейм занят');
   if (/already registered|User already/i.test(text)) throw new Error('Такой аккаунт уже есть');
@@ -101,8 +108,14 @@ function guard(error) {
   throw new Error(text);
 }
 
+async function loadFactory() {
+  if (window.supabase?.createClient) return window.supabase.createClient;
+  const module = await import(CLIENT_URL);
+  return module.createClient;
+}
+
 export async function createSupabase(url, key) {
-  const { createClient } = await import(CLIENT_URL);
+  const createClient = await loadFactory();
   const sb = createClient(url, key, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
   });
