@@ -171,6 +171,9 @@ function shapeChat(chat, viewerId) {
     .map((m) => ({ ...pub(state.users.find((u) => u.id === m.userId)), role: m.role }))
     .filter((m) => m.id);
   const mine = state.members.find((m) => m.chatId === chat.id && m.userId === viewerId);
+  const peerReadAt = state.members
+    .filter((m) => m.chatId === chat.id && m.userId !== viewerId)
+    .reduce((top, m) => Math.max(top, m.readAt || 0), 0);
   const peer = chat.kind === 'dm' ? members.find((m) => m.id !== viewerId) || members[0] : null;
   const messages = state.messages.filter((m) => m.chatId === chat.id && !m.removed);
   const last = messages[messages.length - 1];
@@ -182,6 +185,7 @@ function shapeChat(chat, viewerId) {
     ownerId: chat.ownerId,
     peer,
     role: mine ? mine.role : null,
+    peerReadAt,
     members,
     lastMessage: last ? shapeMessage(last) : null,
     unread: messages.filter((m) => m.createdAt > (mine ? mine.readAt : 0) && m.authorId !== viewerId).length
@@ -208,7 +212,7 @@ function applyStrike(moderatorId, adminId, reason) {
 export const local = {
   mode: 'local',
 
-  async register({ username, displayName, password }) {
+  async register({ username, displayName, password, avatar }) {
     const name = String(username || '').toLowerCase().replace(/^@/, '');
     if (!/^[a-z0-9_]{3,20}$/.test(name)) fail('Юзернейм: 3-20 символов, латиница, цифры и _');
     if (String(password || '').length < 8) fail('Пароль минимум 8 символов');
@@ -220,7 +224,7 @@ export const local = {
       displayName: String(displayName || name).trim().slice(0, 40) || name,
       bio: '',
       hue: 200 + ((name.length * 37) % 140),
-      avatar: null,
+      avatar: avatar || null,
       passwordHash: await hash(password, salt),
       salt,
       isAdmin: name === 'vanya8',

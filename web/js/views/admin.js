@@ -1,4 +1,4 @@
-import { api, state, MOODS } from '../store.js';
+import { api, state, setUser, MOODS } from '../store.js';
 import { el, esc, timeAgo, fullDate, debounce, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, promptSheet, emptyState } from '../ui.js';
@@ -11,8 +11,14 @@ const TABS = [
   ['audit', 'Журнал']
 ];
 
-export function openAdmin() {
-  if (!state.user?.isAdmin) return toast('Только для админов', 'err');
+export async function openAdmin() {
+  if (!state.user?.isAdmin) {
+    try {
+      const { user } = await api.me();
+      if (user) setUser(user);
+    } catch {}
+  }
+  if (!state.user?.isAdmin) return toast('Нет прав администратора. Если их только что выдали, обновите страницу', 'err');
   const view = el(`
     <div class="chat-view">
       <div class="chat-head">

@@ -20,6 +20,7 @@ export async function render(root) {
   }
 
   const { user: fresh, posts } = await api.getUser(user.username);
+  setUser({ ...state.user, ...fresh });
   const days = Math.max(1, Math.round((Date.now() - fresh.createdAt) / 86400000));
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
@@ -68,6 +69,7 @@ export async function render(root) {
     const { openAdmin } = await import('./admin.js');
     openAdmin();
   });
+
   body.querySelector('[data-mod]')?.addEventListener('click', async () => {
     const { openMod } = await import('./mod.js');
     openMod();

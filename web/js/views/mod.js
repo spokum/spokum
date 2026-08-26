@@ -1,4 +1,4 @@
-import { api, state } from '../store.js';
+import { api, state, setUser } from '../store.js';
 import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, promptSheet, emptyState } from '../ui.js';
@@ -11,8 +11,16 @@ const TABS = [
   ['strikes', 'Мой статус']
 ];
 
-export function openMod() {
-  if (!state.user?.isModerator && !state.user?.isAdmin) return toast('Нужен щит модератора', 'err');
+export async function openMod() {
+  if (!state.user?.isModerator && !state.user?.isAdmin) {
+    try {
+      const { user } = await api.me();
+      if (user) setUser(user);
+    } catch {}
+  }
+  if (!state.user?.isModerator && !state.user?.isAdmin) {
+    return toast('Нет прав модератора. Если щит только что выдали, обновите страницу', 'err');
+  }
   const view = el(`
     <div class="chat-view">
       <div class="chat-head">

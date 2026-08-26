@@ -57,30 +57,45 @@ export function debounce(fn, wait = 260) {
   };
 }
 
-export function readFileAsDataUrl(file, maxSide = 1400) {
-  return new Promise((done, fail) => {
-    if (!file.type.startsWith('image/')) {
-      fail(new Error('Нужен файл изображения'));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onerror = () => fail(new Error('Не удалось прочитать файл'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => fail(new Error('Битое изображение'));
-      img.onload = () => {
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        done(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+async function loadImage(file) {
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file);
+    } catch {}
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise((done, fail) => {
+      const image = new Image();
+      image.onload = () => done(image);
+      image.onerror = () => fail(new Error('Формат не поддерживается, сохраните фото как JPG или PNG'));
+      image.src = url;
+    });
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+}
+
+export async function readFileAsDataUrl(file, maxSide = 1400) {
+  if (!file) throw new Error('Файл не выбран');
+  if (file.size > 30 * 1024 * 1024) throw new Error('Файл больше 30 МБ, выберите поменьше');
+
+  const source = await loadImage(file);
+  const width = source.width || source.naturalWidth;
+  const height = source.height || source.naturalHeight;
+  if (!width || !height) throw new Error('Не удалось открыть изображение');
+
+  const scale = Math.min(1, maxSide / Math.max(width, height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  source.close?.();
+
+  const result = canvas.toDataURL('image/jpeg', 0.82);
+  if (!result || result.length < 32) throw new Error('Не удалось обработать изображение');
+  return result;
 }
 
 export function uid() {

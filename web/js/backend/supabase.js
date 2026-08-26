@@ -375,7 +375,7 @@ export async function createSupabase(url, key) {
 
       const [chatRows, memberRows, messageRows] = await Promise.all([
         sb.from('chats').select('*').in('id', ids),
-        sb.from('chat_members').select('chat_id, role, profile:profiles!chat_members_user_id_fkey(*)').in('chat_id', ids),
+        sb.from('chat_members').select('chat_id, role, user_id, read_at, profile:profiles!chat_members_user_id_fkey(*)').in('chat_id', ids),
         sb.from('messages').select('*').in('chat_id', ids).eq('removed', false).order('id', { ascending: false }).limit(400)
       ]);
       guard(chatRows.error || memberRows.error || messageRows.error);
@@ -392,6 +392,9 @@ export async function createSupabase(url, key) {
         const history = (messageRows.data || []).filter((row) => row.chat_id === chat.id);
         const last = history[0];
         const readAt = ms(mine?.read_at);
+        const peerReadAt = (memberRows.data || [])
+          .filter((row) => row.chat_id === chat.id && row.user_id !== me)
+          .reduce((top, row) => Math.max(top, ms(row.read_at)), 0);
         return {
           id: chat.id,
           kind: chat.kind,
@@ -400,6 +403,7 @@ export async function createSupabase(url, key) {
           ownerId: chat.owner_id,
           peer,
           role: mine?.role || null,
+          peerReadAt,
           members,
           lastMessage: last ? shapeMessage(last, authors) : null,
           unread: history.filter((row) => ms(row.created_at) > readAt && row.author_id !== me).length

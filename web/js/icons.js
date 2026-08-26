@@ -20,6 +20,7 @@ const paths = {
   shield: '<path d="M12 2l8 3.5v6c0 5-3.4 9.3-8 10.5-4.6-1.2-8-5.5-8-10.5v-6z"/>',
   hammer: '<path d="M13.7 2.3l8 8-3 3-8-8z"/><path d="M10.9 6.1l-7.7 7.7a2.5 2.5 0 0 0 0 3.5l1.5 1.5a2.5 2.5 0 0 0 3.5 0l7.7-7.7"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
+  check_double: '<path d="M2 12.5l4 4 8.5-9"/><path d="M11 16.5l1 1 8.5-9"/>',
   verified: '<circle cx="12" cy="12" r="9"/><path d="M8.1 12.2l2.7 2.7 5.1-5.4"/>',
   ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
   mute: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/>',

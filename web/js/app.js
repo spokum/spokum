@@ -49,7 +49,7 @@ async function detectLogo() {
 async function boot() {
   applyAppearance(null);
   await detectLogo();
-  root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(30)}</div></div>`;
+  root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
   await initBackend();
   try {
     const { user } = await api.me();
@@ -83,6 +83,18 @@ function buildShell() {
   nav.querySelectorAll('[data-tab]').forEach((button) => {
     button.onclick = () => openTab(button.dataset.tab);
   });
+}
+
+export async function refreshUser() {
+  if (!state.user) return;
+  try {
+    const { user } = await api.me();
+    if (!user) return;
+    const changed = ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified', 'mutedUntil', 'bannedUntil']
+      .some((key) => user[key] !== state.user[key]);
+    setUser(user);
+    if (changed && state.tab) openTab(state.tab);
+  } catch {}
 }
 
 async function openTab(tab) {
@@ -154,6 +166,7 @@ document.addEventListener('click', (event) => {
 
 window.addEventListener('spokum:message', () => refreshUnread());
 setInterval(refreshUnread, 15000);
+setInterval(refreshUser, 30000);
 subscribe((event) => {
   if (event === 'user') applyAppearance(state.user);
 });

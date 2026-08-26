@@ -35,7 +35,7 @@ export function badges(user) {
 }
 
 function badgeButton(className, glyph, label) {
-  return `<button type="button" class="badge-icon ${className}" data-badge="${esc(label)}" title="${esc(label)}" aria-label="${esc(label)}">${glyph}</button>`;
+  return `<span role="button" tabindex="0" class="badge-icon ${className}" data-badge="${esc(label)}" title="${esc(label)}" aria-label="${esc(label)}">${glyph}</span>`;
 }
 
 export function nameLine(user, extra = '') {

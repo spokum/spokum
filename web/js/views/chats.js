@@ -267,7 +267,9 @@ function bubble(message, chat, lastAuthor) {
     inner = `<div class="voice"><button class="btn btn-icon btn-ghost" data-play style="width:32px;height:32px">${icon('play', 15)}</button><div class="voice-bars">${bars}</div><span class="tiny">${durationText(message.duration)}</span></div>`;
   } else inner = esc(message.body);
 
-  const node = el(`<div class="bubble ${mine ? 'mine' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}</div></div>`);
+  const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
+  const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
+  const node = el(`<div class="bubble ${mine ? 'mine' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}</div></div>`);
 
   const play = node.querySelector('[data-play]');
   if (play) {
