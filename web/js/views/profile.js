@@ -4,6 +4,13 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, promptSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
 
+function dayWordChip(user) {
+  if (!user?.shareWord || !user.dayWord) return '';
+  const fresh = Date.now() - (user.dayWordAt || 0) < 36 * 3600 * 1000;
+  if (!fresh) return '';
+  return `<div style="display:flex;justify-content:center;margin-top:8px"><span class="day-word">${icon('spark', 13)} ${esc(user.dayWord)}</span></div>`;
+}
+
 export async function render(root) {
   const user = state.user;
   root.innerHTML = `
@@ -50,7 +57,10 @@ export async function render(root) {
         <button class="btn grow" data-edit-2>${icon('edit', 17)} Редактировать</button>
         <button class="btn grow" data-mood>${icon('wave', 17)} Настроение</button>
       </div>
-      <button class="btn" data-safe style="width:100%;margin-top:8px">${icon('leaf', 17)} Безопасная зона</button>
+      <div class="row" style="margin-top:8px;gap:8px">
+        <button class="btn grow" data-safe>${icon('leaf', 17)} Тихие комнаты</button>
+        <button class="btn grow" data-journal>${icon('edit', 17)} Дневник</button>
+      </div>
       ${isPremium(fresh) ? `<div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-story>${icon('play', 17)} Добавить историю</button>
         ${hasStory(fresh) ? `<button class="btn grow" data-my-story>${icon('eye', 17)} Моя история</button>` : ''}
@@ -78,7 +88,11 @@ export async function render(root) {
   root.querySelector('[data-edit]').onclick = edit;
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
-  body.querySelector('[data-safe]').onclick = () => enterSafeZone(() => render(root));
+  body.querySelector('[data-safe]').onclick = () => openZonePicker(() => render(root));
+  body.querySelector('[data-journal]').onclick = async () => {
+    const { openJournalHistory } = await import('./journal.js');
+    openJournalHistory();
+  };
   body.querySelector('[data-banner]').onclick = () => openBannerMenu(fresh, () => render(root));
   body.querySelector('[data-pins-edit]')?.addEventListener('click', () => openPinEditor(fresh, () => render(root)));
   body.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => render(root)));
@@ -99,6 +113,23 @@ export async function render(root) {
     setUser(null);
     location.reload();
   };
+}
+
+async function openZonePicker(done) {
+  const { MODES } = await import('./safe.js');
+  const body = el(`<div class="col" style="gap:6px">${Object.entries(MODES)
+    .map(([key, mode]) => `<button class="list-item" data-zone="${key}" style="${moodStyle(key)}">
+      <span class="mood-tag" style="${moodStyle(key)}"><i class="mood-dot"></i>${esc(MOODS[key]?.label || key)}</span>
+      <div class="grow"><div class="small strong">${esc(mode.title)}</div><div class="tiny muted">${esc(mode.note)}</div></div>
+    </button>`)
+    .join('')}</div>`);
+  const sheet = openSheet('Куда зайти', body);
+  body.querySelectorAll('[data-zone]').forEach((button) => {
+    button.onclick = () => {
+      sheet.close();
+      enterSafeZone(button.dataset.zone, done);
+    };
+  });
 }
 
 function openBannerMenu(user, done) {
@@ -312,10 +343,10 @@ function openEditor(done) {
   };
 }
 
-async function enterSafeZone(done) {
+export async function enterSafeZone(mood, done) {
   const { openSafeZone } = await import('./safe.js');
-  openSafeZone((minutes) => {
-    toast(`Вы побыли в тишине ${minutes} мин`);
+  openSafeZone(mood, (minutes) => {
+    toast(`Вы побыли здесь ${minutes} мин`);
     done?.();
   });
 }
@@ -331,8 +362,9 @@ function openMoodPicker(done) {
       const { user } = await api.updateMe({ mood });
       setUser(user);
       sheet.close();
-      if (mood === 'anxiety') {
-        enterSafeZone(done);
+      const { HEAVY_MOODS } = await import('./safe.js');
+      if (HEAVY_MOODS.includes(mood)) {
+        enterSafeZone(mood, done);
         return;
       }
       toast('Записал');
@@ -385,6 +417,7 @@ export async function openProfile(username) {
           <span class="strong" style="font-size:19px">${esc(user.displayName)}</span>${badges(user)}
         </div>
         <div class="small muted">@${esc(user.username)}</div>
+        ${dayWordChip(user)}
         ${user.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(user.bio)}</p>` : ''}
         <div style="display:flex;justify-content:center;margin-top:12px"><span class="mood-tag" style="${moodStyle(user.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span></div>
         <div class="stat-grid" style="margin-top:16px">

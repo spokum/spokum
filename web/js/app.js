@@ -116,6 +116,16 @@ function start() {
   buildShell();
   openTab(state.tab || 'feed');
   connectSocket();
+  askJournal();
+}
+
+async function askJournal() {
+  if (!state.user || !navigator.onLine) return;
+  try {
+    const journal = await import('./views/journal.js');
+    if (!(await journal.shouldAskToday())) return;
+    setTimeout(() => journal.openJournal(), 1200);
+  } catch {}
 }
 
 function buildShell() {

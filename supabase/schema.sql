@@ -135,6 +135,18 @@ create table if not exists public.audit (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.journal (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  day date not null,
+  body text not null default '',
+  mood text,
+  word text,
+  created_at timestamptz not null default now(),
+  unique (user_id, day)
+);
+create index if not exists journal_user_idx on public.journal (user_id, day desc);
+
 create table if not exists public.stories (
   id bigint generated always as identity primary key,
   author_id uuid not null references public.profiles on delete cascade,
@@ -168,6 +180,9 @@ alter table public.profiles add column if not exists premium_until timestamptz;
 alter table public.profiles add column if not exists pins jsonb not null default '[]'::jsonb;
 alter table public.profiles add column if not exists status_icon text;
 alter table public.profiles add column if not exists banner text;
+alter table public.profiles add column if not exists day_word text;
+alter table public.profiles add column if not exists day_word_at timestamptz;
+alter table public.profiles add column if not exists share_word boolean not null default false;
 alter table public.profiles add column if not exists premium_reason text not null default '';
 alter table public.profiles add column if not exists premium_granted_at timestamptz;
 
@@ -275,6 +290,7 @@ alter table public.reports enable row level security;
 alter table public.punishments enable row level security;
 alter table public.mod_strikes enable row level security;
 alter table public.audit enable row level security;
+alter table public.journal enable row level security;
 alter table public.stories enable row level security;
 alter table public.stickers enable row level security;
 alter table public.game_scores enable row level security;
@@ -377,6 +393,10 @@ create policy strikes_read on public.mod_strikes for select
 
 drop policy if exists audit_read on public.audit;
 create policy audit_read on public.audit for select using (public.viewer_is_admin());
+
+drop policy if exists journal_own on public.journal;
+create policy journal_own on public.journal for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 drop policy if exists stories_read on public.stories;
 create policy stories_read on public.stories for select using (expires_at > now());

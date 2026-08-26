@@ -44,6 +44,7 @@ function renderComposer(root) {
       </div>
       <div data-preview></div>
       <div class="chips" data-moods style="margin:12px 0 10px"></div>
+      <div data-offer></div>
       <div class="row between">
         <div class="row" style="gap:4px">
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
@@ -65,12 +66,31 @@ function renderComposer(root) {
   moods.innerHTML = Object.entries(MOODS)
     .map(([key, m]) => `<button class="chip" style="${moodStyle(key)}" data-mood="${key}" aria-pressed="${draft.mood === key}"><i class="mood-dot"></i>${esc(m.label)}</button>`)
     .join('');
+  const offer = card.querySelector('[data-offer]');
+  const refreshOffer = async () => {
+    const { HEAVY_MOODS, MODES } = await import('./safe.js');
+    if (!HEAVY_MOODS.includes(draft.mood)) {
+      offer.innerHTML = '';
+      return;
+    }
+    const mode = MODES[draft.mood];
+    offer.innerHTML = `<button class="zone-offer" data-enter>${icon('leaf', 17)}
+      <span class="grow"><span class="small strong">${esc(mode.title)}</span><br><span class="tiny muted">${esc(mode.note)}</span></span>
+      ${icon('forward', 15)}</button>`;
+    offer.querySelector('[data-enter]').onclick = async () => {
+      const { enterSafeZone } = await import('./profile.js');
+      enterSafeZone(draft.mood);
+    };
+  };
+
   moods.querySelectorAll('[data-mood]').forEach((button) => {
     button.onclick = () => {
       draft.mood = button.dataset.mood;
       moods.querySelectorAll('[data-mood]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+      refreshOffer();
     };
   });
+  refreshOffer();
 
   const preview = card.querySelector('[data-preview]');
   const drawPreview = () => {

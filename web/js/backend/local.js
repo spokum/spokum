@@ -17,6 +17,7 @@ function blank() {
     members: [],
     messages: [],
     reports: [],
+    journal: [],
     stories: [],
     stickerPack: [],
     punishments: [],
@@ -147,6 +148,9 @@ function pub(user) {
     lastSeen: user.lastSeen,
     pins: normalizePins(user.pins),
     banner: user.banner || null,
+    dayWord: user.dayWord || null,
+    dayWordAt: user.dayWordAt || 0,
+    shareWord: !!user.shareWord,
     statusIcon: user.statusIcon || null,
     premiumUntil: user.premiumUntil || 0,
     premiumReason: user.premiumReason || '',
@@ -272,7 +276,10 @@ export const local = {
       premiumGrantedAt: 0,
       pins: [],
       statusIcon: null,
-      banner: null
+      banner: null,
+      dayWord: null,
+      dayWordAt: 0,
+      shareWord: false
     };
     state.users.push(user);
     const token = uid() + uid();
@@ -337,6 +344,11 @@ export const local = {
     if (patch.avatar !== undefined) user.avatar = patch.avatar;
     if (patch.pins !== undefined) user.pins = normalizePins(patch.pins);
     if (patch.banner !== undefined) user.banner = patch.banner;
+    if (patch.dayWord !== undefined) {
+      user.dayWord = patch.dayWord;
+      user.dayWordAt = Date.now();
+    }
+    if (patch.shareWord !== undefined) user.shareWord = !!patch.shareWord;
     if (patch.statusIcon !== undefined) user.statusIcon = patch.statusIcon;
     save();
     return { user: priv(user) };
@@ -876,6 +888,40 @@ export const local = {
         createdAt: a.createdAt,
         actor: pub(state.users.find((u) => u.id === a.actorId))
       }))
+    };
+  },
+
+  async journalEntry(day) {
+    const user = need();
+    const entry = (state.journal || []).find((row) => row.userId === user.id && row.day === day);
+    return { entry: entry ? { day: entry.day, body: entry.body, mood: entry.mood, word: entry.word } : null };
+  },
+
+  async saveJournal({ day, body, mood, word }) {
+    const user = need();
+    state.journal = state.journal || [];
+    const existing = state.journal.find((row) => row.userId === user.id && row.day === day);
+    const payload = {
+      userId: user.id,
+      day,
+      body: String(body || '').slice(0, 2000),
+      mood,
+      word: word ? String(word).slice(0, 20) : null,
+      createdAt: Date.now()
+    };
+    if (existing) Object.assign(existing, payload);
+    else state.journal.push(payload);
+    save();
+    return { ok: true };
+  },
+
+  async journalHistory() {
+    const user = need();
+    return {
+      entries: (state.journal || [])
+        .filter((row) => row.userId === user.id)
+        .sort((a, b) => b.day.localeCompare(a.day))
+        .map((row) => ({ day: row.day, body: row.body, mood: row.mood, word: row.word }))
     };
   },
 

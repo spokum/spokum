@@ -793,6 +793,56 @@ svg { display: block; flex: none; }
   touch-action: none;
 }
 
+.zone-offer {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 12px 14px; margin-bottom: 10px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
+}
+
+.day-word {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 12.5px; font-weight: 650;
+}
+
+.check-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--line);
+  text-align: left; width: 100%;
+  transition: all .18s var(--ease);
+}
+.check-box {
+  width: 22px; height: 22px; border-radius: 8px; flex: none;
+  border: 1px solid var(--line-strong);
+  display: grid; place-items: center;
+  color: transparent;
+}
+.check-row.done { border-color: var(--accent); background: var(--accent-soft); }
+.check-row.done .check-box { background: var(--accent); border-color: transparent; color: var(--accent-ink); }
+
+.nothing-stage { flex: 1; display: grid; place-items: center; gap: 8px; align-content: center; }
+.nothing-time { font-size: 46px; font-weight: 200; letter-spacing: -.02em; }
+
+.word-cloud {
+  display: flex; flex-wrap: wrap; gap: 10px 14px;
+  align-items: baseline; justify-content: center;
+  padding: 18px 8px;
+  border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--line);
+  line-height: 1.2;
+}
+
+.safe-zone[data-mode='sad'] { background: radial-gradient(70% 50% at 50% 0%, rgba(138,171,199,.14), transparent 70%), var(--bg); }
+.safe-zone[data-mode='anger'] { background: radial-gradient(70% 50% at 50% 0%, rgba(197,130,121,.14), transparent 70%), var(--bg); }
+.safe-zone[data-mode='tired'] { background: radial-gradient(70% 50% at 50% 0%, rgba(152,160,173,.12), transparent 70%), var(--bg); }
+
 .offline-bar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center; gap: 8px;

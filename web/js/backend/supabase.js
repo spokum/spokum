@@ -46,6 +46,9 @@ function shapeProfile(row, extra = {}) {
     lastSeen: ms(row.last_seen),
     pins: normalizePins(row.pins),
     banner: row.banner || null,
+    dayWord: row.day_word || null,
+    dayWordAt: ms(row.day_word_at),
+    shareWord: !!row.share_word,
     statusIcon: row.status_icon || null,
     premiumUntil: ms(row.premium_until),
     premiumReason: row.premium_reason || '',
@@ -262,6 +265,11 @@ export async function createSupabase(url, key) {
       if (patch.avatar !== undefined) fields.avatar = patch.avatar;
       if (patch.pins !== undefined) fields.pins = normalizePins(patch.pins);
       if (patch.banner !== undefined) fields.banner = patch.banner;
+      if (patch.dayWord !== undefined) {
+        fields.day_word = patch.dayWord;
+        fields.day_word_at = new Date().toISOString();
+      }
+      if (patch.shareWord !== undefined) fields.share_word = !!patch.shareWord;
       if (patch.statusIcon !== undefined) fields.status_icon = patch.statusIcon;
       const { error } = await sb.from('profiles').update(fields).eq('id', id);
       guard(error);
@@ -716,6 +724,44 @@ export async function createSupabase(url, key) {
           createdAt: ms(row.created_at),
           actor: shapeProfile(row.actor)
         }))
+      };
+    },
+
+    async journalEntry(day) {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('journal')
+        .select('*')
+        .eq('user_id', me)
+        .eq('day', day)
+        .maybeSingle();
+      guard(error);
+      return { entry: data ? { day: data.day, body: data.body, mood: data.mood, word: data.word } : null };
+    },
+
+    async saveJournal({ day, body, mood, word }) {
+      const me = requireUid();
+      const { error } = await sb
+        .from('journal')
+        .upsert(
+          { user_id: me, day, body: String(body || '').slice(0, 2000), mood, word: word ? String(word).slice(0, 20) : null },
+          { onConflict: 'user_id,day' }
+        );
+      guard(error);
+      return { ok: true };
+    },
+
+    async journalHistory() {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('journal')
+        .select('*')
+        .eq('user_id', me)
+        .order('day', { ascending: false })
+        .limit(120);
+      guard(error);
+      return {
+        entries: (data || []).map((row) => ({ day: row.day, body: row.body || '', mood: row.mood, word: row.word }))
       };
     },
 
