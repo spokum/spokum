@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState } from '../ui.js';
@@ -91,6 +91,7 @@ function renderComposer(root) {
   };
 
   card.querySelector('[data-send]').onclick = async (event) => {
+    if (isOffline()) return toast('Нет интернета, пост не отправится', 'err');
     const button = event.currentTarget;
     button.disabled = true;
     try {
@@ -131,11 +132,11 @@ function renderFilters(root) {
 async function load(root) {
   const list = root.querySelector('[data-list]');
   list.innerHTML = '<div class="card" style="height:120px;opacity:.4"></div><div class="card" style="height:120px;opacity:.25"></div>';
-  try {
-    const { posts } = await api.listPosts(state.moodFilter ? { mood: state.moodFilter } : {});
+  const draw = (posts, note) => {
     list.innerHTML = '';
+    if (note) list.appendChild(el(note));
     if (!posts.length) {
-      list.innerHTML = emptyState('leaf', 'Пока тихо', 'Стань первым, кто расскажет о своём вечере');
+      list.appendChild(el(`<div>${emptyState('leaf', 'Пока тихо', 'Стань первым, кто расскажет о своём вечере')}</div>`));
       return;
     }
     posts.forEach((post, index) => {
@@ -143,8 +144,34 @@ async function load(root) {
       card.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
       list.appendChild(card);
     });
+  };
+
+  const showCached = (reason) => {
+    const cache = readFeedCache();
+    if (!cache) {
+      list.innerHTML = emptyState('warn', 'Нет связи', 'Лента появится, когда интернет вернётся');
+      return;
+    }
+    const saved = timeAgo(cache.savedAt);
+    const posts = state.moodFilter ? cache.posts.filter((post) => post.mood === state.moodFilter) : cache.posts;
+    draw(posts, `<div class="card" style="border-color:rgba(198,176,131,.3);background:rgba(198,176,131,.07);padding:14px">
+      <div class="row" style="align-items:flex-start;gap:10px">${icon('warn', 18)}
+      <div class="grow"><div class="strong small">${esc(reason)}</div>
+      <div class="tiny muted" style="margin-top:3px">Это сохранённая лента, обновлена ${esc(saved)} назад. Новые записи появятся со связью.</div></div></div></div>`);
+  };
+
+  if (isOffline()) {
+    showCached('Нет интернета');
+    return;
+  }
+
+  try {
+    const { posts } = await api.listPosts(state.moodFilter ? { mood: state.moodFilter } : {});
+    if (!state.moodFilter) cacheFeed(posts);
+    draw(posts, null);
   } catch (error) {
-    list.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    if (isOffline() || /fetch|network|Failed|сет/i.test(error.message)) showCached('Связь потеряна');
+    else list.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
   }
 }
 

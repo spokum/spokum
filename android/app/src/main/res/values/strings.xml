@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">СпокУм</string>
+  <string name="offline_title">Нет интернета</string>
+  <string name="offline_text">Показываем то, что успело загрузиться</string>
+</resources>

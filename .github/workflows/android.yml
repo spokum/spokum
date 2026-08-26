@@ -1,0 +1,65 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - Main
+    paths:
+      - 'web/**'
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Copy site into app assets
+        run: |
+          for candidate in logo.png logo.jpg logo.jpeg logo.webp logo.svg; do
+            if [ -f "$candidate" ] && [ ! -f "web/$candidate" ]; then cp "$candidate" "web/$candidate"; fi
+          done
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -r web/. android/app/src/main/assets/www/
+          rm -f android/app/src/main/assets/www/.nojekyll
+          ls android/app/src/main/assets/www
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/spokum-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/spokum-latest.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spokum-apk
+          path: dist/*.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk dist/spokum-latest.apk \
+            --title "СпокУм для Android" \
+            --notes "Сборка ${{ github.run_number }}. Скачайте spokum-latest.apk и установите на телефон."

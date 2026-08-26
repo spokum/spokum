@@ -39,8 +39,40 @@ export const state = {
   user: null,
   moodFilter: null,
   tab: 'feed',
-  unread: 0
+  unread: 0,
+  online: navigator.onLine
 };
+
+const FEED_CACHE = 'spokum.cache.feed';
+
+export function cacheFeed(posts) {
+  try {
+    const trimmed = posts.slice(0, 20).map((post, index) => ({
+      ...post,
+      image: index < 6 ? post.image : null
+    }));
+    localStorage.setItem(FEED_CACHE, JSON.stringify({ savedAt: Date.now(), posts: trimmed }));
+  } catch {}
+}
+
+export function readFeedCache() {
+  try {
+    const raw = localStorage.getItem(FEED_CACHE);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return Array.isArray(data.posts) && data.posts.length ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isOffline() {
+  return !navigator.onLine;
+}
+
+export function requireOnline() {
+  if (!navigator.onLine) throw new Error('Нет интернета. Действие станет доступно, когда связь вернётся');
+}
 
 const listeners = new Set();
 

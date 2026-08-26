@@ -1,4 +1,4 @@
-import { api, state, setUser, applyAppearance, subscribe, initBackend } from './store.js';
+import { api, state, setUser, applyAppearance, subscribe, initBackend, emit } from './store.js';
 import { el } from './util.js';
 import { icon, logoMark, setLogoSource } from './icons.js';
 import { toast } from './ui.js';
@@ -35,6 +35,37 @@ function tryLogo(url) {
   });
 }
 
+function networkBar() {
+  let bar = document.querySelector('.offline-bar');
+  if (navigator.onLine) {
+    bar?.remove();
+    delete document.documentElement.dataset.offline;
+    return;
+  }
+  document.documentElement.dataset.offline = 'yes';
+  if (bar) return;
+  bar = el(`<div class="offline-bar">${icon('warn', 15)}<span>Нет интернета. Показываем сохранённое</span></div>`);
+  document.body.appendChild(bar);
+}
+
+function watchNetwork() {
+  const update = () => {
+    state.online = navigator.onLine;
+    networkBar();
+    emit('network', state.online);
+    if (navigator.onLine && state.tab) openTab(state.tab);
+  };
+  window.addEventListener('online', update);
+  window.addEventListener('offline', update);
+  networkBar();
+}
+
+function registerWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.protocol !== 'http:') return;
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 async function detectLogo() {
   for (const file of LOGO_FILES) {
     if (!(await tryLogo(file))) continue;
@@ -50,6 +81,8 @@ async function boot() {
   applyAppearance(null);
   await detectLogo();
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
+  registerWorker();
+  watchNetwork();
   await initBackend();
   try {
     const { user } = await api.me();

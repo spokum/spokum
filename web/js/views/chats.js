@@ -1,4 +1,4 @@
-import { api, state } from '../store.js';
+import { api, state, isOffline } from '../store.js';
 import { el, esc, timeAgo, clockTime, durationText, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet } from '../ui.js';
@@ -69,7 +69,17 @@ async function load(root) {
     list.innerHTML = emptyState('chats', 'Нужен вход', 'Войдите, чтобы переписываться');
     return;
   }
-  const { chats } = await api.chats();
+  if (isOffline()) {
+    list.innerHTML = emptyState('warn', 'Нет интернета', 'Переписка станет доступна, когда связь вернётся');
+    return;
+  }
+  let chats;
+  try {
+    ({ chats } = await api.chats());
+  } catch (error) {
+    list.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
   if (!chats.length) {
     list.innerHTML = emptyState('chats', 'Пока пусто', 'Найдите человека через поиск выше');
     return;
@@ -208,6 +218,7 @@ export async function openChat(chatId) {
   observer.observe(document.body, { childList: true });
 
   const send = async (payload) => {
+    if (isOffline()) return toast('Нет интернета, сообщение не уйдёт', 'err');
     try {
       await api.sendMessage(chatId, payload);
       input.value = '';

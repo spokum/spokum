@@ -450,6 +450,18 @@ svg { display: block; flex: none; }
 [data-logo='custom'] .auth-logo { width: 74px; height: 74px; border-radius: 0; overflow: hidden; }
 [data-logo='custom'] .auth-logo img { width: 100%; height: 100%; }
 
+.offline-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 7px 14px;
+  background: #c6b083; color: #221a09;
+  font-size: 12.5px; font-weight: 650;
+  animation: slide-in .25s var(--ease);
+}
+[data-offline] body { padding-top: 32px; }
+[data-offline] .topbar { top: 32px; }
+[data-offline] .chat-view, [data-offline] .game-stage { top: 32px; }
+
 .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
 .empty svg { margin: 0 auto 12px; opacity: .5; }
 
