@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v4';
+const VERSION = 'spokum-v5';
 const CORE = [
   './',
   './index.html',
@@ -22,6 +22,7 @@ const CORE = [
   './js/views/admin.js',
   './js/views/mod.js',
   './js/views/stories.js',
+  './js/views/safe.js',
   './vendor/supabase.js',
   './fonts/inter-cyrillic-400.woff2',
   './fonts/inter-cyrillic-500.woff2',

@@ -40,7 +40,8 @@ export const state = {
   moodFilter: null,
   tab: 'feed',
   unread: 0,
-  online: navigator.onLine
+  online: navigator.onLine,
+  quiet: false
 };
 
 const FEED_CACHE = 'spokum.cache.feed';

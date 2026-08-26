@@ -88,6 +88,9 @@ function shapeMessage(row, authors) {
 function guard(error) {
   if (!error) return;
   const text = error.message || 'Ошибка запроса';
+  if (/abort|timed? ?out|timeout/i.test(text)) {
+    throw new Error('Сервер не ответил вовремя. Попробуйте ещё раз');
+  }
   if (/failed to fetch|networkerror|load failed|network request failed/i.test(text)) {
     throw new Error(
       navigator.onLine
@@ -108,6 +111,24 @@ function guard(error) {
   throw new Error(text);
 }
 
+const REQUEST_TIMEOUT = 20000;
+
+function timedFetch(input, init = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  if (init.signal) {
+    init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise((done) => setTimeout(() => done(fallback), ms))
+  ]);
+}
+
 async function loadFactory() {
   if (window.supabase?.createClient) return window.supabase.createClient;
   const module = await import(CLIENT_URL);
@@ -117,7 +138,9 @@ async function loadFactory() {
 export async function createSupabase(url, key) {
   const createClient = await loadFactory();
   const sb = createClient(url, key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    global: { fetch: timedFetch },
+    realtime: { params: { eventsPerSecond: 4 } }
   });
 
   let uid = null;
@@ -167,8 +190,8 @@ export async function createSupabase(url, key) {
       .subscribe();
   };
 
-  const { data: sessionData } = await sb.auth.getSession();
-  uid = sessionData?.session?.user?.id || null;
+  const sessionResult = await withTimeout(sb.auth.getSession(), 8000, { data: { session: null } });
+  uid = sessionResult?.data?.session?.user?.id || null;
   if (uid) listen();
 
   sb.auth.onAuthStateChange((_event, session) => {

@@ -50,6 +50,7 @@ export async function render(root) {
         <button class="btn grow" data-edit-2>${icon('edit', 17)} Редактировать</button>
         <button class="btn grow" data-mood>${icon('wave', 17)} Настроение</button>
       </div>
+      <button class="btn" data-safe style="width:100%;margin-top:8px">${icon('leaf', 17)} Безопасная зона</button>
       ${isPremium(fresh) ? `<div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-story>${icon('play', 17)} Добавить историю</button>
         ${hasStory(fresh) ? `<button class="btn grow" data-my-story>${icon('eye', 17)} Моя история</button>` : ''}
@@ -77,6 +78,7 @@ export async function render(root) {
   root.querySelector('[data-edit]').onclick = edit;
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
+  body.querySelector('[data-safe]').onclick = () => enterSafeZone(() => render(root));
   body.querySelector('[data-banner]').onclick = () => openBannerMenu(fresh, () => render(root));
   body.querySelector('[data-pins-edit]')?.addEventListener('click', () => openPinEditor(fresh, () => render(root)));
   body.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => render(root)));
@@ -310,6 +312,14 @@ function openEditor(done) {
   };
 }
 
+async function enterSafeZone(done) {
+  const { openSafeZone } = await import('./safe.js');
+  openSafeZone((minutes) => {
+    toast(`Вы побыли в тишине ${minutes} мин`);
+    done?.();
+  });
+}
+
 function openMoodPicker(done) {
   const body = el(`<div class="col" style="gap:6px">${Object.entries(MOODS)
     .map(([key, m]) => `<button class="list-item" data-mood="${key}" style="${moodStyle(key)}"><span class="mood-tag" style="${moodStyle(key)}"><i class="mood-dot"></i>${esc(m.label)}</span></button>`)
@@ -317,9 +327,14 @@ function openMoodPicker(done) {
   const sheet = openSheet('Настроение сейчас', body);
   body.querySelectorAll('[data-mood]').forEach((button) => {
     button.onclick = async () => {
-      const { user } = await api.updateMe({ mood: button.dataset.mood });
+      const mood = button.dataset.mood;
+      const { user } = await api.updateMe({ mood });
       setUser(user);
       sheet.close();
+      if (mood === 'anxiety') {
+        enterSafeZone(done);
+        return;
+      }
       toast('Записал');
       done?.();
     };

@@ -29,8 +29,13 @@ const LOGO_FILES = ['logo.png', 'logo.jpg', 'logo.jpeg', 'logo.webp', 'logo.svg'
 function tryLogo(url) {
   return new Promise((done) => {
     const probe = new Image();
-    probe.onload = () => done(true);
-    probe.onerror = () => done(false);
+    const finish = (result) => {
+      clearTimeout(timer);
+      done(result);
+    };
+    const timer = setTimeout(() => finish(false), 2500);
+    probe.onload = () => finish(true);
+    probe.onerror = () => finish(false);
     probe.src = url;
   });
 }
@@ -90,7 +95,10 @@ async function boot() {
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
   registerWorker();
   watchNetwork();
-  await initBackend();
+  await Promise.race([
+    initBackend(),
+    new Promise((done) => setTimeout(done, 12000))
+  ]);
   try {
     const { user } = await api.me();
     setUser(user);
@@ -164,7 +172,7 @@ function announcePremium(user) {
 }
 
 export async function refreshUser() {
-  if (!state.user) return;
+  if (!state.user || state.quiet) return;
   try {
     const { user } = await api.me();
     if (!user) return;
@@ -181,7 +189,7 @@ async function openTab(tab) {
   const host = shell.querySelector('[data-view]');
   if (state.user && navigator.onLine) {
     const { loadStories } = await import('./views/stories.js');
-    await loadStories();
+    await Promise.race([loadStories(), new Promise((done) => setTimeout(done, 4000))]);
   }
   shell.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
   host.scrollTop = 0;
@@ -197,7 +205,7 @@ async function openTab(tab) {
 }
 
 async function refreshUnread() {
-  if (!state.user) return;
+  if (!state.user || state.quiet) return;
   try {
     const { chats } = await api.chats();
     const total = chats.reduce((sum, chat) => sum + chat.unread, 0);

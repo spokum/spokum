@@ -66,7 +66,9 @@ export function renderAuth(root, done) {
       const displayName = form.querySelector('[data-name]')?.value.trim();
       if (!username || !password) return toast('Заполните поля', 'err');
       const button = form.querySelector('[data-submit]');
+      const label = button.textContent;
       button.disabled = true;
+      button.textContent = mode === 'login' ? 'Входим' : 'Создаём аккаунт';
       try {
         const result = mode === 'login'
           ? await api.login({ username, password })
@@ -83,6 +85,7 @@ export function renderAuth(root, done) {
         toast(error.message, 'err');
       } finally {
         button.disabled = false;
+        button.textContent = label;
       }
     };
 

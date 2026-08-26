@@ -1,10 +1,11 @@
 import { el, esc, initials } from './util.js';
 import { icon, solidIcon } from './icons.js';
-import { isPremium } from './store.js';
+import { isPremium, state } from './store.js';
 
 let toastHost;
 
 export function toast(message, kind = '') {
+  if (state.quiet && kind !== 'err') return;
   if (!toastHost) {
     toastHost = el('<div class="toast-host"></div>');
     document.body.appendChild(toastHost);

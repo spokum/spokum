@@ -727,6 +727,72 @@ svg { display: block; flex: none; }
 [data-logo='custom'] .auth-logo { width: 74px; height: 74px; border-radius: 0; overflow: hidden; }
 [data-logo='custom'] .auth-logo img { width: 100%; height: 100%; }
 
+.safe-zone {
+  position: fixed; inset: 0; z-index: 140;
+  display: flex; flex-direction: column;
+  height: 100dvh;
+  background:
+    radial-gradient(70% 50% at 50% 0%, rgba(127,179,160,.14), transparent 70%),
+    var(--bg);
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  gap: 12px;
+  animation: fade .35s var(--ease);
+}
+.safe-head { display: flex; align-items: center; gap: 12px; }
+.safe-note {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--line);
+  color: var(--muted); font-size: 12px;
+}
+.safe-tabs { flex: none; }
+.safe-body { flex: 1; min-height: 0; display: flex; }
+.safe-panel { flex: 1; display: flex; flex-direction: column; gap: 14px; justify-content: center; }
+
+.breath-stage { flex: 1; display: grid; place-items: center; position: relative; min-height: 220px; }
+.breath-circle {
+  width: min(62vw, 260px); aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, var(--accent-soft), transparent 70%);
+  border: 2px solid var(--accent);
+  will-change: transform;
+}
+.breath-label {
+  position: absolute;
+  font-size: 19px; font-weight: 650;
+  letter-spacing: .01em;
+}
+
+.sound-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.sound-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 22px 12px;
+  border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--line);
+  color: var(--text); font-size: 13.5px; font-weight: 600;
+  transition: all .2s var(--ease);
+}
+.sound-tile.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+.quote-card {
+  flex: 1;
+  display: grid; place-items: center;
+  padding: 28px 22px;
+  border-radius: var(--r-xl);
+  background: var(--surface); border: 1px solid var(--line);
+  font-size: 18px; line-height: 1.5; font-weight: 500;
+  text-align: center;
+  color: var(--text);
+}
+
+.calm-canvas {
+  flex: 1; width: 100%; min-height: 260px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+
 .offline-bar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center; gap: 8px;
