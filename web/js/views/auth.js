@@ -3,35 +3,42 @@ import { el, esc, initials } from '../util.js';
 import { icon, logoMark } from '../icons.js';
 import { toast, pickImage } from '../ui.js';
 
+function humanError(message) {
+  const text = String(message || '');
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(text)) return 'не отвечает';
+  if (/abort|timeout|timed out/i.test(text)) return 'слишком долго не отвечает';
+  return text;
+}
+
 async function probe(label, run) {
   const started = Date.now();
+  const spent = () => `${((Date.now() - started) / 1000).toFixed(1)} с`;
   try {
-    const detail = await run();
-    return { label, ok: true, detail: `${detail} · ${Date.now() - started} мс` };
+    return { label, ok: true, detail: `${await run()} · ${spent()}` };
   } catch (error) {
-    return { label, ok: false, detail: `${error.message} · ${Date.now() - started} мс` };
+    return { label, ok: false, detail: `${humanError(error.message)} · ${spent()}` };
   }
 }
 
 async function runDiagnostics() {
   const { openSheet } = await import('../ui.js');
   const body = el('<div class="col"><div class="small muted center">Проверяем</div></div>');
-  openSheet('Связь с базой', body);
+  openSheet('Проверка связи', body);
 
   const url = String(window.SPOKUM_SUPABASE_URL || '').replace(/\/$/, '');
   const key = window.SPOKUM_SUPABASE_KEY || '';
   const results = [];
 
   results.push({
-    label: 'Ключи в приложении',
+    label: 'Настройки приложения',
     ok: !!(url && key),
-    detail: url ? `${url.slice(0, 34)}...` : 'не заданы в config.js'
+    detail: url && key ? 'на месте' : 'не заданы'
   });
 
   results.push({
-    label: 'Библиотека внутри',
+    label: 'Модуль связи',
     ok: !!window.supabase?.createClient,
-    detail: window.supabase?.createClient ? 'подключена' : 'не загрузилась'
+    detail: window.supabase?.createClient ? 'загружен' : 'не загрузился'
   });
 
   results.push({
@@ -41,17 +48,17 @@ async function runDiagnostics() {
   });
 
   if (url && key) {
-    results.push(await probe('Ответ сервера базы', async () => {
+    results.push(await probe('Сервер', async () => {
       const response = await fetch(`${url}/auth/v1/health`, { headers: { apikey: key } });
-      return `код ${response.status}`;
+      return response.ok ? 'отвечает' : `не отвечает, код ${response.status}`;
     }));
 
-    results.push(await probe('Чтение данных', async () => {
+    results.push(await probe('Данные', async () => {
       const response = await fetch(`${url}/rest/v1/profiles?select=id&limit=1`, {
         headers: { apikey: key, Authorization: `Bearer ${key}` }
       });
-      if (!response.ok) throw new Error(`код ${response.status}`);
-      return 'доступно';
+      if (!response.ok) throw new Error(`недоступны, код ${response.status}`);
+      return 'читаются';
     }));
   }
 
@@ -66,7 +73,7 @@ async function runDiagnostics() {
           </div>
         </div>`).join('')}
     </div>
-    <p class="tiny muted" style="margin:4px 0 0">Если сервер не отвечает, проверьте проект в Supabase: бесплатные проекты засыпают после долгой паузы и просыпаются по кнопке Restore в панели.</p>`;
+    <p class="tiny muted" style="margin:4px 0 0">Если сервер не отвечает, попробуйте позже или напишите администратору.</p>`;
 }
 
 export function renderAuth(root, done) {
