@@ -172,6 +172,10 @@ export async function refreshUser() {
 async function openTab(tab) {
   state.tab = tab;
   const host = shell.querySelector('[data-view]');
+  if (state.user && navigator.onLine) {
+    const { loadStories } = await import('./views/stories.js');
+    await loadStories();
+  }
   shell.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
   host.scrollTop = 0;
   window.scrollTo({ top: 0 });

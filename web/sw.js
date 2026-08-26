@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v1';
+const VERSION = 'spokum-v2';
 const CORE = [
   './',
   './index.html',
@@ -21,7 +21,8 @@ const CORE = [
   './js/views/settings.js',
   './js/views/profile.js',
   './js/views/admin.js',
-  './js/views/mod.js'
+  './js/views/mod.js',
+  './js/views/stories.js'
 ];
 
 self.addEventListener('install', (event) => {

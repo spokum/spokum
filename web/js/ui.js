@@ -18,18 +18,40 @@ export function toast(message, kind = '') {
   }, 2600);
 }
 
-export function avatar(user, size = 40) {
+const storyOwners = new Set();
+
+export function setStoryOwners(ids) {
+  storyOwners.clear();
+  for (const id of ids) storyOwners.add(String(id));
+}
+
+export function hasStory(user) {
+  return !!user && storyOwners.has(String(user.id));
+}
+
+export function avatar(user, size = 40, options = {}) {
   if (!user) return `<div class="avatar avatar-${size}" style="--h:220">?</div>`;
   const inner = user.avatar
     ? `<img src="${esc(user.avatar)}" alt="">`
     : esc(initials(user.displayName || user.username));
   const premium = isPremium(user) ? ' avatar-premium' : '';
-  return `<div class="avatar avatar-${size}${premium}" style="--h:${Number(user.hue) || 220}">${inner}</div>`;
+  const ring = hasStory(user) ? ' avatar-story' : '';
+  const face = `<div class="avatar avatar-${size}${premium}${ring}" style="--h:${Number(user.hue) || 220}">${inner}</div>`;
+
+  const pins = options.pins === false ? [] : (Array.isArray(user.pins) ? user.pins.filter(Boolean).slice(0, 4) : []);
+  if (!pins.length) return face;
+
+  const slots = ['pin-tl', 'pin-tr', 'pin-bl', 'pin-br'];
+  const marks = pins.map((pin, index) => `<img class="avatar-pin ${slots[index]}" src="${esc(pin)}" alt="">`).join('');
+  return `<span class="avatar-wrap avatar-wrap-${size}">${face}${marks}</span>`;
 }
 
 export function badges(user) {
   if (!user) return '';
   const items = [];
+  if (user.statusIcon) {
+    items.push(`<img class="status-icon" src="${esc(user.statusIcon)}" alt="" title="Статус">`);
+  }
   if (isPremium(user)) items.push(badgeButton('badge-premium', solidIcon('crown', 12), 'СпокУм Премиум'));
   if (user.isVerified) items.push(badgeButton('badge-verified', icon('verified', 12, 2.4), 'Пользователь верифицирован'));
   if (user.isModerator) items.push(badgeButton('badge-mod', solidIcon('shield', 12), 'Модератор СпокУма'));

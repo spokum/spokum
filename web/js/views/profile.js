@@ -1,7 +1,8 @@
-import { api, state, setUser, MOODS, moodStyle } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium } from '../store.js';
 import { el, esc, timeAgo, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, badges, toast, openSheet, promptSheet, pickImage, emptyState, confirmSheet } from '../ui.js';
+import { avatar, badges, toast, openSheet, promptSheet, pickImage, emptyState, confirmSheet, hasStory } from '../ui.js';
+import { openStories, publishStory } from './stories.js';
 
 export async function render(root) {
   const user = state.user;
@@ -44,6 +45,10 @@ export async function render(root) {
         <button class="btn grow" data-edit-2>${icon('edit', 17)} Редактировать</button>
         <button class="btn grow" data-mood>${icon('wave', 17)} Настроение</button>
       </div>
+      ${isPremium(fresh) ? `<div class="row" style="margin-top:8px;gap:8px">
+        <button class="btn grow" data-story>${icon('play', 17)} Добавить историю</button>
+        ${hasStory(fresh) ? `<button class="btn grow" data-my-story>${icon('eye', 17)} Моя история</button>` : ''}
+      </div>` : ''}
     </div>
 
     <div class="col" style="margin-top:12px;gap:6px">
@@ -65,6 +70,8 @@ export async function render(root) {
   root.querySelector('[data-edit]').onclick = edit;
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
+  body.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => render(root)));
+  body.querySelector('[data-my-story]')?.addEventListener('click', () => openStories(fresh.id, () => render(root)));
   body.querySelector('[data-admin]')?.addEventListener('click', async () => {
     const { openAdmin } = await import('./admin.js');
     openAdmin();
@@ -97,6 +104,19 @@ function openEditor(done) {
       <div><div class="tiny muted" style="margin-bottom:6px">Имя</div><input class="input" data-name maxlength="40" value="${esc(user.displayName)}"></div>
       <div><div class="tiny muted" style="margin-bottom:6px">О себе</div><textarea class="textarea" data-bio maxlength="300">${esc(user.bio || '')}</textarea></div>
       <div><div class="tiny muted" style="margin-bottom:6px">Цвет аватара</div><input type="range" min="0" max="360" value="${Number(user.hue) || 220}" data-hue style="width:100%"></div>
+      ${isPremium(user) ? `
+      <div class="divider"></div>
+      <div class="row between"><span class="small strong">Статус возле ника</span>
+        <div class="row" style="gap:6px">
+          <div data-status-preview></div>
+          <button class="btn btn-sm" data-status-pick>${icon('image', 15)} Выбрать</button>
+        </div>
+      </div>
+      <div>
+        <div class="row between" style="margin-bottom:8px"><span class="small strong">Пины вокруг аватара</span><span class="tiny muted">до четырёх</span></div>
+        <div class="pin-slots" data-pins></div>
+        <div class="tiny muted" style="margin-top:8px">Нажмите на слот, чтобы выбрать картинку. Долгое нажатие очищает.</div>
+      </div>` : ''}
       <button class="btn btn-primary" data-save>Сохранить</button>
     </div>`);
   const sheet = openSheet('Редактировать профиль', body);
@@ -124,14 +144,73 @@ function openEditor(done) {
     avatarData = null;
     redraw();
   });
+
+  let pins = Array.isArray(user.pins) ? user.pins.slice(0, 4) : [];
+  let statusIcon = user.statusIcon || null;
+  const pinHost = body.querySelector('[data-pins]');
+  const statusPreview = body.querySelector('[data-status-preview]');
+
+  const drawStatus = () => {
+    if (!statusPreview) return;
+    statusPreview.innerHTML = statusIcon
+      ? `<img class="status-icon" style="width:26px;height:26px" src="${esc(statusIcon)}" alt="">`
+      : `<span class="tiny muted">нет</span>`;
+  };
+
+  const drawPins = () => {
+    if (!pinHost) return;
+    pinHost.innerHTML = Array.from({ length: 4 }, (unused, index) =>
+      `<button type="button" class="pin-slot" data-pin="${index}">${pins[index] ? `<img src="${esc(pins[index])}" alt="">` : icon('plus', 18)}</button>`
+    ).join('');
+    pinHost.querySelectorAll('[data-pin]').forEach((slot) => {
+      const index = Number(slot.dataset.pin);
+      slot.onclick = async () => {
+        const image = await pickImage(160);
+        if (!image) return;
+        pins[index] = image;
+        drawPins();
+      };
+      slot.oncontextmenu = (event) => {
+        event.preventDefault();
+        pins[index] = null;
+        pins = pins.filter((value, position) => value || position < pins.length);
+        drawPins();
+      };
+      let hold;
+      slot.onpointerdown = () => {
+        hold = setTimeout(() => {
+          pins[index] = null;
+          drawPins();
+        }, 600);
+      };
+      slot.onpointerup = () => clearTimeout(hold);
+      slot.onpointerleave = () => clearTimeout(hold);
+    });
+  };
+
+  body.querySelector('[data-status-pick]')?.addEventListener('click', async () => {
+    const image = await pickImage(120);
+    if (image) {
+      statusIcon = image;
+      drawStatus();
+    }
+  });
+
+  drawPins();
+  drawStatus();
   body.querySelector('[data-save]').onclick = async () => {
     try {
-      const { user: updated } = await api.updateMe({
+      const patch = {
         displayName: body.querySelector('[data-name]').value,
         bio: body.querySelector('[data-bio]').value,
         hue,
         avatar: avatarData
-      });
+      };
+      if (isPremium(user)) {
+        patch.pins = pins.filter(Boolean).slice(0, 4);
+        patch.statusIcon = statusIcon;
+      }
+      const { user: updated } = await api.updateMe(patch);
       setUser(updated);
       sheet.close();
       toast('Профиль обновлён');
@@ -195,7 +274,7 @@ export async function openProfile(username) {
     const days = Math.max(1, Math.round((Date.now() - user.createdAt) / 86400000));
     body.innerHTML = `
       <div class="card" style="text-align:center">
-        <div style="display:flex;justify-content:center">${avatar(user, 88)}</div>
+        <div style="display:flex;justify-content:center">${hasStory(user) ? `<button data-open-story style="display:contents">${avatar(user, 88)}</button>` : avatar(user, 88)}</div>
         <div class="row" style="justify-content:center;gap:6px;margin-top:14px">
           <span class="strong" style="font-size:19px">${esc(user.displayName)}</span>${badges(user)}
         </div>
@@ -235,6 +314,10 @@ export async function openProfile(username) {
       const { openReport } = await import('./feed.js');
       openReport('user', user.id);
     };
+    if (hasStory(user)) {
+      body.querySelector('[data-open-story]')?.addEventListener('click', () => openStories(user.id));
+    }
+
     body.querySelector('[data-write]').onclick = async () => {
       try {
         const { chat } = await api.createChat({ kind: 'dm', members: [user.id] });

@@ -1,8 +1,9 @@
 import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState } from '../ui.js';
+import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
 import { openProfile } from './profile.js';
+import { openStories, publishStory } from './stories.js';
 
 let draft = { text: '', image: null, mood: 'calm' };
 
@@ -46,6 +47,7 @@ function renderComposer(root) {
       <div class="row between">
         <div class="row" style="gap:4px">
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
+          ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm" data-send>${icon('send', 16)} Опубликовать</button>
       </div>
@@ -89,6 +91,8 @@ function renderComposer(root) {
       drawPreview();
     }
   };
+
+  card.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => load(root)));
 
   card.querySelector('[data-send]').onclick = async (event) => {
     if (isOffline()) return toast('Нет интернета, пост не отправится', 'err');
@@ -202,7 +206,10 @@ export function postCard(post, refresh, options = {}) {
       </div>
     </article>`);
 
-  card.querySelector('[data-author]').onclick = () => openProfile(post.author.username);
+  card.querySelector('[data-author]').onclick = () => {
+    if (hasStory(post.author)) openStories(post.author.id);
+    else openProfile(post.author.username);
+  };
 
   card.querySelector('[data-like]').onclick = async (event) => {
     if (!state.user) return toast('Войдите, чтобы ставить лайки', 'err');

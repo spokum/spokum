@@ -135,6 +135,26 @@ create table if not exists public.audit (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.stories (
+  id bigint generated always as identity primary key,
+  author_id uuid not null references public.profiles on delete cascade,
+  kind text not null default 'video',
+  media text not null,
+  storage_path text,
+  caption text not null default '',
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '24 hours'
+);
+create index if not exists stories_author_idx on public.stories (author_id, expires_at desc);
+
+create table if not exists public.stickers (
+  id bigint generated always as identity primary key,
+  owner_id uuid not null references public.profiles on delete cascade,
+  image text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists stickers_owner_idx on public.stickers (owner_id);
+
 create table if not exists public.game_scores (
   id bigint generated always as identity primary key,
   user_id uuid not null references public.profiles on delete cascade,
@@ -145,6 +165,8 @@ create table if not exists public.game_scores (
 create index if not exists game_scores_idx on public.game_scores (game, score desc);
 
 alter table public.profiles add column if not exists premium_until timestamptz;
+alter table public.profiles add column if not exists pins jsonb not null default '[]'::jsonb;
+alter table public.profiles add column if not exists status_icon text;
 alter table public.profiles add column if not exists premium_reason text not null default '';
 alter table public.profiles add column if not exists premium_granted_at timestamptz;
 
@@ -165,6 +187,11 @@ returns boolean language sql stable security definer set search_path = public as
        and (muted_until is null or muted_until < now())
     from public.profiles where id = auth.uid()
   ), false);
+$$;
+
+create or replace function public.viewer_is_premium()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select premium_until > now() from public.profiles where id = auth.uid()), false);
 $$;
 
 create or replace function public.is_chat_member(target_chat bigint)
@@ -210,6 +237,10 @@ begin
   if coalesce(current_setting('spokum.privileged', true), '') = 'on' then
     return new;
   end if;
+  if not public.viewer_is_premium() then
+    new.pins := old.pins;
+    new.status_icon := old.status_icon;
+  end if;
   new.username := old.username;
   new.is_admin := old.is_admin;
   new.is_moderator := old.is_moderator;
@@ -243,6 +274,8 @@ alter table public.reports enable row level security;
 alter table public.punishments enable row level security;
 alter table public.mod_strikes enable row level security;
 alter table public.audit enable row level security;
+alter table public.stories enable row level security;
+alter table public.stickers enable row level security;
 alter table public.game_scores enable row level security;
 
 drop policy if exists profiles_read on public.profiles;
@@ -343,6 +376,27 @@ create policy strikes_read on public.mod_strikes for select
 
 drop policy if exists audit_read on public.audit;
 create policy audit_read on public.audit for select using (public.viewer_is_admin());
+
+drop policy if exists stories_read on public.stories;
+create policy stories_read on public.stories for select using (expires_at > now());
+
+drop policy if exists stories_insert on public.stories;
+create policy stories_insert on public.stories for insert
+  with check (author_id = auth.uid() and public.viewer_is_premium() and public.viewer_can_write());
+
+drop policy if exists stories_delete on public.stories;
+create policy stories_delete on public.stories for delete
+  using (author_id = auth.uid() or public.viewer_is_moderator());
+
+drop policy if exists stickers_read on public.stickers;
+create policy stickers_read on public.stickers for select using (owner_id = auth.uid());
+
+drop policy if exists stickers_insert on public.stickers;
+create policy stickers_insert on public.stickers for insert
+  with check (owner_id = auth.uid() and public.viewer_is_premium());
+
+drop policy if exists stickers_delete on public.stickers;
+create policy stickers_delete on public.stickers for delete using (owner_id = auth.uid());
 
 drop policy if exists scores_read on public.game_scores;
 create policy scores_read on public.game_scores for select using (true);
@@ -657,6 +711,11 @@ begin
 end;
 $$;
 
+create or replace function public.purge_expired_stories()
+returns void language sql security definer set search_path = public as $$
+  delete from public.stories where expires_at < now();
+$$;
+
 create or replace function public.touch_presence()
 returns void language sql security definer set search_path = public as $$
   update public.profiles set last_seen = now() where id = auth.uid();
@@ -671,6 +730,8 @@ grant execute on function public.admin_set_state(uuid, text, integer, text) to a
 grant execute on function public.admin_revert(bigint, boolean, text) to authenticated;
 grant execute on function public.admin_stats() to authenticated;
 grant execute on function public.admin_users(text) to authenticated;
+grant execute on function public.viewer_is_premium() to authenticated, anon;
+grant execute on function public.purge_expired_stories() to authenticated;
 grant execute on function public.admin_grant_premium(uuid, integer, text) to authenticated;
 grant execute on function public.admin_revoke_premium(uuid) to authenticated;
 grant execute on function public.touch_presence() to authenticated;
@@ -680,3 +741,28 @@ begin
   alter publication supabase_realtime add table public.messages;
 exception when duplicate_object then null;
 end $$;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'stories',
+  'stories',
+  true,
+  26214400,
+  array['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+  set public = true,
+      file_size_limit = 26214400,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "stories bucket read" on storage.objects;
+create policy "stories bucket read" on storage.objects for select
+  using (bucket_id = 'stories');
+
+drop policy if exists "stories bucket insert" on storage.objects;
+create policy "stories bucket insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'stories' and public.viewer_is_premium());
+
+drop policy if exists "stories bucket delete" on storage.objects;
+create policy "stories bucket delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'stories' and owner = auth.uid());

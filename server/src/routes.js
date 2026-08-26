@@ -485,11 +485,15 @@ export const routes = [
     if (chat.kind === 'channel' && membership.role !== 'owner' && !user.is_admin) {
       throw new HttpError(403, 'Писать в канал может только владелец');
     }
-    const kind = oneOf(ctx.body.kind || 'text', ['text', 'image', 'voice', 'call'], 'kind');
+    const kind = oneOf(ctx.body.kind || 'text', ['text', 'image', 'voice', 'call', 'sticker'], 'kind');
     const body = str(ctx.body.body || '', { max: 4000 });
-    const asset = kind === 'image' ? media(ctx.body.media) : kind === 'voice' ? media(ctx.body.media, 'audio') : null;
+    const asset = kind === 'image' || kind === 'sticker'
+      ? media(ctx.body.media)
+      : kind === 'voice'
+        ? media(ctx.body.media, 'audio')
+        : null;
     if (kind === 'text' && !body) bad('Пустое сообщение');
-    if ((kind === 'image' || kind === 'voice') && !asset) bad('Нет вложения');
+    if ((kind === 'image' || kind === 'voice' || kind === 'sticker') && !asset) bad('Нет вложения');
     const info = db.prepare(
       'INSERT INTO messages (chat_id, author_id, kind, body, media, duration, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(chatId, user.id, kind, body, asset, int(ctx.body.duration ?? 0, { min: 0, max: 3600 }), Date.now());

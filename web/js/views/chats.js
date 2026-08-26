@@ -1,4 +1,4 @@
-import { api, state, isOffline } from '../store.js';
+import { api, state, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, clockTime, durationText, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet } from '../ui.js';
@@ -88,7 +88,9 @@ async function load(root) {
   chats.forEach((chat) => {
     const last = chat.lastMessage;
     const preview = last
-      ? last.kind === 'image'
+      ? last.kind === 'sticker'
+        ? 'Стикер'
+        : last.kind === 'image'
         ? 'Фотография'
         : last.kind === 'voice'
           ? `Голосовое ${durationText(last.duration)}`
@@ -164,6 +166,7 @@ export async function openChat(chatId) {
       <div class="chat-body" data-body></div>
       <div class="chat-foot">
         <button class="btn btn-icon btn-ghost" data-emoji>${icon('smile', 19)}</button>
+        <button class="btn btn-icon btn-ghost" data-stickers>${icon('star', 19)}</button>
         <button class="btn btn-icon btn-ghost" data-image>${icon('image', 19)}</button>
         <textarea class="input grow" data-input rows="1" placeholder="Сообщение" style="min-height:44px;max-height:120px;resize:none;padding:11px 14px"></textarea>
         <button class="btn btn-icon btn-ghost" data-voice>${icon('mic', 19)}</button>
@@ -262,6 +265,8 @@ export async function openChat(chatId) {
     });
   });
 
+  view.querySelector('[data-stickers]')?.addEventListener('click', () => openStickers(send));
+
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
@@ -272,7 +277,8 @@ function bubble(message, chat, lastAuthor) {
   }
   const showAuthor = chat.kind !== 'dm' && !mine && message.author?.id !== lastAuthor;
   let inner = '';
-  if (message.kind === 'image') inner = `<img src="${esc(message.media)}" alt="" loading="lazy">${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
+  if (message.kind === 'sticker') inner = `<img class="sticker" src="${esc(message.media)}" alt="стикер" loading="lazy">`;
+  else if (message.kind === 'image') inner = `<img src="${esc(message.media)}" alt="" loading="lazy">${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
   else if (message.kind === 'voice') {
     const bars = Array.from({ length: 22 }, (_, i) => `<i style="height:${20 + Math.round(Math.sin(i * 1.7 + message.id) * 55 + 55) * 0.6}%"></i>`).join('');
     inner = `<div class="voice"><button class="btn btn-icon btn-ghost" data-play style="width:32px;height:32px">${icon('play', 15)}</button><div class="voice-bars">${bars}</div><span class="tiny">${durationText(message.duration)}</span></div>`;
@@ -280,7 +286,7 @@ function bubble(message, chat, lastAuthor) {
 
   const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
   const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
-  const node = el(`<div class="bubble ${mine ? 'mine' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}</div></div>`);
+  const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}</div></div>`);
 
   const play = node.querySelector('[data-play]');
   if (play) {
@@ -299,6 +305,70 @@ function bubble(message, chat, lastAuthor) {
     };
   }
   return node;
+}
+
+async function openStickers(send) {
+  const body = el('<div class="col" data-host style="gap:12px"></div>');
+  const sheet = openSheet('Стикеры', body);
+
+  const draw = async () => {
+    let stickers = [];
+    try {
+      ({ stickers } = await api.stickers());
+    } catch (error) {
+      body.innerHTML = `<div class="small muted center">${esc(error.message)}</div>`;
+      return;
+    }
+
+    body.innerHTML = `
+      ${stickers.length
+        ? `<div class="sticker-grid" data-grid>${stickers
+            .map((sticker) => `<button data-send="${sticker.id}" data-image="${esc(sticker.image)}"><img src="${esc(sticker.image)}" alt=""></button>`)
+            .join('')}</div>`
+        : `<div class="small muted center" style="padding:14px 0">Своих стикеров пока нет</div>`}
+      ${isPremium(state.user)
+        ? `<div class="row" style="gap:8px">
+            <button class="btn grow" data-add>${icon('plus', 16)} Добавить стикер</button>
+            ${stickers.length ? `<button class="btn btn-sm" data-manage>${icon('trash', 15)}</button>` : ''}
+          </div>`
+        : `<div class="tiny muted center">Свои стикеры доступны с подпиской СпокУм Премиум</div>`}`;
+
+    body.querySelectorAll('[data-send]').forEach((button) => {
+      button.onclick = () => {
+        send({ kind: 'sticker', media: button.dataset.image });
+        sheet.close();
+      };
+    });
+
+    body.querySelector('[data-add]')?.addEventListener('click', async () => {
+      const image = await pickImage(320);
+      if (!image) return;
+      try {
+        await api.addSticker(image);
+        toast('Стикер добавлен');
+        draw();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    });
+
+    body.querySelector('[data-manage]')?.addEventListener('click', () => {
+      body.querySelectorAll('[data-send]').forEach((button) => {
+        button.onclick = async () => {
+          try {
+            await api.removeSticker(Number(button.dataset.send));
+            toast('Стикер удалён');
+            draw();
+          } catch (error) {
+            toast(error.message, 'err');
+          }
+        };
+      });
+      toast('Нажмите на стикер, чтобы удалить');
+    });
+  };
+
+  await draw();
 }
 
 async function recordVoice(send) {

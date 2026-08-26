@@ -24,6 +24,8 @@ function shapeProfile(row, extra = {}) {
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
     lastSeen: ms(row.last_seen),
+    pins: Array.isArray(row.pins) ? row.pins : [],
+    statusIcon: row.status_icon || null,
     premiumUntil: ms(row.premium_until),
     premiumReason: row.premium_reason || '',
     premiumGrantedAt: ms(row.premium_granted_at),
@@ -201,6 +203,8 @@ export async function createSupabase(url, key) {
       if (patch.theme != null) fields.theme = patch.theme;
       if (patch.accent != null) fields.accent = patch.accent;
       if (patch.avatar !== undefined) fields.avatar = patch.avatar;
+      if (patch.pins !== undefined) fields.pins = patch.pins;
+      if (patch.statusIcon !== undefined) fields.status_icon = patch.statusIcon;
       const { error } = await sb.from('profiles').update(fields).eq('id', id);
       guard(error);
       return { user: await profileById(id) };
@@ -655,6 +659,86 @@ export async function createSupabase(url, key) {
           actor: shapeProfile(row.actor)
         }))
       };
+    },
+
+    async publishStory(file, caption) {
+      const me = requireUid();
+      const name = String(file.name || 'story');
+      const ext = (name.includes('.') ? name.split('.').pop() : '').toLowerCase() ||
+        (file.type.startsWith('video') ? 'mp4' : 'jpg');
+      const path = `${me}/${Date.now()}.${ext}`;
+
+      const upload = await sb.storage.from('stories').upload(path, file, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false
+      });
+      if (upload.error) {
+        if (/bucket/i.test(upload.error.message)) {
+          throw new Error('В Supabase нет хранилища stories. Прогоните schema.sql заново');
+        }
+        guard(upload.error);
+      }
+
+      const { data } = sb.storage.from('stories').getPublicUrl(path);
+      const { error } = await sb.from('stories').insert({
+        author_id: me,
+        kind: file.type.startsWith('video') ? 'video' : 'image',
+        media: data.publicUrl,
+        storage_path: path,
+        caption: String(caption || '').slice(0, 200)
+      });
+      guard(error);
+      return { ok: true };
+    },
+
+    async stories() {
+      const { data, error } = await sb
+        .from('stories')
+        .select('*, author:profiles!stories_author_id_fkey(*)')
+        .gt('expires_at', new Date().toISOString())
+        .order('id', { ascending: true });
+      guard(error);
+      return {
+        stories: (data || []).map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          media: row.media,
+          caption: row.caption,
+          createdAt: ms(row.created_at),
+          expiresAt: ms(row.expires_at),
+          author: shapeProfile(row.author)
+        }))
+      };
+    },
+
+    async deleteStory(id) {
+      const { error } = await sb.from('stories').delete().eq('id', id);
+      guard(error);
+      return { ok: true };
+    },
+
+    async stickers() {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('stickers')
+        .select('*')
+        .eq('owner_id', me)
+        .order('id', { ascending: false });
+      guard(error);
+      return { stickers: (data || []).map((row) => ({ id: row.id, image: row.image })) };
+    },
+
+    async addSticker(image) {
+      const me = requireUid();
+      const { error } = await sb.from('stickers').insert({ owner_id: me, image });
+      guard(error);
+      return { ok: true };
+    },
+
+    async removeSticker(id) {
+      const { error } = await sb.from('stickers').delete().eq('id', id);
+      guard(error);
+      return { ok: true };
     },
 
     async saveScore(game, score) {

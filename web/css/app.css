@@ -247,6 +247,63 @@ svg { display: block; flex: none; }
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-premium { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #d8b45c, 0 0 18px -4px #d8b45c; }
+.avatar-story { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.avatar-premium.avatar-story { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #d8b45c, 0 0 0 6px var(--accent); }
+
+.avatar-wrap { position: relative; display: inline-block; flex: none; line-height: 0; }
+.avatar-pin {
+  position: absolute;
+  width: 42%; height: 42%;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--bg-2);
+  box-shadow: 0 0 0 2px var(--bg);
+  pointer-events: none;
+}
+.pin-tl { top: -12%; left: -12%; }
+.pin-tr { top: -12%; right: -12%; }
+.pin-bl { bottom: -12%; left: -12%; }
+.pin-br { bottom: -12%; right: -12%; }
+
+.status-icon {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+  vertical-align: middle;
+  flex: none;
+}
+
+.story-view { position: fixed; inset: 0; z-index: 120; background: #05070d; display: flex; flex-direction: column; }
+.story-bars { display: flex; gap: 4px; padding: 12px 12px 6px; }
+.story-bars i { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
+.story-bars i b { display: block; height: 100%; background: #fff; width: 0; }
+.story-head { display: flex; align-items: center; gap: 10px; padding: 4px 14px 10px; color: #eef2fb; }
+.story-stage { flex: 1; display: grid; place-items: center; min-height: 0; position: relative; }
+.story-stage video, .story-stage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.story-caption { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; color: #fff; font-size: 14px; padding: 0 20px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+.story-tap { position: absolute; top: 0; bottom: 0; width: 34%; }
+.story-tap.left { left: 0; }
+.story-tap.right { right: 0; }
+
+.pin-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pin-slot {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface);
+  display: grid; place-items: center;
+  overflow: hidden;
+  color: var(--muted);
+}
+.pin-slot img { width: 100%; height: 100%; object-fit: cover; }
+
+.sticker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sticker-grid button { border-radius: 12px; overflow: hidden; aspect-ratio: 1; background: var(--surface); }
+.sticker-grid img { width: 100%; height: 100%; object-fit: contain; }
+.bubble .sticker { width: 132px; height: 132px; object-fit: contain; }
+.bubble-sticker { background: none; padding: 0; box-shadow: none; }
+.bubble-sticker.mine { background: none; color: var(--text); }
+.bubble-sticker .bubble-meta { opacity: .55; }
 .avatar-40 { width: 40px; height: 40px; font-size: 15px; }
 .avatar-46 { width: 46px; height: 46px; font-size: 17px; }
 .avatar-54 { width: 54px; height: 54px; font-size: 19px; }

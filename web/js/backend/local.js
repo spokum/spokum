@@ -6,7 +6,7 @@ const MOODS = ['calm', 'joy', 'sad', 'anger', 'anxiety', 'tired', 'love', 'inspi
 
 function blank() {
   return {
-    seq: { users: 0, posts: 0, comments: 0, chats: 0, messages: 0, reports: 0, punishments: 0, strikes: 0, audit: 0, scores: 0 },
+    seq: { users: 0, posts: 0, comments: 0, chats: 0, messages: 0, reports: 0, punishments: 0, strikes: 0, audit: 0, scores: 0, stories: 0, stickerPack: 0 },
     users: [],
     sessions: [],
     posts: [],
@@ -17,6 +17,8 @@ function blank() {
     members: [],
     messages: [],
     reports: [],
+    stories: [],
+    stickerPack: [],
     punishments: [],
     strikes: [],
     audit: [],
@@ -123,6 +125,8 @@ function pub(user) {
     mutedUntil: user.mutedUntil,
     createdAt: user.createdAt,
     lastSeen: user.lastSeen,
+    pins: Array.isArray(user.pins) ? user.pins : [],
+    statusIcon: user.statusIcon || null,
     premiumUntil: user.premiumUntil || 0,
     premiumReason: user.premiumReason || '',
     premiumGrantedAt: user.premiumGrantedAt || 0,
@@ -244,7 +248,9 @@ export const local = {
       lastSeen: Date.now(),
       premiumUntil: 0,
       premiumReason: '',
-      premiumGrantedAt: 0
+      premiumGrantedAt: 0,
+      pins: [],
+      statusIcon: null
     };
     state.users.push(user);
     const token = uid() + uid();
@@ -307,6 +313,8 @@ export const local = {
     if (patch.theme != null) user.theme = patch.theme;
     if (patch.accent != null) user.accent = patch.accent;
     if (patch.avatar !== undefined) user.avatar = patch.avatar;
+    if (patch.pins !== undefined) user.pins = Array.isArray(patch.pins) ? patch.pins.slice(0, 4) : [];
+    if (patch.statusIcon !== undefined) user.statusIcon = patch.statusIcon;
     save();
     return { user: priv(user) };
   },
@@ -846,6 +854,76 @@ export const local = {
         actor: pub(state.users.find((u) => u.id === a.actorId))
       }))
     };
+  },
+
+  async publishStory(file, caption) {
+    const user = need();
+    if (!(user.premiumUntil > Date.now())) fail('Истории доступны с подпиской СпокУм Премиум');
+    const media = await new Promise((done, error) => {
+      const reader = new FileReader();
+      reader.onload = () => done(reader.result);
+      reader.onerror = () => error(new Error('Не удалось прочитать файл'));
+      reader.readAsDataURL(file);
+    });
+    if (media.length > 6_000_000) fail('Без сервера история должна весить до 4 МБ');
+    state.stories = (state.stories || []).filter((row) => row.expiresAt > Date.now());
+    state.stories.push({
+      id: next('stories'),
+      authorId: user.id,
+      kind: file.type.startsWith('video') ? 'video' : 'image',
+      media,
+      caption: String(caption || '').slice(0, 200),
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 86400000
+    });
+    save();
+    return { ok: true };
+  },
+
+  async stories() {
+    const now = Date.now();
+    return {
+      stories: (state.stories || [])
+        .filter((row) => row.expiresAt > now)
+        .map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          media: row.media,
+          caption: row.caption,
+          createdAt: row.createdAt,
+          expiresAt: row.expiresAt,
+          author: pub(state.users.find((u) => u.id === row.authorId))
+        }))
+        .filter((row) => row.author)
+    };
+  },
+
+  async deleteStory(id) {
+    const user = need();
+    state.stories = (state.stories || []).filter((row) => !(row.id === id && (row.authorId === user.id || user.isModerator || user.isAdmin)));
+    save();
+    return { ok: true };
+  },
+
+  async stickers() {
+    const user = need();
+    return { stickers: (state.stickerPack || []).filter((row) => row.ownerId === user.id).map((row) => ({ id: row.id, image: row.image })) };
+  },
+
+  async addSticker(image) {
+    const user = need();
+    if (!(user.premiumUntil > Date.now())) fail('Стикеры доступны с подпиской СпокУм Премиум');
+    state.stickerPack = state.stickerPack || [];
+    state.stickerPack.unshift({ id: next('stickerPack'), ownerId: user.id, image, createdAt: Date.now() });
+    save();
+    return { ok: true };
+  },
+
+  async removeSticker(id) {
+    const user = need();
+    state.stickerPack = (state.stickerPack || []).filter((row) => !(row.id === id && row.ownerId === user.id));
+    save();
+    return { ok: true };
   },
 
   async saveScore(game, score) {
