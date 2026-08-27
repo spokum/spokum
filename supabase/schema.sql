@@ -1257,3 +1257,37 @@ revoke execute on function public.bot_grant_premium(bigint, integer, integer, te
 
 grant execute on function public.make_link_code() to authenticated;
 grant execute on function public.my_billing() to authenticated;
+
+create or replace function public.bot_stats()
+returns json language sql security definer set search_path = public as $$
+  select json_build_object(
+    'users', (select count(*) from public.profiles),
+    'users_today', (select count(*) from public.profiles where created_at > now() - interval '1 day'),
+    'users_week', (select count(*) from public.profiles where created_at > now() - interval '7 days'),
+    'online', (select count(*) from public.profiles where last_seen > now() - interval '5 minutes'),
+    'active_day', (select count(*) from public.profiles where last_seen > now() - interval '1 day'),
+    'active_week', (select count(*) from public.profiles where last_seen > now() - interval '7 days'),
+    'premium', (select count(*) from public.profiles where premium_until > now()),
+    'moderators', (select count(*) from public.profiles where is_moderator),
+    'banned', (select count(*) from public.profiles where banned_until > now()),
+    'muted', (select count(*) from public.profiles where muted_until > now()),
+    'posts', (select count(*) from public.posts where not removed and kind = 'text'),
+    'reels', (select count(*) from public.posts where not removed and kind in ('video', 'album')),
+    'posts_today', (select count(*) from public.posts where created_at > now() - interval '1 day'),
+    'comments', (select count(*) from public.comments),
+    'messages', (select count(*) from public.messages),
+    'chats', (select count(*) from public.chats),
+    'reports_open', (select count(*) from public.reports where status = 'open'),
+    'linked', (select count(*) from public.tg_links),
+    'orders', (select count(*) from public.payments),
+    'orders_today', (select count(*) from public.payments where created_at > now() - interval '1 day'),
+    'orders_week', (select count(*) from public.payments where created_at > now() - interval '7 days'),
+    'stars', (select coalesce(sum(stars), 0) from public.payments where refunded_at is null),
+    'stars_today', (select coalesce(sum(stars), 0) from public.payments where refunded_at is null and created_at > now() - interval '1 day'),
+    'stars_week', (select coalesce(sum(stars), 0) from public.payments where refunded_at is null and created_at > now() - interval '7 days'),
+    'refunded', (select count(*) from public.payments where refunded_at is not null),
+    'last_order', (select created_at from public.payments order by created_at desc limit 1)
+  );
+$$;
+
+revoke execute on function public.bot_stats() from public, anon, authenticated;

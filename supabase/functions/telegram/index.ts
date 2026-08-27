@@ -3,6 +3,7 @@ const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('PROJECT_URL') ?? Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY = Deno.env.get('SERVICE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://spokum.github.io/spokum/';
+const OWNER_ID = Deno.env.get('OWNER_ID') ?? '';
 
 const PLANS = [
   { id: 'd1', days: 1, stars: 10, title: 'Один день', note: 'попробовать' },
@@ -100,6 +101,121 @@ async function greet(chat: number, linked: { username?: string; premium_until?: 
       'Оплата звёздами Telegram. Срок прибавляется к текущему.\n\n' +
       priceList()
   });
+}
+
+function plural(n: number, one: string, few: string, many: string) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} ${one}`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
+
+function moment(value: string | null) {
+  if (!value) return 'ещё не было';
+  const passed = Date.now() - new Date(value).getTime();
+  const hours = Math.floor(passed / 3600000);
+  if (hours < 1) return `${Math.max(1, Math.floor(passed / 60000))} мин назад`;
+  if (hours < 24) return `${plural(hours, 'час', 'часа', 'часов')} назад`;
+  return `${plural(Math.floor(hours / 24), 'день', 'дня', 'дней')} назад`;
+}
+
+async function starBalance() {
+  const direct = await tg('getMyStarBalance', {});
+  const lines: string[] = [];
+  let total: number | null = null;
+  if (direct?.ok && typeof direct.result?.amount === 'number') {
+    total = direct.result.amount;
+  }
+
+  let earned = 0;
+  let spent = 0;
+  let ready = 0;
+  let held = 0;
+  let count = 0;
+  const border = Date.now() - 21 * 24 * 3600 * 1000;
+
+  const history = await tg('getStarTransactions', { offset: 0, limit: 100 });
+  if (history?.ok) {
+    for (const item of history.result?.transactions ?? []) {
+      const amount = Number(item.amount) || 0;
+      const stamp = Number(item.date) * 1000;
+      if (item.source) {
+        earned += amount;
+        count += 1;
+        if (stamp < border) ready += amount;
+        else held += amount;
+      } else {
+        spent += amount;
+      }
+    }
+  } else {
+    lines.push('История операций недоступна — обновите Telegram или проверьте токен.');
+  }
+
+  if (total === null) total = earned - spent;
+
+  return [
+    '<b>Баланс бота</b>',
+    '',
+    `Сейчас на балансе: <b>${total} ⭐</b>`,
+    `Можно выводить: <b>${ready} ⭐</b>`,
+    `Ждёт разморозки: <b>${held} ⭐</b>`,
+    '',
+    `Всего получено: ${earned} ⭐ за ${plural(count, 'платёж', 'платежа', 'платежей')}`,
+    spent ? `Потрачено или возвращено: ${spent} ⭐` : '',
+    '',
+    'Звёзды размораживаются через 21 день после оплаты — это окно на возврат.',
+    'Вывод: fragment.com, вход через Telegram, деньги приходят в TON.',
+    ...lines
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function networkStats() {
+  const data = await rpc('bot_stats', {});
+  if (!data) return 'База не ответила. Загляните в отчёт функции — адрес открывается в браузере.';
+  const row = (label: string, value: unknown) => `${label}: <b>${value}</b>`;
+  return [
+    '<b>СпокУм в цифрах</b>',
+    '',
+    '<u>Люди</u>',
+    row('Всего аккаунтов', data.users),
+    row('Новых за сутки', data.users_today),
+    row('Новых за неделю', data.users_week),
+    row('Онлайн сейчас', data.online),
+    row('Заходили за сутки', data.active_day),
+    row('Заходили за неделю', data.active_week),
+    row('С премиумом', data.premium),
+    row('Привязали Telegram', data.linked),
+    '',
+    '<u>Заказы</u>',
+    row('Всего оплат', data.orders),
+    row('За сутки', data.orders_today),
+    row('За неделю', data.orders_week),
+    row('Звёзд получено', `${data.stars} ⭐`),
+    row('За сутки', `${data.stars_today} ⭐`),
+    row('За неделю', `${data.stars_week} ⭐`),
+    data.refunded ? row('Возвратов', data.refunded) : '',
+    row('Последняя оплата', moment(data.last_order)),
+    '',
+    '<u>Контент</u>',
+    row('Постов в ленте', data.posts),
+    row('Роликов и альбомов', data.reels),
+    row('Новых записей за сутки', data.posts_today),
+    row('Комментариев', data.comments),
+    row('Сообщений', data.messages),
+    row('Чатов', data.chats),
+    '',
+    '<u>Порядок</u>',
+    row('Модераторов', data.moderators),
+    row('В блокировке', data.banned),
+    row('В муте', data.muted),
+    row('Открытых жалоб', data.reports_open)
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 async function handleUpdate(update: Record<string, any>) {
@@ -229,6 +345,24 @@ async function handleUpdate(update: Record<string, any>) {
   if (text.startsWith('/unlink')) {
     await rpc('bot_unbind', { tg: from });
     await tg('sendMessage', { chat_id: chat, text: 'Аккаунт отвязан. Привязать заново можно из настроек приложения.' });
+    return;
+  }
+
+  if (text.startsWith('/balance')) {
+    if (OWNER_ID && String(from) !== OWNER_ID) {
+      await tg('sendMessage', { chat_id: chat, text: 'Эта команда не для вас.' });
+      return;
+    }
+    await tg('sendMessage', { chat_id: chat, parse_mode: 'HTML', text: await starBalance() });
+    return;
+  }
+
+  if (text.startsWith('/anv')) {
+    if (OWNER_ID && String(from) !== OWNER_ID) {
+      await tg('sendMessage', { chat_id: chat, text: 'Эта команда не для вас.' });
+      return;
+    }
+    await tg('sendMessage', { chat_id: chat, parse_mode: 'HTML', text: await networkStats() });
     return;
   }
 
