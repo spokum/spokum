@@ -1,6 +1,6 @@
 import { api, state } from '../store.js';
 import { GAMES } from '../games/index.js';
-import { el, esc, plural } from '../util.js';
+import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, emptyState } from '../ui.js';
 

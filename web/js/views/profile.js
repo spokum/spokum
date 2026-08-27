@@ -1,7 +1,7 @@
 import { api, state, setUser, MOODS, moodStyle, isPremium } from '../store.js';
-import { el, esc, timeAgo, plural, fullDate } from '../util.js';
+import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, badges, toast, openSheet, promptSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
+import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
 
 function dayWordChip(user) {

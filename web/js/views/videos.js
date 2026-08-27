@@ -1,5 +1,5 @@
 import { api, state, isOffline, isPremium } from '../store.js';
-import { el, esc, timeAgo, plural } from '../util.js';
+import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState } from '../ui.js';
 import { openProfile } from './profile.js';
@@ -281,8 +281,4 @@ export function openVideo(post) {
     document.body.style.overflow = '';
     view.remove();
   };
-}
-
-export function videoCount(list) {
-  return plural(list.length, 'видео', 'видео', 'видео');
 }
