@@ -341,6 +341,7 @@ function openUserActions(user, refresh) {
         <div class="grow"><div class="row" style="gap:6px"><span class="strong">${esc(user.displayName)}</span>${badges(user)}</div>
         <div class="tiny muted">@${esc(user.username)}${user.strikes ? ` · предупреждений ${user.strikes}/3` : ''}</div>
         ${isPremium(user) ? `<div class="pill warn" style="margin-top:4px;display:inline-block">Премиум до ${esc(new Date(user.premiumUntil).toLocaleDateString('ru-RU'))}</div>` : ''}</div></div>
+      <button class="list-item" data-info>${icon('device', 18)}<span>Информация: устройства и страна</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Открыть профиль</span></button>
       <button class="list-item" data-write>${icon('chats', 18)}<span>Написать сообщение</span></button>
       <button class="list-item" data-copy-id>${icon('share', 18)}<span>Скопировать ID</span></button>
@@ -372,6 +373,12 @@ function openUserActions(user, refresh) {
     } catch (error) {
       toast(error.message, 'err');
     }
+  };
+
+  body.querySelector('[data-info]').onclick = async () => {
+    sheet.close();
+    const { openUserInfo } = await import('./userinfo.js');
+    openUserInfo(user.id);
   };
 
   body.querySelector('[data-open]').onclick = () => {

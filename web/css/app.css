@@ -389,7 +389,12 @@ svg { display: block; flex: none; }
   max-width: 100%;
   background: var(--surface-2); border: 1px solid var(--line);
   font-weight: 600; font-size: 14px;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: transform .18s var(--ease), background .18s var(--ease), border-color .18s var(--ease);
+}
+.btn svg { flex: none; }
+@media (max-width: 380px) {
+  .btn { padding: 11px 14px; font-size: 13.5px; gap: 6px; }
 }
 .btn:hover { background: var(--line); }
 .btn:active { transform: scale(.96); }

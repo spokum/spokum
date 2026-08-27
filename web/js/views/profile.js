@@ -646,10 +646,15 @@ export async function openProfile(username) {
         ${user.bannedUntil > Date.now() ? '<div class="pill bad" style="margin-top:12px">Заблокирован</div>' : ''}
         <div class="row" style="margin-top:14px;gap:8px">
           <button class="btn btn-primary grow" data-write>${icon('chats', 17)} Написать</button>
-          <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
-          <button class="btn btn-icon" data-report>${icon('flag', 17)}</button>
-          ${state.user?.isModerator || state.user?.isAdmin ? `<button class="btn btn-icon" data-info title="Информация о человеке">${icon('device', 17)}</button><button class="btn btn-icon" data-punish title="Наказать">${icon('warn', 17)}</button>` : ''}
+          <button class="btn btn-icon" data-report title="Пожаловаться">${icon('flag', 17)}</button>
         </div>
+        <div class="row" style="margin-top:8px;gap:8px">
+          <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
+        </div>
+        ${state.user?.isModerator || state.user?.isAdmin ? `<div class="col" style="margin-top:8px;gap:8px">
+          <button class="btn" data-info style="width:100%">${icon('device', 17)} Информация о человеке</button>
+          <button class="btn" data-punish style="width:100%;color:#c98b8b">${icon('warn', 17)} Наказать</button>
+        </div>` : ''}
         <div class="tiny muted" style="margin-top:10px">В СпокУм с ${fullDate(user.createdAt).split(',')[0]}</div>
         </div>
       </div>
