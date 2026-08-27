@@ -5,6 +5,7 @@ import { avatar, badges, toast, openSheet, promptSheet, emptyState } from '../ui
 import { openProfile } from './profile.js';
 import { pickDuration } from './admin.js';
 import { ruleList, openRules } from './rules.js';
+import { openUserInfo } from './userinfo.js';
 
 const TABS = [
   ['queue', 'Публикации'],
@@ -254,6 +255,7 @@ export function openPunish(user, done) {
     <div class="col" style="gap:6px">
       <div class="row" style="padding:0 4px 8px">${avatar(user, 46)}
         <div class="grow"><div class="strong">${esc(user.displayName)}</div><div class="tiny muted">@${esc(user.username)}</div></div></div>
+      <button class="list-item" data-info>${icon('device', 18)}<span>Информация о человеке</span></button>
       <button class="list-item" data-rule style="color:var(--accent)">${icon('book', 18)}<span>По пункту правил</span></button>
       <div class="tiny muted" style="padding:2px 4px 8px">Мера и срок подставятся сами, но их можно изменить</div>
       <button class="list-item" data-kind="warn">${icon('warn', 18)}<span>Предупреждение</span></button>
@@ -275,6 +277,11 @@ export function openPunish(user, done) {
     } catch (error) {
       toast(error.message, 'err');
     }
+  };
+
+  body.querySelector('[data-info]').onclick = () => {
+    sheet.close();
+    openUserInfo(user.id);
   };
 
   body.querySelector('[data-rule]').onclick = async () => {

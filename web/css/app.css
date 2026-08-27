@@ -1177,6 +1177,23 @@ svg { display: block; flex: none; }
   background: var(--accent-soft); color: var(--accent);
   font-size: 12px; font-weight: 700;
 }
+.rank-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 11.5px; font-weight: 700; white-space: nowrap;
+}
+.rank-pill.up { background: rgba(198,176,131,.16); color: #b39a66; }
+.info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.info-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.info-grid .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-blocked { border-color: rgba(212,115,111,.45); }
+.block-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 32px 26px; text-align: center;
+  background: var(--bg); color: var(--text);
+}
 .rule-pick {
   display: flex; align-items: center; gap: 9px; width: 100%;
   padding: 10px 12px; border-radius: 12px;

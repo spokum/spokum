@@ -161,6 +161,19 @@ export function renderAuth(root, done) {
           } catch {}
         }
         try {
+          const { deviceInfo, rememberBlock } = await import('../device.js');
+          const info = await deviceInfo();
+          const { state: ban } = await api.touchDevice(info, mode === 'register');
+          rememberBlock(ban);
+          if (ban?.blocked) {
+            await api.logout?.();
+            setUser(null);
+            toast(ban.forever || !ban.until ? 'Это устройство заблокировано навсегда' : 'Это устройство заблокировано', 'err');
+            location.reload();
+            return;
+          }
+        } catch {}
+        try {
           const { rememberCurrent } = await import('../accounts.js');
           await rememberCurrent();
         } catch {}

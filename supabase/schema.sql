@@ -185,6 +185,7 @@ alter table public.profiles add column if not exists day_word_at timestamptz;
 alter table public.profiles add column if not exists share_word boolean not null default false;
 alter table public.profiles add column if not exists premium_reason text not null default '';
 alter table public.profiles add column if not exists premium_granted_at timestamptz;
+alter table public.profiles add column if not exists mod_rank smallint not null default 0;
 
 create or replace function public.viewer_is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
@@ -269,6 +270,7 @@ begin
   new.premium_until := old.premium_until;
   new.premium_reason := old.premium_reason;
   new.premium_granted_at := old.premium_granted_at;
+  new.mod_rank := old.mod_rank;
   return new;
 end;
 $$;
@@ -548,6 +550,15 @@ begin
 
   if coalesce((flags->>'isModerator')::boolean, false) then
     delete from public.mod_strikes where moderator_id = target;
+    update public.profiles set mod_rank = 1 where id = target and mod_rank = 0;
+  end if;
+
+  if flags ? 'isModerator' and not coalesce((flags->>'isModerator')::boolean, false) then
+    update public.profiles set mod_rank = 0 where id = target and not is_admin;
+  end if;
+
+  if coalesce((flags->>'clearAll')::boolean, false) and not founder then
+    update public.profiles set mod_rank = 0 where id = target;
   end if;
 
   perform public.log_action('admin.flags', jsonb_build_object('user', target, 'flags', flags));
@@ -1596,3 +1607,324 @@ end;
 $$;
 
 revoke execute on function public.bot_grant_premium(bigint, integer, integer, text) from public, anon, authenticated;
+
+create table if not exists public.devices (
+  id text primary key,
+  label text not null default '',
+  platform text not null default '',
+  country text not null default '',
+  app text not null default 'web',
+  first_seen timestamptz not null default now(),
+  last_seen timestamptz not null default now()
+);
+
+create table if not exists public.device_users (
+  device_id text not null references public.devices on delete cascade,
+  user_id uuid not null references public.profiles on delete cascade,
+  first_seen timestamptz not null default now(),
+  last_seen timestamptz not null default now(),
+  primary key (device_id, user_id)
+);
+create index if not exists device_users_user_idx on public.device_users (user_id, last_seen desc);
+
+create table if not exists public.device_bans (
+  id bigint generated always as identity primary key,
+  device_id text not null references public.devices on delete cascade,
+  until timestamptz,
+  reason text not null default '',
+  actor_id uuid references public.profiles on delete set null,
+  created_at timestamptz not null default now(),
+  lifted_at timestamptz,
+  lifted_by uuid references public.profiles on delete set null
+);
+create index if not exists device_bans_device_idx on public.device_bans (device_id, created_at desc);
+
+alter table public.devices enable row level security;
+alter table public.device_users enable row level security;
+alter table public.device_bans enable row level security;
+
+drop policy if exists devices_read on public.devices;
+create policy devices_read on public.devices for select using (public.viewer_is_moderator());
+
+drop policy if exists device_users_read on public.device_users;
+create policy device_users_read on public.device_users for select using (public.viewer_is_moderator());
+
+drop policy if exists device_bans_read on public.device_bans;
+create policy device_bans_read on public.device_bans for select using (public.viewer_is_moderator());
+
+create or replace function public.rank_name(rank integer)
+returns text language sql immutable as $$
+  select case coalesce(rank, 0)
+    when 0 then 'Стажёр'
+    when 1 then 'Младший модератор'
+    when 2 then 'Модератор'
+    when 3 then 'Старший модератор'
+    when 4 then 'Ведущий модератор'
+    when 5 then 'Начальник модераторов'
+    else 'Стажёр' end;
+$$;
+
+create or replace function public.device_ban_state(fp text)
+returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(
+    (select jsonb_build_object(
+        'blocked', true,
+        'until', b.until,
+        'forever', b.until is null,
+        'reason', b.reason)
+       from public.device_bans b
+      where b.device_id = fp
+        and b.lifted_at is null
+        and (b.until is null or b.until > now())
+      order by b.created_at desc
+      limit 1),
+    jsonb_build_object('blocked', false));
+$$;
+
+create or replace function public.touch_device(fp text, info jsonb, fresh boolean default false)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  state jsonb;
+  stop timestamptz;
+begin
+  if coalesce(trim(fp), '') = '' then return jsonb_build_object('blocked', false); end if;
+
+  state := public.device_ban_state(fp);
+
+  insert into public.devices (id, label, platform, country, app)
+  values (
+    fp,
+    left(coalesce(info->>'label', ''), 120),
+    left(coalesce(info->>'platform', ''), 60),
+    left(coalesce(info->>'country', ''), 60),
+    left(coalesce(info->>'app', 'web'), 20)
+  )
+  on conflict (id) do update
+    set last_seen = now(),
+        label = case when excluded.label <> '' then excluded.label else public.devices.label end,
+        platform = case when excluded.platform <> '' then excluded.platform else public.devices.platform end,
+        country = case when excluded.country <> '' then excluded.country else public.devices.country end,
+        app = case when excluded.app <> '' then excluded.app else public.devices.app end;
+
+  if auth.uid() is not null then
+    insert into public.device_users (device_id, user_id)
+    values (fp, auth.uid())
+    on conflict (device_id, user_id) do update set last_seen = now();
+  end if;
+
+  if (state->>'blocked')::boolean and fresh and auth.uid() is not null then
+    stop := coalesce((state->>'until')::timestamptz, now() + interval '100 years');
+    perform set_config('spokum.privileged', 'on', true);
+    update public.profiles
+       set banned_until = stop,
+           ban_reason = 'Регистрация с заблокированного устройства'
+     where id = auth.uid() and not is_admin;
+    insert into public.audit (actor_id, action, meta)
+    values (auth.uid(), 'device.evade', jsonb_build_object('device', fp));
+    perform public.notify_staff(
+      'modaction', 'Обход блокировки устройства',
+      'С заблокированного устройства завели новый аккаунт',
+      jsonb_build_object('user', auth.uid(), 'device', fp),
+      null);
+  end if;
+
+  return state;
+end;
+$$;
+
+create or replace function public.mod_user_info(target uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  who public.profiles;
+  result jsonb;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  select * into who from public.profiles where id = target;
+  if who.id is null then raise exception 'Человек не найден'; end if;
+
+  select jsonb_build_object(
+    'id', who.id,
+    'username', who.username,
+    'displayName', who.display_name,
+    'createdAt', who.created_at,
+    'lastSeen', who.last_seen,
+    'bannedUntil', who.banned_until,
+    'mutedUntil', who.muted_until,
+    'banReason', who.ban_reason,
+    'isModerator', who.is_moderator,
+    'isAdmin', who.is_admin,
+    'rank', who.mod_rank,
+    'rankName', case when who.is_admin and who.mod_rank = 0 then 'Администратор' else public.rank_name(who.mod_rank) end,
+    'posts', (select count(*) from public.posts p where p.author_id = target),
+    'comments', (select count(*) from public.comments c where c.author_id = target),
+    'reportsOn', (select count(*) from public.reports r where r.target_user = target),
+    'reportsBy', (select count(*) from public.reports r where r.reporter_id = target),
+    'punishments', (select count(*) from public.punishments p where p.user_id = target),
+    'countries', (select coalesce(jsonb_agg(distinct d.country), '[]'::jsonb)
+                    from public.device_users du
+                    join public.devices d on d.id = du.device_id
+                   where du.user_id = target and d.country <> ''),
+    'devices', (select coalesce(jsonb_agg(item order by item->>'lastSeen' desc), '[]'::jsonb)
+                  from (
+                    select jsonb_build_object(
+                      'id', d.id,
+                      'label', d.label,
+                      'platform', d.platform,
+                      'country', d.country,
+                      'app', d.app,
+                      'firstSeen', du.first_seen,
+                      'lastSeen', du.last_seen,
+                      'accounts', (select count(*) from public.device_users x where x.device_id = d.id),
+                      'ban', public.device_ban_state(d.id)
+                    ) as item
+                    from public.device_users du
+                    join public.devices d on d.id = du.device_id
+                    where du.user_id = target
+                  ) rows)
+  ) into result;
+
+  perform public.log_action('mod.userinfo', jsonb_build_object('user', target));
+  return result;
+end;
+$$;
+
+create or replace function public.mod_ban_device(fp text, minutes integer, reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  stop timestamptz;
+  owners integer;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  if coalesce(trim(reason), '') = '' then raise exception 'Нужна причина'; end if;
+  if not exists (select 1 from public.devices where id = fp) then raise exception 'Устройство не найдено'; end if;
+  if exists (
+    select 1 from public.device_users du
+    join public.profiles p on p.id = du.user_id
+    where du.device_id = fp and p.is_admin
+  ) then
+    raise exception 'На этом устройстве заходил админ';
+  end if;
+
+  stop := case when coalesce(minutes, 0) <= 0 then null else now() + make_interval(mins => minutes) end;
+
+  update public.device_bans
+     set lifted_at = now(), lifted_by = auth.uid()
+   where device_id = fp and lifted_at is null;
+
+  insert into public.device_bans (device_id, until, reason, actor_id)
+  values (fp, stop, reason, auth.uid());
+
+  select count(*) into owners from public.device_users where device_id = fp;
+
+  perform public.notify_admins(
+    'modaction', 'Блокировка устройства',
+    case when stop is null then 'Навсегда' else 'До ' || to_char(stop, 'DD.MM.YYYY HH24:MI') end || '. ' || reason,
+    jsonb_build_object('device', fp),
+    null);
+
+  perform public.log_action('device.ban', jsonb_build_object('device', fp, 'minutes', minutes, 'reason', reason));
+  return jsonb_build_object('ok', true, 'until', stop, 'accounts', owners);
+end;
+$$;
+
+create or replace function public.mod_unban_device(fp text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then raise exception 'Снять блокировку устройства может только админ'; end if;
+  update public.device_bans
+     set lifted_at = now(), lifted_by = auth.uid()
+   where device_id = fp and lifted_at is null;
+  perform public.log_action('device.unban', jsonb_build_object('device', fp));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.admin_mod_team()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+
+  select coalesce(jsonb_agg(row order by (row->>'score')::int desc), '[]'::jsonb) into result
+  from (
+    select jsonb_build_object(
+      'id', p.id,
+      'username', p.username,
+      'displayName', p.display_name,
+      'avatar', p.avatar,
+      'hue', p.hue,
+      'isAdmin', p.is_admin,
+      'rank', p.mod_rank,
+      'rankName', case when p.is_admin and p.mod_rank = 0 then 'Администратор' else public.rank_name(p.mod_rank) end,
+      'since', p.created_at,
+      'lastSeen', p.last_seen,
+      'removals', r.removals,
+      'punishments', r.punishments,
+      'reports', r.reports,
+      'strikes', r.strikes,
+      'recent', r.recent,
+      'lastAction', r.last_action,
+      'score', r.removals + r.punishments + r.reports,
+      'deserved', case
+        when r.strikes >= 2 then 0
+        when r.removals + r.punishments + r.reports >= 400 then 4
+        when r.removals + r.punishments + r.reports >= 150 then 3
+        when r.removals + r.punishments + r.reports >= 50 then 2
+        when r.removals + r.punishments + r.reports >= 10 then 1
+        else 0 end
+    ) as row
+    from public.profiles p
+    cross join lateral (
+      select
+        (select count(*) from public.punishments x where x.actor_id = p.id and x.kind = 'post_removed')::int as removals,
+        (select count(*) from public.punishments x where x.actor_id = p.id and x.kind in ('warn', 'mute', 'ban'))::int as punishments,
+        (select count(*) from public.reports x where x.handled_by = p.id)::int as reports,
+        (select count(*) from public.mod_strikes x where x.moderator_id = p.id)::int as strikes,
+        (select count(*) from public.punishments x where x.actor_id = p.id and x.created_at > now() - interval '30 days')::int as recent,
+        (select max(x.created_at) from public.punishments x where x.actor_id = p.id) as last_action
+    ) r
+    where p.is_moderator or p.is_admin
+  ) rows;
+
+  return result;
+end;
+$$;
+
+create or replace function public.admin_set_rank(target uuid, rank integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  title text;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  if rank < 0 or rank > 5 then raise exception 'Звание от 0 до 5'; end if;
+  if not exists (select 1 from public.profiles where id = target and (is_moderator or is_admin)) then
+    raise exception 'Звание только для модераторов';
+  end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set mod_rank = rank where id = target;
+  title := public.rank_name(rank);
+
+  perform public.notify_user(
+    target, 'modaction', 'Новое звание',
+    'Теперь вы ' || title,
+    jsonb_build_object('rank', rank));
+
+  perform public.log_action('mod.rank', jsonb_build_object('user', target, 'rank', rank));
+  return jsonb_build_object('ok', true, 'rank', rank, 'rankName', title);
+end;
+$$;
+
+revoke execute on function public.touch_device(text, jsonb, boolean) from public, anon;
+grant execute on function public.touch_device(text, jsonb, boolean) to authenticated;
+revoke execute on function public.mod_user_info(uuid) from public, anon;
+grant execute on function public.mod_user_info(uuid) to authenticated;
+revoke execute on function public.mod_ban_device(text, integer, text) from public, anon;
+grant execute on function public.mod_ban_device(text, integer, text) to authenticated;
+revoke execute on function public.mod_unban_device(text) from public, anon;
+grant execute on function public.mod_unban_device(text) to authenticated;
+revoke execute on function public.admin_mod_team() from public, anon;
+grant execute on function public.admin_mod_team() to authenticated;
+revoke execute on function public.admin_set_rank(uuid, integer) from public, anon;
+grant execute on function public.admin_set_rank(uuid, integer) to authenticated;

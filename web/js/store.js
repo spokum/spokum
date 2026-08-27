@@ -15,6 +15,7 @@ export const api = new Proxy({}, {
 
 export async function initBackend() {
   const params = new URLSearchParams(location.search);
+  if (window.SPOKUM_FORCE_LOCAL || params.get('local') === '1') return backend.mode;
   const supabaseUrl = window.SPOKUM_SUPABASE_URL || params.get('supabaseUrl') || '';
   const supabaseKey = window.SPOKUM_SUPABASE_KEY || params.get('supabaseKey') || '';
   const apiBase = window.SPOKUM_API || params.get('api') || '';
@@ -33,6 +34,14 @@ export async function initBackend() {
 
   if (apiBase) backend = createRemote(apiBase);
   return backend.mode;
+}
+
+export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
+
+export function rankName(user) {
+  if (!user) return '';
+  if (user.isAdmin && !user.modRank) return 'Администратор';
+  return RANKS[Math.min(Math.max(user.modRank || 0, 0), RANKS.length - 1)];
 }
 
 export const state = {

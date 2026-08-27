@@ -23,7 +23,10 @@ function blank() {
     punishments: [],
     strikes: [],
     audit: [],
-    scores: []
+    scores: [],
+    devices: [],
+    deviceUsers: [],
+    deviceBans: []
   };
 }
 
@@ -139,6 +142,25 @@ function ownerOf(name) {
   return state.users.find((u) => aliasesOf(u).includes(clean));
 }
 
+export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
+
+function deservedRank(score, strikes) {
+  if (strikes >= 2) return 0;
+  if (score >= 400) return 4;
+  if (score >= 150) return 3;
+  if (score >= 50) return 2;
+  if (score >= 10) return 1;
+  return 0;
+}
+
+function banState(id) {
+  const ban = (state.deviceBans || [])
+    .filter((b) => b.deviceId === id && !b.liftedAt && (b.until === null || b.until > Date.now()))
+    .sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (!ban) return { blocked: false };
+  return { blocked: true, until: ban.until, forever: ban.until === null, reason: ban.reason };
+}
+
 function pub(user) {
   if (!user) return null;
   return {
@@ -153,6 +175,7 @@ function pub(user) {
     isModerator: user.isModerator,
     isDeveloper: user.isDeveloper,
     isVerified: user.isVerified,
+    modRank: user.modRank || 0,
     bannedUntil: user.bannedUntil,
     mutedUntil: user.mutedUntil,
     createdAt: user.createdAt,
@@ -922,6 +945,164 @@ export const local = {
     return { ok: true };
   },
 
+  async touchDevice(info, fresh) {
+    if (!state.devices) { state.devices = []; state.deviceUsers = []; state.deviceBans = []; }
+    const who = me();
+    let device = state.devices.find((d) => d.id === info.id);
+    if (!device) {
+      device = { id: info.id, label: '', platform: '', country: '', app: 'web', firstSeen: Date.now(), lastSeen: Date.now() };
+      state.devices.push(device);
+    }
+    device.lastSeen = Date.now();
+    for (const key of ['label', 'platform', 'country', 'app']) if (info[key]) device[key] = info[key];
+
+    if (who) {
+      let link = state.deviceUsers.find((l) => l.deviceId === info.id && l.userId === who.id);
+      if (!link) {
+        link = { deviceId: info.id, userId: who.id, firstSeen: Date.now(), lastSeen: Date.now() };
+        state.deviceUsers.push(link);
+      }
+      link.lastSeen = Date.now();
+    }
+
+    const state_ = banState(info.id);
+    if (state_.blocked && fresh && who && !who.isAdmin) {
+      who.bannedUntil = state_.forever ? Date.now() + 3153600000000 : state_.until;
+      who.banReason = 'Регистрация с заблокированного устройства';
+    }
+    save();
+    return { state: state_ };
+  },
+
+  async deviceState(id) {
+    return { state: banState(id) };
+  },
+
+  async userInfo(id) {
+    needMod();
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Человек не найден');
+    const links = (state.deviceUsers || []).filter((l) => l.userId === id);
+    const devices = links
+      .map((link) => {
+        const device = (state.devices || []).find((d) => d.id === link.deviceId);
+        if (!device) return null;
+        return {
+          ...device,
+          firstSeen: link.firstSeen,
+          lastSeen: link.lastSeen,
+          accounts: (state.deviceUsers || []).filter((l) => l.deviceId === device.id).length,
+          ban: banState(device.id)
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+    return {
+      info: {
+        id: target.id,
+        username: target.username,
+        displayName: target.displayName,
+        createdAt: target.createdAt,
+        lastSeen: target.lastSeen,
+        bannedUntil: target.bannedUntil || 0,
+        mutedUntil: target.mutedUntil || 0,
+        banReason: target.banReason || '',
+        isModerator: !!target.isModerator,
+        isAdmin: !!target.isAdmin,
+        rank: target.modRank || 0,
+        rankName: target.isAdmin && !target.modRank ? 'Администратор' : RANKS[target.modRank || 0],
+        posts: state.posts.filter((p) => p.authorId === id).length,
+        comments: state.comments.filter((c) => c.authorId === id).length,
+        reportsOn: state.reports.filter((r) => r.targetUser === id || (r.targetKind === 'user' && String(r.targetId) === String(id))).length,
+        reportsBy: state.reports.filter((r) => r.reporterId === id).length,
+        punishments: state.punishments.filter((p) => p.userId === id).length,
+        countries: [...new Set(devices.map((d) => d.country).filter(Boolean))],
+        devices
+      }
+    };
+  },
+
+  async banDevice(id, minutes, reason) {
+    const me = needMod();
+    if (!String(reason || '').trim()) fail('Нужна причина');
+    const device = (state.devices || []).find((d) => d.id === id);
+    if (!device) fail('Устройство не найдено');
+    const owners = (state.deviceUsers || []).filter((l) => l.deviceId === id);
+    if (owners.some((l) => state.users.find((u) => u.id === l.userId)?.isAdmin)) fail('На этом устройстве заходил админ');
+    (state.deviceBans || []).forEach((ban) => {
+      if (ban.deviceId === id && !ban.liftedAt) ban.liftedAt = Date.now();
+    });
+    state.deviceBans.push({
+      id: state.deviceBans.length + 1,
+      deviceId: id,
+      until: minutes > 0 ? Date.now() + minutes * 60000 : null,
+      reason,
+      actorId: me.id,
+      createdAt: Date.now(),
+      liftedAt: null
+    });
+    log(me.id, 'device.ban', { device: id, minutes, reason });
+    save();
+    return { ok: true, until: minutes > 0 ? Date.now() + minutes * 60000 : null, accounts: owners.length };
+  },
+
+  async unbanDevice(id) {
+    const admin = needAdmin();
+    (state.deviceBans || []).forEach((ban) => {
+      if (ban.deviceId === id && !ban.liftedAt) ban.liftedAt = Date.now();
+    });
+    log(admin.id, 'device.unban', { device: id });
+    save();
+    return { ok: true };
+  },
+
+  async modTeam() {
+    needAdmin();
+    const team = state.users
+      .filter((u) => u.isModerator || u.isAdmin)
+      .map((u) => {
+        const removals = state.punishments.filter((p) => p.actorId === u.id && p.kind === 'post_removed').length;
+        const punishments = state.punishments.filter((p) => p.actorId === u.id && ['warn', 'mute', 'ban'].includes(p.kind)).length;
+        const reports = state.reports.filter((r) => r.handledBy === u.id).length;
+        const strikes = state.strikes.filter((s) => s.moderatorId === u.id).length;
+        const score = removals + punishments + reports;
+        return {
+          id: u.id,
+          username: u.username,
+          displayName: u.displayName,
+          avatar: u.avatar || null,
+          hue: u.hue,
+          isAdmin: !!u.isAdmin,
+          rank: u.modRank || 0,
+          rankName: u.isAdmin && !u.modRank ? 'Администратор' : RANKS[u.modRank || 0],
+          since: u.createdAt,
+          lastSeen: u.lastSeen,
+          removals,
+          punishments,
+          reports,
+          strikes,
+          recent: state.punishments.filter((p) => p.actorId === u.id && p.createdAt > Date.now() - 30 * 86400000).length,
+          lastAction: state.punishments.filter((p) => p.actorId === u.id).map((p) => p.createdAt).sort((a, b) => b - a)[0] || 0,
+          score,
+          deserved: deservedRank(score, strikes)
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+    return { team };
+  },
+
+  async setRank(id, rank) {
+    const admin = needAdmin();
+    if (rank < 0 || rank > 5) fail('Звание от 0 до 5');
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Пользователь не найден');
+    if (!target.isModerator && !target.isAdmin) fail('Звание только для модераторов');
+    target.modRank = rank;
+    log(admin.id, 'mod.rank', { id, rank });
+    save();
+    return { ok: true, rank, rankName: RANKS[rank] };
+  },
+
   async strikes(userId) {
     const user = needMod();
     const id = userId || user.id;
@@ -991,7 +1172,12 @@ export const local = {
       }
     }
     if (target.username === 'vanya8') target.isAdmin = true;
-    if (flags.isModerator) state.strikes = state.strikes.filter((s) => s.moderatorId !== id);
+    if (flags.isModerator) {
+      state.strikes = state.strikes.filter((s) => s.moderatorId !== id);
+      if (!target.modRank) target.modRank = 1;
+    }
+    if (flags.isModerator === false && !target.isAdmin) target.modRank = 0;
+    if (flags.clearAll && target.username !== 'vanya8') target.modRank = 0;
     log(admin.id, 'admin.flags', { id, flags });
     save();
     return { user: pub(target) };

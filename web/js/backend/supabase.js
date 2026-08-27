@@ -41,6 +41,7 @@ function shapeProfile(row, extra = {}) {
     isModerator: !!row.is_moderator,
     isDeveloper: !!row.is_developer,
     isVerified: !!row.is_verified,
+    modRank: row.mod_rank ?? 0,
     bannedUntil: ms(row.banned_until),
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
@@ -952,6 +953,52 @@ export async function createSupabase(url, key) {
       const { error } = await sb.rpc('mod_punish', { target: userId, kind, minutes: minutes || 0, reason });
       guard(error);
       return { ok: true };
+    },
+
+    async touchDevice(info, fresh) {
+      const { data, error } = await sb.rpc('touch_device', {
+        fp: info.id,
+        info: { label: info.label, platform: info.platform, country: info.country, app: info.app },
+        fresh: !!fresh
+      });
+      guard(error);
+      return { state: data || { blocked: false } };
+    },
+
+    async deviceState(id) {
+      const { data, error } = await sb.rpc('device_ban_state', { fp: id });
+      guard(error);
+      return { state: data || { blocked: false } };
+    },
+
+    async userInfo(id) {
+      const { data, error } = await sb.rpc('mod_user_info', { target: id });
+      guard(error);
+      return { info: data };
+    },
+
+    async banDevice(id, minutes, reason) {
+      const { data, error } = await sb.rpc('mod_ban_device', { fp: id, minutes: minutes || 0, reason });
+      guard(error);
+      return data;
+    },
+
+    async unbanDevice(id) {
+      const { error } = await sb.rpc('mod_unban_device', { fp: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async modTeam() {
+      const { data, error } = await sb.rpc('admin_mod_team');
+      guard(error);
+      return { team: data || [] };
+    },
+
+    async setRank(id, rank) {
+      const { data, error } = await sb.rpc('admin_set_rank', { target: id, rank });
+      guard(error);
+      return data;
     },
 
     async strikes(userId) {

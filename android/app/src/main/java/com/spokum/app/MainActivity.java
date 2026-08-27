@@ -241,6 +241,25 @@ public class MainActivity extends AppCompatActivity {
       public boolean canNotify() {
         return androidx.core.app.NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled();
       }
+
+      @JavascriptInterface
+      public String deviceId() {
+        String id = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+        if (id == null || id.isEmpty() || "9774d56d682e549c".equals(id)) {
+          android.content.SharedPreferences prefs = getSharedPreferences("spokum", MODE_PRIVATE);
+          id = prefs.getString("hw_id", "");
+          if (id.isEmpty()) {
+            id = java.util.UUID.randomUUID().toString();
+            prefs.edit().putString("hw_id", id).apply();
+          }
+        }
+        return id + "|" + android.os.Build.MODEL + "|" + android.os.Build.DEVICE;
+      }
+
+      @JavascriptInterface
+      public String deviceName() {
+        return android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL;
+      }
     }, "SpokumHost");
 
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

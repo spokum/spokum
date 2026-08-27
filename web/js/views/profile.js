@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -71,7 +71,7 @@ export async function render(root) {
 
     <div class="col" style="margin-top:12px;gap:6px">
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
-      ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Модерация постов и жалобы</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-contacts>${icon('users', 20)}<div class="grow"><div class="strong small">Контакты</div><div class="tiny muted">Кого ты добавил</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-accounts>${icon('users', 20)}<div class="grow"><div class="strong small">Мои аккаунты</div><div class="tiny muted">Переключиться или добавить ещё</div></div>${icon('forward', 16)}</button>
@@ -634,6 +634,7 @@ export async function openProfile(username) {
           <span class="strong" style="font-size:19px">${esc(user.displayName)}</span>${badges(user)}
         </div>
         <div class="small muted">@${esc(user.username)}</div>
+        ${user.isModerator ? `<div style="display:flex;justify-content:center;margin-top:8px"><span class="rank-pill">${icon('shield', 13)}<span>${esc(rankName(user))}</span></span></div>` : ''}
         ${dayWordChip(user)}
         ${user.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(user.bio)}</p>` : ''}
         <div style="display:flex;justify-content:center;margin-top:12px"><span class="mood-tag" style="${moodStyle(user.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span></div>
@@ -647,6 +648,7 @@ export async function openProfile(username) {
           <button class="btn btn-primary grow" data-write>${icon('chats', 17)} Написать</button>
           <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
           <button class="btn btn-icon" data-report>${icon('flag', 17)}</button>
+          ${state.user?.isModerator || state.user?.isAdmin ? `<button class="btn btn-icon" data-info title="Информация о человеке">${icon('device', 17)}</button><button class="btn btn-icon" data-punish title="Наказать">${icon('warn', 17)}</button>` : ''}
         </div>
         <div class="tiny muted" style="margin-top:10px">В СпокУм с ${fullDate(user.createdAt).split(',')[0]}</div>
         </div>
@@ -667,6 +669,14 @@ export async function openProfile(username) {
         toast(error.message, 'err');
       }
     };
+    body.querySelector('[data-info]')?.addEventListener('click', async () => {
+      const { openUserInfo } = await import('./userinfo.js');
+      openUserInfo(user.id);
+    });
+    body.querySelector('[data-punish]')?.addEventListener('click', async () => {
+      const { openPunish } = await import('./mod.js');
+      openPunish(user, () => openProfile(username));
+    });
     body.querySelector('[data-report]').onclick = async () => {
       const { openReport } = await import('./feed.js');
       openReport('user', user.id);

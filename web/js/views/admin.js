@@ -3,10 +3,12 @@ import { el, esc, timeAgo, fullDate, debounce, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, promptSheet, emptyState } from '../ui.js';
 import { openProfile } from './profile.js';
+import { RANKS } from '../store.js';
 
 const TABS = [
   ['stats', 'Аналитика'],
   ['users', 'Люди'],
+  ['team', 'Модераторы'],
   ['content', 'Контент'],
   ['announce', 'Эфир'],
   ['actions', 'Наказания'],
@@ -54,6 +56,7 @@ export async function openAdmin() {
     try {
       if (active === 'stats') await drawStats(body);
       if (active === 'users') await drawUsers(body);
+      if (active === 'team') await drawTeam(body);
       if (active === 'content') await drawContent(body);
       if (active === 'announce') await drawAnnounce(body);
       if (active === 'actions') await drawActions(body);
@@ -526,6 +529,75 @@ export function pickPremiumDays() {
         sheet.sheet.parentElement.remove();
       };
     });
+  });
+}
+
+async function drawTeam(body) {
+  const { team } = await api.modTeam();
+  if (!team.length) {
+    body.innerHTML = emptyState('shield', 'Модераторов нет', 'Выдайте щит на вкладке «Люди»');
+    return;
+  }
+
+  body.innerHTML = `
+    <p class="tiny muted" style="margin:0 0 12px;line-height:1.5">Звание видно всем на профиле модератора. «Заслуживает» считается по разобранным жалобам, снятым записям и наказаниям; два и больше предупреждений сбрасывают предложение до стажёра. Начальника модераторов назначает только админ, автоматически это звание не предлагается.</p>
+    <div class="col" data-list style="gap:8px"></div>`;
+
+  const list = body.querySelector('[data-list]');
+  team.forEach((mod) => {
+    const grown = mod.deserved > mod.rank;
+    const card = el(`<div class="card" style="padding:13px">
+      <div class="row" style="gap:10px;align-items:flex-start">
+        ${avatar(mod, 42)}
+        <div class="grow" style="min-width:0">
+          <div class="row" style="gap:6px"><span class="strong small truncate">${esc(mod.displayName)}</span>${mod.isAdmin ? '<span class="pill">админ</span>' : ''}</div>
+          <div class="tiny muted">@${esc(mod.username)}</div>
+          <div class="row" style="gap:6px;margin-top:7px;flex-wrap:wrap">
+            <span class="rank-pill">${icon('shield', 13)}<span>${esc(mod.rankName)}</span></span>
+            ${grown ? `<span class="rank-pill up">${icon('spark', 13)}<span>заслуживает: ${esc(RANKS[mod.deserved])}</span></span>` : ''}
+            ${mod.strikes ? `<span class="pill bad">${mod.strikes} предупр.</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="info-grid" style="margin-top:11px">
+        <div><span class="tiny muted">Жалоб разобрано</span><span class="small strong">${mod.reports}</span></div>
+        <div><span class="tiny muted">Записей снято</span><span class="small strong">${mod.removals}</span></div>
+        <div><span class="tiny muted">Наказаний</span><span class="small strong">${mod.punishments}</span></div>
+        <div><span class="tiny muted">За 30 дней</span><span class="small strong">${mod.recent}</span></div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <button class="btn btn-sm grow" data-rank>${icon('crown', 15)} Звание</button>
+        <button class="btn btn-sm grow" data-open>${icon('profile', 15)} Профиль</button>
+      </div>
+    </div>`);
+
+    card.querySelector('[data-open]').onclick = () => openProfile(mod.username);
+    card.querySelector('[data-rank]').onclick = () => openRankPicker(mod, () => drawTeam(body));
+    list.appendChild(card);
+  });
+}
+
+function openRankPicker(mod, done) {
+  const body = el(`<div class="col" style="gap:6px">
+    <p class="tiny muted" style="margin:0 0 6px;line-height:1.5">Сейчас: ${esc(mod.rankName)}. По работе заслуживает: ${esc(RANKS[mod.deserved])}.</p>
+    ${RANKS.map(
+      (label, index) => `<button class="list-item" data-rank="${index}" ${index === mod.rank ? 'style="color:var(--accent)"' : ''}>${icon('shield', 18)}<span class="grow" style="text-align:left">${label}</span>${
+        index === mod.deserved ? '<span class="rule-pun">по работе</span>' : ''
+      }</button>`
+    ).join('')}
+  </div>`);
+  const sheet = openSheet('Звание модератора', body);
+  body.querySelectorAll('[data-rank]').forEach((button) => {
+    button.onclick = async () => {
+      try {
+        const result = await api.setRank(mod.id, Number(button.dataset.rank));
+        toast('Теперь ' + (result?.rankName || 'звание изменено'));
+        sheet.close();
+        done();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
   });
 }
 

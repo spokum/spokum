@@ -91,6 +91,34 @@ async function detectLogo() {
   }
 }
 
+async function checkDevice(fresh) {
+  if (!api.touchDevice) return false;
+  try {
+    const { deviceInfo, rememberBlock } = await import('./device.js');
+    const info = await deviceInfo();
+    const { state: ban } = await api.touchDevice(info, fresh);
+    rememberBlock(ban);
+    if (ban?.blocked) {
+      showBlocked(ban);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function showBlocked(ban) {
+  const until = ban.forever || !ban.until
+    ? 'навсегда'
+    : 'до ' + new Date(typeof ban.until === 'string' ? Date.parse(ban.until) : ban.until).toLocaleString('ru-RU');
+  document.body.innerHTML = `<div class="block-screen">
+    <span style="color:#c98b8b">${icon('ban', 44, 1.6)}</span>
+    <div class="strong" style="font-size:18px">Устройство заблокировано</div>
+    <p class="small muted" style="margin:0;max-width:340px;line-height:1.55">С этого устройства нельзя зайти и завести аккаунт ${until}.${ban.reason ? ' Причина: ' + ban.reason + '.' : ''}</p>
+    <p class="tiny muted" style="margin:0;max-width:340px;line-height:1.5">Считаете, что это ошибка — напишите администрации с другого устройства.</p>
+  </div>`;
+  api.logout?.().catch(() => {});
+}
+
 async function boot() {
   applyAppearance(null);
   await detectLogo();
@@ -107,6 +135,7 @@ async function boot() {
   } catch {
     setUser(null);
   }
+  if (await checkDevice(false)) return;
   if (!state.user) renderAuth(root, start);
   else {
     start();

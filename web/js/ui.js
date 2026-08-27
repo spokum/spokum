@@ -1,6 +1,6 @@
 import { el, esc, initials } from './util.js';
 import { icon, solidIcon } from './icons.js';
-import { isPremium, state } from './store.js';
+import { isPremium, state, rankName } from './store.js';
 
 let toastHost;
 
@@ -61,7 +61,7 @@ export function badges(user) {
   }
   if (isPremium(user)) items.push(badgeButton('badge-premium', solidIcon('crown', 12), 'СпокУм Премиум'));
   if (user.isVerified) items.push(badgeButton('badge-verified', icon('verified', 12, 2.4), 'Пользователь верифицирован'));
-  if (user.isModerator) items.push(badgeButton('badge-mod', solidIcon('shield', 12), 'Модератор СпокУма'));
+  if (user.isModerator) items.push(badgeButton('badge-mod', solidIcon('shield', 12), rankName(user) + ' СпокУма'));
   if (user.isDeveloper) items.push(badgeButton('badge-dev', solidIcon('hammer', 12), 'Разработчик СпокУма'));
   return items.length ? `<span class="badges">${items.join('')}</span>` : '';
 }
