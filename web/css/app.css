@@ -1150,3 +1150,5 @@ svg { display: block; flex: none; }
   background: rgba(4,6,10,.7); color: #eef2fb;
   font-size: 13px; font-weight: 600; text-align: center; max-width: 76%;
 }
+
+.shorts-sound.on { background: var(--accent); color: var(--accent-ink); }

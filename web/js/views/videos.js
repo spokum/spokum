@@ -6,6 +6,28 @@ import { openProfile } from './profile.js';
 
 let feed = { items: [], cursor: null, more: true, busy: false };
 
+const SOUND_KEY = 'spokum.sound';
+
+function soundWanted() {
+  return localStorage.getItem(SOUND_KEY) !== 'off';
+}
+
+function rememberSound(on) {
+  localStorage.setItem(SOUND_KEY, on ? 'on' : 'off');
+}
+
+let touched = false;
+const markTouched = () => {
+  touched = true;
+};
+document.addEventListener('pointerdown', markTouched, { capture: true });
+document.addEventListener('keydown', markTouched, { capture: true });
+
+function canUnmute() {
+  if (touched) return true;
+  return navigator.userActivation ? navigator.userActivation.hasBeenActive : false;
+}
+
 export async function render(root) {
   root.innerHTML = `
     <div class="topbar">
@@ -130,16 +152,37 @@ function slide(post, stage) {
     const playHint = node.querySelector('[data-play]');
     const fault = node.querySelector('[data-error]');
 
+    const drawSound = () => {
+      sound.innerHTML = icon(video.muted ? 'mute' : 'volume', 18);
+      sound.classList.toggle('on', !video.muted);
+    };
+
     node.play = () => {
       if (fault.hidden === false) return;
+      video.muted = !(soundWanted() && canUnmute());
+      drawSound();
       const attempt = video.play();
-      if (attempt?.then) {
-        attempt.then(() => {
+      if (!attempt?.then) return;
+      attempt
+        .then(() => {
           playHint.hidden = true;
-        }).catch(() => {
+        })
+        .catch(() => {
+          if (!video.muted) {
+            video.muted = true;
+            drawSound();
+            video
+              .play()
+              .then(() => {
+                playHint.hidden = true;
+              })
+              .catch(() => {
+                playHint.hidden = false;
+              });
+            return;
+          }
           playHint.hidden = false;
         });
-      }
     };
 
     video.addEventListener('loadeddata', () => {
@@ -164,9 +207,19 @@ function slide(post, stage) {
     sound.onclick = (event) => {
       event.stopPropagation();
       video.muted = !video.muted;
-      sound.innerHTML = icon(video.muted ? 'mute' : 'volume', 18);
+      rememberSound(!video.muted);
+      drawSound();
+      [...document.querySelectorAll('.shorts-slide video')].forEach((other) => {
+        if (other !== video) other.muted = video.muted;
+      });
+      document.querySelectorAll('.shorts-sound').forEach((button) => {
+        button.innerHTML = icon(video.muted ? 'mute' : 'volume', 18);
+        button.classList.toggle('on', !video.muted);
+      });
       if (video.paused) node.play();
     };
+
+    drawSound();
 
     playHint.onclick = (event) => {
       event.stopPropagation();

@@ -68,6 +68,7 @@ export async function render(root) {
       <label class="row between" style="padding:8px 0"><span class="small">Компактная лента</span><input type="checkbox" data-pref="compact" ${current.compact ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Плавные анимации</span><input type="checkbox" data-pref="motion" ${current.motion !== false ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Звук уведомлений</span><input type="checkbox" data-pref="sound" ${current.sound ? 'checked' : ''}></label>
+      <label class="row between" style="padding:8px 0"><span class="small">Звук в видео сразу</span><input type="checkbox" data-video-sound ${localStorage.getItem('spokum.sound') !== 'off' ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Тихий режим по вечерам</span><input type="checkbox" data-pref="quiet" ${current.quiet ? 'checked' : ''}></label>
     </div>
 
@@ -135,6 +136,11 @@ export async function render(root) {
       }
     };
   });
+
+  root.querySelector('[data-video-sound]').onchange = (event) => {
+    localStorage.setItem('spokum.sound', event.target.checked ? 'on' : 'off');
+    toast(event.target.checked ? 'Видео будут со звуком' : 'Видео будут без звука');
+  };
 
   root.querySelector('[data-buy]')?.addEventListener('click', openBilling);
 
