@@ -251,7 +251,25 @@ async function handleUpdate(update: Record<string, any>) {
 
 Deno.serve(async (request) => {
   if (request.method !== 'POST') {
-    return new Response('СпокУм бот жив', { status: 200 });
+    const report = {
+      ok: true,
+      note: 'Функция запущена. Ниже видно, какие секреты найдены. Значения не показываются.',
+      BOT_TOKEN: BOT_TOKEN ? 'есть' : 'НЕ ЗАДАН',
+      SERVICE_KEY: SERVICE_KEY ? 'есть' : 'НЕ ЗАДАН',
+      PROJECT_URL: SUPABASE_URL || 'НЕ ЗАДАН',
+      WEBHOOK_SECRET: WEBHOOK_SECRET ? 'есть' : 'не задан, проверка отключена',
+      database: 'проверяем...'
+    };
+    if (SUPABASE_URL && SERVICE_KEY) {
+      const probe = await rpc('bot_whoami', { tg: 0 });
+      report.database = probe === null ? 'НЕ ОТВЕЧАЕТ, проверьте SERVICE_KEY и прогон schema.sql' : 'на связи';
+    } else {
+      report.database = 'нечем проверить, нет PROJECT_URL или SERVICE_KEY';
+    }
+    return new Response(JSON.stringify(report, null, 2), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    });
   }
   if (WEBHOOK_SECRET && request.headers.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) {
     return new Response('no', { status: 401 });

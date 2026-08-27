@@ -1,0 +1,4 @@
+project_id = "spokum"
+
+[functions.telegram]
+verify_jwt = false
