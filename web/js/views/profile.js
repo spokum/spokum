@@ -72,6 +72,7 @@ export async function render(root) {
     <div class="col" style="margin-top:12px;gap:6px">
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
+      <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-contacts>${icon('users', 20)}<div class="grow"><div class="strong small">Контакты</div><div class="tiny muted">Кого ты добавил</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-accounts>${icon('users', 20)}<div class="grow"><div class="strong small">Мои аккаунты</div><div class="tiny muted">Переключиться или добавить ещё</div></div>${icon('forward', 16)}</button>
@@ -109,6 +110,10 @@ export async function render(root) {
     const { openMod } = await import('./mod.js');
     openMod();
   });
+  body.querySelector('[data-notes]').onclick = async () => {
+    const { openNotifications } = await import('./notifications.js');
+    openNotifications();
+  };
   body.querySelector('[data-contacts]').onclick = openContacts;
   body.querySelector('[data-accounts]').onclick = () => openAccounts();
 

@@ -61,6 +61,7 @@ export function unreadCount() {
 }
 
 function paint() {
+  const label = unread > 99 ? '99+' : String(unread);
   document.querySelectorAll('[data-bell]').forEach((bell) => {
     let dot = bell.querySelector('.bell-dot');
     if (!unread) {
@@ -71,7 +72,15 @@ function paint() {
       dot = el('<span class="bell-dot"></span>');
       bell.appendChild(dot);
     }
-    dot.textContent = unread > 99 ? '99+' : String(unread);
+    dot.textContent = label;
+  });
+  const tab = document.querySelector('[data-tab="profile"]');
+  if (tab) {
+    tab.querySelector('.nav-dot')?.remove();
+    if (unread) tab.appendChild(el(`<span class="nav-dot">${unread > 99 ? '99' : unread}</span>`));
+  }
+  document.querySelectorAll('[data-bell-count]').forEach((node) => {
+    node.textContent = unread ? `Непрочитанных: ${label}` : 'Всё прочитано';
   });
 }
 
@@ -87,10 +96,15 @@ export async function refreshBell() {
 export function bumpBell() {
   unread += 1;
   paint();
+  refreshBell();
 }
 
-export function mountBell(host) {
+export function mountBell(host, tab) {
   if (!state.user) return;
+  if (tab && tab !== 'feed') {
+    paint();
+    return;
+  }
   const bar = host.querySelector('.topbar');
   if (!bar || bar.querySelector('[data-bell]')) return;
   const button = el(`<button class="btn btn-icon" data-bell title="Уведомления">${icon('bell', 18)}</button>`);

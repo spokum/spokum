@@ -263,7 +263,7 @@ async function openTab(tab) {
   }
   try {
     const bell = await import('./views/notifications.js');
-    bell.mountBell(host);
+    bell.mountBell(host, tab);
     bell.refreshBell();
   } catch {}
   refreshUnread();
