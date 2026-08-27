@@ -129,6 +129,16 @@ function normalizePins(value) {
     .slice(0, 4);
 }
 
+function aliasesOf(user) {
+  const list = Array.isArray(user?.aliases) ? user.aliases : [];
+  return [user.username, ...list.filter((name) => name !== user.username)];
+}
+
+function ownerOf(name) {
+  const clean = String(name || '').toLowerCase().replace(/^@/, '');
+  return state.users.find((u) => aliasesOf(u).includes(clean));
+}
+
 function pub(user) {
   if (!user) return null;
   return {
@@ -255,11 +265,13 @@ export const local = {
     const name = String(username || '').toLowerCase().replace(/^@/, '');
     if (!/^[a-z0-9_]{3,20}$/.test(name)) fail('Юзернейм: 3-20 символов, латиница, цифры и _');
     if (String(password || '').length < 8) fail('Пароль минимум 8 символов');
-    if (state.users.some((u) => u.username === name)) fail('Юзернейм занят');
+    if (state.users.some((u) => aliasesOf(u).includes(name))) fail('Юзернейм занят');
     const salt = uid();
     const user = {
       id: next('users'),
       username: name,
+      loginName: name,
+      aliases: [],
       displayName: String(displayName || name).trim().slice(0, 40) || name,
       bio: '',
       hue: 200 + ((name.length * 37) % 140),
@@ -306,7 +318,7 @@ export const local = {
 
   async login({ username, password }) {
     const name = String(username || '').toLowerCase().replace(/^@/, '');
-    const user = state.users.find((u) => u.username === name);
+    const user = ownerOf(name);
     if (!user) fail('Неверный логин или пароль');
     if (user.passwordHash !== (await hash(password, user.salt))) fail('Неверный логин или пароль');
     if (user.bannedUntil > Date.now()) fail('Аккаунт заблокирован');
@@ -391,18 +403,63 @@ export const local = {
     return { ok: true };
   },
 
+  async myUsernames() {
+    const user = need();
+    return { names: aliasesOf(user), limit: user.premiumUntil > Date.now() ? 8 : 3 };
+  },
+
+  async addUsername(name) {
+    const user = need();
+    const clean = String(name || '').toLowerCase().replace(/^@/, '');
+    if (!/^[a-z0-9_]{3,20}$/.test(clean)) fail('Юзернейм: 3-20 символов, латиница, цифры и _');
+    if (aliasesOf(user).includes(clean)) return { username: clean };
+    if (state.users.some((u) => aliasesOf(u).includes(clean))) fail('Юзернейм занят');
+    const limit = user.premiumUntil > Date.now() ? 8 : 3;
+    if (aliasesOf(user).length >= limit) fail(`Больше юзернеймов не поместится: лимит ${limit}`);
+    user.aliases = [...aliasesOf(user).filter((n) => n !== user.username), clean];
+    save();
+    return { username: clean };
+  },
+
+  async dropUsername(name) {
+    const user = need();
+    const clean = String(name || '').toLowerCase().replace(/^@/, '');
+    if (clean === user.username) fail('Это основной юзернейм, сначала выберите другой основным');
+    if (clean === (user.loginName || user.aliases?.[0])) fail('С этим юзернеймом вы входите в аккаунт, его убрать нельзя');
+    user.aliases = aliasesOf(user).filter((n) => n !== clean && n !== user.username);
+    save();
+    return { ok: true };
+  },
+
+  async setMainUsername(name) {
+    const user = need();
+    const clean = String(name || '').toLowerCase().replace(/^@/, '');
+    if (!aliasesOf(user).includes(clean)) fail('Этот юзернейм вам не принадлежит');
+    const rest = aliasesOf(user).filter((n) => n !== clean);
+    user.username = clean;
+    user.aliases = rest;
+    save();
+    return { user: priv(user) };
+  },
+
   async searchUsers(query) {
     const q = String(query || '').toLowerCase().replace(/^@/, '');
     return {
       users: state.users
-        .filter((u) => !q || u.username.includes(q) || u.displayName.toLowerCase().includes(q) || u.bio.toLowerCase().includes(q))
+        .filter(
+          (u) =>
+            !q ||
+            aliasesOf(u).some((name) => name.includes(q)) ||
+            u.displayName.toLowerCase().includes(q) ||
+            u.bio.toLowerCase().includes(q)
+        )
         .slice(0, 40)
         .map(pub)
     };
   },
 
   async getUser(name) {
-    const user = state.users.find((u) => u.username === String(name).toLowerCase().replace(/^@/, ''));
+    const user = ownerOf(name);
     if (!user) fail('Пользователь не найден');
     const viewer = me();
     return {

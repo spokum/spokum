@@ -29,6 +29,7 @@ function shapeProfile(row, extra = {}) {
   return {
     id: row.id,
     username: row.username,
+    loginName: row.login_name || row.username,
     displayName: row.display_name || row.username,
     bio: row.bio || '',
     hue: row.hue ?? 220,
@@ -227,6 +228,8 @@ export async function createSupabase(url, key) {
       if (String(password || '').length < 8) throw new Error('Пароль минимум 8 символов');
       const taken = await sb.from('profiles').select('id').eq('username', name).maybeSingle();
       if (taken.data) throw new Error('Юзернейм занят');
+      const alias = await sb.from('usernames').select('user_id').eq('username', name).maybeSingle();
+      if (alias.data) throw new Error('Юзернейм занят');
       const { data, error } = await sb.auth.signUp({
         email: emailFor(name),
         password,
@@ -241,7 +244,12 @@ export async function createSupabase(url, key) {
 
     async login({ username, password }) {
       const name = String(username || '').toLowerCase().replace(/^@/, '');
-      const { data, error } = await sb.auth.signInWithPassword({ email: emailFor(name), password });
+      let handle = name;
+      try {
+        const resolved = await sb.rpc('resolve_login', { target: name });
+        if (resolved.data) handle = resolved.data;
+      } catch {}
+      const { data, error } = await sb.auth.signInWithPassword({ email: emailFor(handle), password });
       guard(error);
       uid = data.user.id;
       const user = await profileById(uid);
@@ -295,7 +303,7 @@ export async function createSupabase(url, key) {
     async changePassword({ current, next }) {
       const id = requireUid();
       const profile = await profileById(id);
-      const check = await sb.auth.signInWithPassword({ email: emailFor(profile.username), password: current });
+      const check = await sb.auth.signInWithPassword({ email: emailFor(profile.login_name || profile.username), password: current });
       if (check.error) throw new Error('Текущий пароль неверный');
       const { error } = await sb.auth.updateUser({ password: next });
       guard(error);
@@ -331,13 +339,61 @@ export async function createSupabase(url, key) {
       if (q) request = request.or(`username.ilike.%${q}%,display_name.ilike.%${q}%,bio.ilike.%${q}%`);
       const { data, error } = await request;
       guard(error);
-      return { users: (data || []).map((row) => shapeProfile(row)) };
+      const found = new Map((data || []).map((row) => [row.id, row]));
+      if (q) {
+        try {
+          const aliases = await sb.from('usernames').select('user_id').ilike('username', `%${q}%`).limit(40);
+          const missing = (aliases.data || []).map((row) => row.user_id).filter((id) => !found.has(id));
+          if (missing.length) {
+            const extra = await sb.from('profiles').select('*').in('id', missing);
+            for (const row of extra.data || []) found.set(row.id, row);
+          }
+        } catch {}
+      }
+      return { users: [...found.values()].map((row) => shapeProfile(row)) };
+    },
+
+    async myUsernames() {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('usernames')
+        .select('username, created_at')
+        .eq('user_id', me)
+        .order('created_at', { ascending: true });
+      if (error) return { names: [], limit: 3 };
+      const limit = await sb.rpc('username_limit');
+      return { names: (data || []).map((row) => row.username), limit: limit.data || 3 };
+    },
+
+    async addUsername(name) {
+      const { data, error } = await sb.rpc('add_username', { wanted: name });
+      guard(error);
+      return { username: data };
+    },
+
+    async dropUsername(name) {
+      const { error } = await sb.rpc('drop_username', { target: name });
+      guard(error);
+      return { ok: true };
+    },
+
+    async setMainUsername(name) {
+      const { error } = await sb.rpc('set_main_username', { target: name });
+      guard(error);
+      return { user: await profileById(uid) };
     },
 
     async getUser(name) {
       const clean = String(name).toLowerCase().replace(/^@/, '');
-      const { data, error } = await sb.from('profiles').select('*').eq('username', clean).maybeSingle();
+      let { data, error } = await sb.from('profiles').select('*').eq('username', clean).maybeSingle();
       guard(error);
+      if (!data) {
+        const alias = await sb.from('usernames').select('user_id').eq('username', clean).maybeSingle();
+        if (alias.data) {
+          const found = await sb.from('profiles').select('*').eq('id', alias.data.user_id).maybeSingle();
+          data = found.data;
+        }
+      }
       if (!data) throw new Error('Пользователь не найден');
       const grab = () =>
         sb

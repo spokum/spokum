@@ -935,3 +935,168 @@ create policy "media bucket delete" on storage.objects for delete to authenticat
 grant select, insert, update, delete on table public.announcements to authenticated;
 grant select on table public.announcements to anon;
 grant select, insert, delete on table public.call_signals to authenticated;
+
+alter table public.profiles add column if not exists login_name text;
+update public.profiles set login_name = username where login_name is null;
+
+create table if not exists public.usernames (
+  username text primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists usernames_user_idx on public.usernames (user_id, created_at);
+
+insert into public.usernames (username, user_id)
+select username, id from public.profiles
+on conflict (username) do nothing;
+
+alter table public.usernames enable row level security;
+
+drop policy if exists usernames_read on public.usernames;
+create policy usernames_read on public.usernames for select using (true);
+
+grant select on table public.usernames to authenticated, anon;
+
+create or replace function public.username_limit()
+returns integer language sql stable security definer set search_path = public as $$
+  select case when public.viewer_is_premium() then 8 else 3 end;
+$$;
+
+create or replace function public.add_username(wanted text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  clean text;
+  taken uuid;
+  used integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Нужен вход';
+  end if;
+  clean := lower(trim(both from coalesce(wanted, '')));
+  clean := regexp_replace(clean, '^@', '');
+  if clean !~ '^[a-z0-9_]{3,20}$' then
+    raise exception 'Юзернейм: 3-20 символов, латиница, цифры и _';
+  end if;
+  select user_id into taken from public.usernames where username = clean;
+  if taken is not null then
+    if taken = auth.uid() then
+      return clean;
+    end if;
+    raise exception 'Юзернейм занят';
+  end if;
+  if exists (select 1 from public.profiles where username = clean and id <> auth.uid()) then
+    raise exception 'Юзернейм занят';
+  end if;
+  select count(*) into used from public.usernames where user_id = auth.uid();
+  if used >= public.username_limit() then
+    raise exception 'Больше юзернеймов не поместится: лимит %', public.username_limit();
+  end if;
+  insert into public.usernames (username, user_id) values (clean, auth.uid());
+  return clean;
+end;
+$$;
+
+create or replace function public.drop_username(target text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  clean text;
+  main text;
+begin
+  if auth.uid() is null then
+    raise exception 'Нужен вход';
+  end if;
+  clean := lower(regexp_replace(coalesce(target, ''), '^@', ''));
+  select username into main from public.profiles where id = auth.uid();
+  if clean = main then
+    raise exception 'Это основной юзернейм, сначала выберите другой основным';
+  end if;
+  if clean = (select login_name from public.profiles where id = auth.uid()) then
+    raise exception 'С этим юзернеймом вы входите в аккаунт, его убрать нельзя';
+  end if;
+  delete from public.usernames where username = clean and user_id = auth.uid();
+end;
+$$;
+
+create or replace function public.set_main_username(target text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  clean text;
+  owner uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Нужен вход';
+  end if;
+  clean := lower(regexp_replace(coalesce(target, ''), '^@', ''));
+  select user_id into owner from public.usernames where username = clean;
+  if owner is null or owner <> auth.uid() then
+    raise exception 'Этот юзернейм вам не принадлежит';
+  end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set username = clean where id = auth.uid();
+  return clean;
+end;
+$$;
+
+create or replace function public.resolve_login(target text)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce(p.login_name, p.username)
+    from public.usernames u
+    join public.profiles p on p.id = u.user_id
+   where u.username = lower(regexp_replace(coalesce(target, ''), '^@', ''))
+   limit 1;
+$$;
+
+create or replace function public.find_by_username(needle text)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select distinct user_id from public.usernames
+   where username ilike '%' || lower(regexp_replace(coalesce(needle, ''), '^@', '')) || '%'
+   limit 40;
+$$;
+
+grant execute on function public.username_limit() to authenticated;
+grant execute on function public.add_username(text) to authenticated;
+grant execute on function public.drop_username(text) to authenticated;
+grant execute on function public.set_main_username(text) to authenticated;
+grant execute on function public.resolve_login(text) to authenticated, anon;
+grant execute on function public.find_by_username(text) to authenticated, anon;
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  wanted text;
+  founder boolean;
+begin
+  wanted := lower(coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)));
+  founder := wanted = 'vanya8';
+  insert into public.profiles (id, username, login_name, display_name, hue, is_admin, is_developer, is_verified)
+  values (
+    new.id,
+    wanted,
+    wanted,
+    coalesce(nullif(new.raw_user_meta_data->>'display_name', ''), wanted),
+    200 + (length(wanted) * 37) % 140,
+    founder,
+    founder,
+    founder
+  );
+  insert into public.usernames (username, user_id) values (wanted, new.id)
+  on conflict (username) do nothing;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_login_name()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(current_setting('spokum.privileged', true), '') = 'on' then
+    return new;
+  end if;
+  new.login_name := old.login_name;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_protect_login on public.profiles;
+create trigger profiles_protect_login
+  before update on public.profiles
+  for each row execute function public.protect_login_name();

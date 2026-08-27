@@ -72,6 +72,7 @@ export async function render(root) {
     <div class="col" style="margin-top:12px;gap:6px">
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Модерация постов и жалобы</div></div>${icon('forward', 16)}</button>` : ''}
+      <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-contacts>${icon('users', 20)}<div class="grow"><div class="strong small">Контакты</div><div class="tiny muted">Кого ты добавил</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-logout style="color:#c98b8b">${icon('logout', 20)}<div class="grow" style="text-align:left"><div class="strong small">Выйти</div></div></button>
     </div>
@@ -88,6 +89,7 @@ export async function render(root) {
   root.querySelector('[data-edit]').onclick = edit;
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
+  body.querySelector('[data-names]').onclick = () => openUsernames(() => render(root));
   body.querySelector('[data-safe]').onclick = () => openZonePicker(() => render(root));
   body.querySelector('[data-journal]').onclick = async () => {
     const { openJournalHistory } = await import('./journal.js');
@@ -341,6 +343,100 @@ function openEditor(done) {
       toast(error.message, 'err');
     }
   };
+}
+
+export function openUsernames(done) {
+  const body = el(`<div class="col">
+    <div class="col" data-list style="gap:6px"></div>
+    <div class="row" style="gap:8px">
+      <input class="input grow" data-new placeholder="новый юзернейм" maxlength="20">
+      <button class="btn btn-primary btn-icon" data-add>${icon('plus', 18)}</button>
+    </div>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Все ваши юзернеймы ведут на один аккаунт: по любому из них можно войти, найти вас в поиске и открыть профиль. Основной показывается людям.</p>
+  </div>`);
+  const sheet = openSheet('Мои юзернеймы', body, { onClose: done });
+  const list = body.querySelector('[data-list]');
+  const input = body.querySelector('[data-new]');
+  const addButton = body.querySelector('[data-add]');
+
+  const draw = async () => {
+    list.innerHTML = '<div class="card" style="height:52px;opacity:.3"></div>';
+    try {
+      const { names, limit } = await api.myUsernames();
+      const main = state.user?.username;
+      list.innerHTML = names
+        .map(
+          (name) => `<div class="list-item" data-row="${esc(name)}" style="background:var(--surface);border-radius:var(--r-md)">
+            <span class="grow strong small">@${esc(name)}</span>
+            ${name === main
+              ? '<span class="pill good">основной</span>'
+              : `<button class="btn btn-sm" data-main="${esc(name)}">Сделать основным</button>
+                 <button class="btn btn-icon btn-ghost" data-drop="${esc(name)}">${icon('trash', 16)}</button>`}
+          </div>`
+        )
+        .join('') + `<div class="tiny muted" style="padding:4px 2px">Занято ${names.length} из ${limit}${limit < 8 ? '. С премиумом до 8' : ''}</div>`;
+
+      addButton.disabled = names.length >= limit;
+      input.placeholder = names.length >= limit ? 'лимит исчерпан' : 'новый юзернейм';
+
+      list.querySelectorAll('[data-main]').forEach((button) => {
+        button.onclick = async () => {
+          button.disabled = true;
+          try {
+            const { user } = await api.setMainUsername(button.dataset.main);
+            if (user) setUser(user);
+            else setUser((await api.me()).user);
+            toast('Основной юзернейм обновлён');
+            draw();
+          } catch (error) {
+            button.disabled = false;
+            toast(error.message, 'err');
+          }
+        };
+      });
+
+      list.querySelectorAll('[data-drop]').forEach((button) => {
+        button.onclick = async () => {
+          if (!(await confirmSheet({ title: `Убрать @${button.dataset.drop}`, text: 'Имя освободится, его сможет занять кто-то другой', confirm: 'Убрать', danger: true }))) return;
+          try {
+            await api.dropUsername(button.dataset.drop);
+            toast('Юзернейм убран');
+            draw();
+          } catch (error) {
+            toast(error.message, 'err');
+          }
+        };
+      });
+    } catch (error) {
+      list.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    }
+  };
+
+  const add = async () => {
+    const wanted = input.value.trim().toLowerCase().replace(/^@/, '');
+    if (!wanted) return;
+    if (!/^[a-z0-9_]{3,20}$/.test(wanted)) return toast('Юзернейм: 3-20 символов, латиница, цифры и _', 'err');
+    addButton.disabled = true;
+    try {
+      await api.addUsername(wanted);
+      input.value = '';
+      toast(`@${wanted} теперь ваш`);
+      draw();
+    } catch (error) {
+      toast(error.message, 'err');
+    } finally {
+      addButton.disabled = false;
+    }
+  };
+
+  addButton.onclick = add;
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    add();
+  });
+
+  draw();
 }
 
 function mediaTabs(chips, list, posts, postCard, refresh) {
