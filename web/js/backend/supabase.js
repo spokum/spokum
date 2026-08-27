@@ -187,7 +187,11 @@ export async function createSupabase(url, key) {
     return new Set((data || []).map((row) => row.post_id));
   };
 
-  const POST_SELECT = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const POST_SELECT_FULL = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const POST_SELECT_BASE = 'id, body, image, mood, created_at, removed, removed_reason, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  let legacyPosts = false;
+  const POST_SELECT = () => (legacyPosts ? POST_SELECT_BASE : POST_SELECT_FULL);
+  const missingColumn = (error) => !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message || ''));
 
   const listen = () => {
     if (channel || !uid) return;
@@ -335,13 +339,19 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.from('profiles').select('*').eq('username', clean).maybeSingle();
       guard(error);
       if (!data) throw new Error('Пользователь не найден');
-      const posts = await sb
-        .from('posts')
-        .select(POST_SELECT)
-        .eq('author_id', data.id)
-        .eq('removed', false)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const grab = () =>
+        sb
+          .from('posts')
+          .select(POST_SELECT())
+          .eq('author_id', data.id)
+          .eq('removed', false)
+          .order('created_at', { ascending: false })
+          .limit(50);
+      let posts = await grab();
+      if (missingColumn(posts.error)) {
+        legacyPosts = true;
+        posts = await grab();
+      }
       guard(posts.error);
       const liked = await likedSet((posts.data || []).map((row) => row.id));
       return {
@@ -352,17 +362,25 @@ export async function createSupabase(url, key) {
 
     async listPosts({ mood, kind, before, limit } = {}) {
       const size = Math.min(40, Math.max(4, Number(limit) || 12));
-      let request = sb
-        .from('posts')
-        .select(POST_SELECT)
-        .eq('removed', false)
-        .order('created_at', { ascending: false })
-        .limit(size);
-      if (mood) request = request.eq('mood', mood);
-      if (kind === 'video') request = request.eq('kind', 'video');
-      if (kind === 'feed') request = request.neq('kind', 'video');
-      if (before) request = request.lt('created_at', new Date(Number(before)).toISOString());
-      const { data, error } = await request;
+      const build = () => {
+        let request = sb
+          .from('posts')
+          .select(POST_SELECT())
+          .eq('removed', false)
+          .order('created_at', { ascending: false })
+          .limit(size);
+        if (mood) request = request.eq('mood', mood);
+        if (!legacyPosts && kind === 'video') request = request.eq('kind', 'video');
+        if (!legacyPosts && kind === 'feed') request = request.neq('kind', 'video');
+        if (before) request = request.lt('created_at', new Date(Number(before)).toISOString());
+        return request;
+      };
+      let { data, error } = await build();
+      if (missingColumn(error)) {
+        legacyPosts = true;
+        if (kind === 'video') return { posts: [], more: false, cursor: null };
+        ({ data, error } = await build());
+      }
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
       const posts = (data || []).map((row) => shapePost(row, liked));
@@ -434,21 +452,29 @@ export async function createSupabase(url, key) {
       const body = String(text || '').trim().slice(0, 5000);
       const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
       if (!body && !image && !album.length && !video) throw new Error('Пустой пост');
-      const { data, error } = await sb
-        .from('posts')
-        .insert({
-          author_id: id,
-          body,
-          image: image || album[0] || poster || null,
-          mood: mood || 'calm',
-          kind: kind || (video ? 'video' : album.length > 1 ? 'album' : 'text'),
-          media: album,
-          video: video || null,
-          poster: poster || null,
-          duration: Math.max(0, Math.round(Number(duration) || 0))
-        })
-        .select(POST_SELECT)
-        .single();
+      const payload = {
+        author_id: id,
+        body,
+        image: image || album[0] || poster || null,
+        mood: mood || 'calm',
+        kind: kind || (video ? 'video' : album.length > 1 ? 'album' : 'text'),
+        media: album,
+        video: video || null,
+        poster: poster || null,
+        duration: Math.max(0, Math.round(Number(duration) || 0))
+      };
+      let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
+      if (missingColumn(error)) {
+        legacyPosts = true;
+        if (video || album.length > 1) {
+          throw new Error('Видео и альбомы появятся после того, как вы прогоните supabase/schema.sql заново');
+        }
+        ({ data, error } = await sb
+          .from('posts')
+          .insert({ author_id: id, body, image: payload.image, mood: payload.mood })
+          .select(POST_SELECT())
+          .single());
+      }
       guard(error);
       return { post: shapePost(data, new Set()) };
     },
@@ -469,7 +495,7 @@ export async function createSupabase(url, key) {
         const { error } = await sb.from('likes').insert({ post_id: id, user_id: me });
         guard(error);
       }
-      const { data, error } = await sb.from('posts').select(POST_SELECT).eq('id', id).single();
+      const { data, error } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       guard(error);
       return { post: shapePost(data, await likedSet([id])) };
     },
@@ -498,7 +524,7 @@ export async function createSupabase(url, key) {
       if (!body) throw new Error('Пустой комментарий');
       const { error } = await sb.from('comments').insert({ post_id: id, author_id: me, body });
       guard(error);
-      const { data } = await sb.from('posts').select(POST_SELECT).eq('id', id).single();
+      const { data } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       return { post: shapePost(data, await likedSet([id])) };
     },
 
@@ -746,11 +772,12 @@ export async function createSupabase(url, key) {
     },
 
     async modQueue() {
-      const { data, error } = await sb
-        .from('posts')
-        .select(POST_SELECT)
-        .order('created_at', { ascending: false })
-        .limit(60);
+      const grab = () => sb.from('posts').select(POST_SELECT()).order('created_at', { ascending: false }).limit(60);
+      let { data, error } = await grab();
+      if (missingColumn(error)) {
+        legacyPosts = true;
+        ({ data, error } = await grab());
+      }
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
       return { posts: (data || []).map((row) => shapePost(row, liked)) };
