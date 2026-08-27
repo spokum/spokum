@@ -4,6 +4,7 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
 import { openProfile } from './profile.js';
 import { openStories, publishStory } from './stories.js';
+import { isSaved, toggleSaved, savedList, dropSaved } from '../saved.js';
 
 let draft = { text: '', media: [], mood: 'calm' };
 
@@ -17,7 +18,12 @@ export async function render(root) {
         </div>
       </div>
       <div class="spacer"></div>
+      <button class="btn btn-icon" data-search-toggle title="Поиск">${icon('search', 18)}</button>
+      <button class="btn btn-icon" data-saved title="Сохранённое">${icon('star', 18)}</button>
       <button class="btn btn-icon" data-refresh title="Обновить">${icon('refresh', 18)}</button>
+    </div>
+    <div data-search hidden style="margin-bottom:12px">
+      <input class="input" data-query placeholder="Поиск по записям и авторам">
     </div>
     ${api.mode === 'local' ? `<div class="card" style="border-color:rgba(255,203,107,.3);background:rgba(255,203,107,.07)"><div class="row" style="align-items:flex-start;gap:10px">${icon('warn', 18)}<div class="grow"><div class="strong small">Автономный режим</div><div class="tiny muted" style="margin-top:3px;line-height:1.5">База не подключена, поэтому аккаунт и записи живут только в этом браузере. Впишите ключи Supabase в файл config.js, и сеть станет общей для всех.</div></div></div></div>` : ''}
     <div data-announce></div>
@@ -26,6 +32,26 @@ export async function render(root) {
     <div class="col" data-list></div>`;
 
   root.querySelector('[data-refresh]').onclick = () => load(root);
+
+  const searchBox = root.querySelector('[data-search]');
+  const query = root.querySelector('[data-query]');
+  root.querySelector('[data-search-toggle]').onclick = () => {
+    searchBox.hidden = !searchBox.hidden;
+    if (!searchBox.hidden) query.focus();
+    else {
+      query.value = '';
+      feedState.query = '';
+      drawPosts(root, feedState.posts, {});
+    }
+  };
+  query.addEventListener('input', () => {
+    feedState.query = query.value.trim().toLowerCase();
+    drawPosts(root, feedState.posts, {});
+  });
+
+  root.querySelector('[data-saved]').onclick = () => openSaved(root);
+
+  attachPullToRefresh(root);
   renderComposer(root);
   renderFilters(root);
   loadAnnouncements(root);
@@ -257,7 +283,71 @@ function skeleton(count = 3) {
   </div>`).join('');
 }
 
-let feedState = { posts: [], cursor: null, more: true, busy: false, key: '' };
+let feedState = { posts: [], cursor: null, more: true, busy: false, key: '', query: '' };
+
+function attachPullToRefresh(root) {
+  let startY = 0;
+  let pulling = false;
+  let bar = null;
+  root.addEventListener('touchstart', (event) => {
+    if (window.scrollY > 4) return;
+    startY = event.touches[0].clientY;
+    pulling = true;
+  }, { passive: true });
+  root.addEventListener('touchmove', (event) => {
+    if (!pulling) return;
+    const shift = event.touches[0].clientY - startY;
+    if (shift < 12) return;
+    if (!bar) {
+      bar = el('<div class="pull-hint">Потяните, чтобы обновить</div>');
+      root.prepend(bar);
+    }
+    bar.style.opacity = String(Math.min(1, shift / 90));
+    if (shift > 90) bar.textContent = 'Отпустите';
+  }, { passive: true });
+  root.addEventListener('touchend', (event) => {
+    if (!pulling) return;
+    pulling = false;
+    const shift = (event.changedTouches[0]?.clientY || 0) - startY;
+    bar?.remove();
+    bar = null;
+    if (shift > 90) load(root);
+  });
+}
+
+function openSaved(root) {
+  const list = savedList();
+  const body = el(`<div class="col" style="gap:8px">${
+    list.length
+      ? list
+          .map(
+            (row) => `<div class="card" style="padding:12px" data-row="${esc(String(row.id))}">
+              <div class="row" style="gap:8px">${avatar(row.author, 36)}
+                <div class="grow" style="min-width:0">
+                  <div class="small strong truncate">${esc(row.author?.displayName || '')}</div>
+                  <div class="tiny muted">сохранено ${esc(timeAgo(row.savedAt))} назад</div>
+                </div>
+                <button class="btn btn-icon btn-ghost" data-drop="${esc(String(row.id))}">${icon('close', 16)}</button>
+              </div>
+              ${row.text ? `<div class="small" style="margin-top:8px;line-height:1.45">${esc(row.text.slice(0, 220))}</div>` : ''}
+              ${row.image ? `<div class="post-image" style="margin-top:10px"><img src="${esc(row.image)}" alt=""></div>` : ''}
+            </div>`
+          )
+          .join('')
+      : emptyState('star', 'Пока пусто', 'Сохраняйте записи, чтобы вернуться к ним позже')
+  }</div>`);
+  const sheet = openSheet('Сохранённое', body);
+  body.querySelectorAll('[data-drop]').forEach((button) => {
+    button.onclick = () => {
+      dropSaved(button.dataset.drop);
+      button.closest('[data-row]').remove();
+      if (!body.querySelector('[data-row]')) {
+        sheet.close();
+        toast('Список пуст');
+      }
+    };
+  });
+}
 
 async function load(root, options = {}) {
   const list = root.querySelector('[data-list]');
@@ -335,11 +425,28 @@ function drawPosts(root, posts, meta) {
     return;
   }
 
-  posts.forEach((post, index) => {
+  const term = feedState.query || '';
+  const shown = term
+    ? posts.filter(
+        (post) =>
+          (post.text || '').toLowerCase().includes(term) ||
+          (post.author?.displayName || '').toLowerCase().includes(term) ||
+          (post.author?.username || '').toLowerCase().includes(term)
+      )
+    : posts;
+
+  if (term && !shown.length) {
+    list.appendChild(el(`<div>${emptyState('search', 'Ничего не нашли', 'Попробуйте другое слово')}</div>`));
+    return;
+  }
+
+  shown.forEach((post, index) => {
     const card = postCard(post, () => load(root));
     card.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
     list.appendChild(card);
   });
+
+  if (term) return;
 
   if (meta.cached || !feedState.more) return;
 
@@ -410,8 +517,10 @@ export function postCard(post, refresh, options = {}) {
       <div class="post-actions">
         <button class="icon-btn ${post.liked ? 'on' : ''}" data-like>${icon('heart', 17)}<span>${post.likes}</span></button>
         <button class="icon-btn" data-comments>${icon('comment', 17)}<span>${post.comments}</span></button>
+        <button class="icon-btn ${isSaved(post.id) ? 'on' : ''}" data-save title="Сохранить">${icon('star', 17)}</button>
         ${post.views ? `<span class="icon-btn" style="pointer-events:none">${icon('eye', 17)}<span>${post.views}</span></span>` : ''}
         <div class="grow"></div>
+        <button class="icon-btn" data-share>${icon('share', 17)}</button>
         <button class="icon-btn" data-report>${icon('flag', 17)}</button>
       </div>
     </article>`);
@@ -420,6 +529,40 @@ export function postCard(post, refresh, options = {}) {
     if (hasStory(post.author)) openStories(post.author.id);
     else openProfile(post.author.username);
   };
+
+  card.querySelector('[data-save]').onclick = (event) => {
+    const on = toggleSaved(post);
+    event.currentTarget.classList.toggle('on', on);
+    toast(on ? 'Сохранено' : 'Убрано из сохранённых');
+  };
+
+  card.querySelector('[data-share]').onclick = async () => {
+    const text = `${post.author.displayName} (@${post.author.username}): ${post.text || 'запись в СпокУме'}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'СпокУм', text });
+        return;
+      } catch {}
+    }
+    navigator.clipboard?.writeText(text);
+    toast('Скопировано');
+  };
+
+  let lastTouch = 0;
+  card.addEventListener('click', (event) => {
+    if (event.target.closest('button, a, .status-icon, img')) return;
+    const now = Date.now();
+    if (now - lastTouch < 320) {
+      lastTouch = 0;
+      const button = card.querySelector('[data-like]');
+      if (!post.liked) button.click();
+      const flash = el(`<span class="tap-heart">${icon('heart', 74)}</span>`);
+      card.appendChild(flash);
+      setTimeout(() => flash.remove(), 700);
+      return;
+    }
+    lastTouch = now;
+  });
 
   card.querySelector('[data-like]').onclick = async (event) => {
     if (!state.user) return toast('Войдите, чтобы ставить лайки', 'err');

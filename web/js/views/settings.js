@@ -57,10 +57,8 @@ export async function render(root) {
       <div class="row" style="margin-bottom:12px">${icon('palette', 18)}<span class="strong small">Тема</span></div>
       <div class="theme-swatches" data-themes></div>
       <div class="divider"></div>
-      <div class="row between">
-        <span class="small">Акцент</span>
-        <div class="accent-row" data-accents></div>
-      </div>
+      <div class="small" style="margin-bottom:10px">Акцент</div>
+      <div class="accent-row" data-accents></div>
     </div>
 
     ${premiumCard()}

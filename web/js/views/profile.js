@@ -77,12 +77,12 @@ export async function render(root) {
     </div>
 
     <div class="row between" style="margin:22px 2px 10px"><div class="strong small">Мои записи</div><div class="tiny muted">${plural(posts.length, 'запись', 'записи', 'записей')}</div></div>
+    <div class="chips" data-kinds style="margin-bottom:10px"></div>
     <div class="col" data-posts></div>`;
 
   const list = body.querySelector('[data-posts]');
   const { postCard } = await import('./feed.js');
-  if (!posts.length) list.innerHTML = emptyState('leaf', 'Ещё нет записей', 'Первая запись обычно самая сложная');
-  else posts.forEach((post) => list.appendChild(postCard(post, () => render(root))));
+  mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
@@ -343,6 +343,38 @@ function openEditor(done) {
   };
 }
 
+function mediaTabs(chips, list, posts, postCard, refresh) {
+  const groups = [
+    ['all', 'Всё', () => true],
+    ['text', 'Записи', (post) => (post.kind || 'text') === 'text'],
+    ['album', 'Альбомы', (post) => post.kind === 'album'],
+    ['video', 'Видео', (post) => post.kind === 'video']
+  ].filter(([key, , match]) => key === 'all' || posts.some(match));
+
+  let active = 'all';
+  const draw = () => {
+    chips.innerHTML = groups
+      .map(([key, label]) => `<button class="chip" data-kind="${key}" aria-pressed="${key === active}">${label}</button>`)
+      .join('');
+    chips.querySelectorAll('[data-kind]').forEach((chip) => {
+      chip.onclick = () => {
+        active = chip.dataset.kind;
+        draw();
+      };
+    });
+    const match = groups.find(([key]) => key === active)?.[2] || (() => true);
+    const shown = posts.filter(match);
+    list.innerHTML = '';
+    if (!shown.length) {
+      list.innerHTML = emptyState('leaf', 'Пока пусто', 'Здесь появятся записи');
+      return;
+    }
+    shown.forEach((post) => list.appendChild(postCard(post, refresh)));
+  };
+  if (groups.length < 3) chips.style.display = 'none';
+  draw();
+}
+
 export async function enterSafeZone(mood, done) {
   const { openSafeZone } = await import('./safe.js');
   openSafeZone(mood, (minutes) => {
@@ -442,12 +474,12 @@ export async function openProfile(username) {
         </div>
       </div>
       <div class="row between" style="margin:20px 2px 10px"><div class="strong small">Записи</div></div>
+      <div class="chips" data-kinds style="margin-bottom:10px"></div>
       <div class="col" data-posts></div>`;
 
     const list = body.querySelector('[data-posts]');
     const { postCard } = await import('./feed.js');
-    if (!posts.length) list.innerHTML = emptyState('leaf', 'Записей нет', 'Здесь появятся посты');
-    else posts.forEach((post) => list.appendChild(postCard(post, () => openProfile(username))));
+    mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => openProfile(username));
 
     body.querySelector('[data-contact]').onclick = async () => {
       try {

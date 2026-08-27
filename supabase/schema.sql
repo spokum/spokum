@@ -931,3 +931,7 @@ create policy "media bucket insert" on storage.objects for insert to authenticat
 drop policy if exists "media bucket delete" on storage.objects;
 create policy "media bucket delete" on storage.objects for delete to authenticated
   using (bucket_id = 'media' and owner = auth.uid());
+
+grant select, insert, update, delete on table public.announcements to authenticated;
+grant select on table public.announcements to anon;
+grant select, insert, delete on table public.call_signals to authenticated;

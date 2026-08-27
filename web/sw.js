@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v11';
+const VERSION = 'spokum-v12';
 const CORE = [
   './',
   './index.html',
@@ -13,7 +13,10 @@ const CORE = [
   './js/backend/remote.js',
   './js/backend/supabase.js',
   './js/games/index.js',
+  './js/call.js',
+  './js/saved.js',
   './js/views/auth.js',
+  './js/views/videos.js',
   './js/views/feed.js',
   './js/views/chats.js',
   './js/views/games.js',
