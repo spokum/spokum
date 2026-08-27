@@ -1163,12 +1163,27 @@ svg { display: block; flex: none; }
 .rule-list { display: flex; flex-direction: column; gap: 9px; }
 .rule-item { display: flex; gap: 9px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .rule-no { flex: none; min-width: 30px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rule-pun {
+  flex: none; align-self: flex-start; margin-top: 1px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .2px; white-space: nowrap;
+  background: var(--accent-soft); color: var(--accent);
+}
+.rule-pun.warn { background: rgba(198,176,131,.16); color: #b39a66; }
+.rule-pun.bad { background: rgba(212,115,111,.14); color: #c98b8b; }
 .rule-num {
   min-width: 22px; height: 22px; border-radius: 7px;
   display: grid; place-items: center; flex: none;
   background: var(--accent-soft); color: var(--accent);
   font-size: 12px; font-weight: 700;
 }
+.rule-pick {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 10px 12px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--line);
+  font-size: 13px; line-height: 1.45; color: var(--text); text-align: left;
+}
+.rule-pick:hover { border-color: var(--accent); }
 .rule-note {
   display: flex; align-items: flex-start; gap: 8px; margin-top: 10px;
   padding: 10px 12px; border-radius: 12px;

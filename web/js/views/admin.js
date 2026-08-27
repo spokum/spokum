@@ -529,7 +529,7 @@ export function pickPremiumDays() {
   });
 }
 
-export function pickDuration() {
+export function pickDuration(suggested) {
   return new Promise((done) => {
     const options = [
       [60, '1 час'],
@@ -540,7 +540,11 @@ export function pickDuration() {
       [525600, 'Год']
     ];
     const body = el(`<div class="col" style="gap:6px">${options
-      .map(([value, label]) => `<button class="list-item" data-value="${value}">${icon('clock', 18)}<span>${label}</span></button>`)
+      .map(
+        ([value, label]) => `<button class="list-item" data-value="${value}">${icon('clock', 18)}<span class="grow" style="text-align:left">${label}</span>${
+          value === suggested ? '<span class="rule-pun">по правилам</span>' : ''
+        }</button>`
+      )
       .join('')}</div>`);
     const sheet = openSheet('На сколько', body, { onClose: () => done(null) });
     body.querySelectorAll('[data-value]').forEach((button) => {

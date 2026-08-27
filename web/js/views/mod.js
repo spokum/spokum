@@ -4,6 +4,7 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, promptSheet, emptyState } from '../ui.js';
 import { openProfile } from './profile.js';
 import { pickDuration } from './admin.js';
+import { ruleList, openRules } from './rules.js';
 
 const TABS = [
   ['queue', 'Публикации'],
@@ -97,8 +98,9 @@ async function drawQueue(body) {
       </div>`);
     card.querySelector('[data-author]').onclick = () => openProfile(post.author.username);
     card.querySelector('[data-remove]')?.addEventListener('click', async () => {
-      const reason = await promptSheet({ title: 'Снять публикацию', label: 'Причина, её увидит админ', placeholder: 'Например: травля', multiline: true });
-      if (!reason) return;
+      const picked = await reasonByRule('Снять публикацию');
+      if (!picked) return;
+      const reason = picked.reason;
       try {
         await api.removePost(post.id, reason);
         toast('Пост снят');
@@ -162,8 +164,9 @@ async function drawReels(body) {
       };
       card.querySelector('[data-author]').onclick = () => openProfile(post.author.username);
       card.querySelector('[data-remove]')?.addEventListener('click', async () => {
-        const reason = await promptSheet({ title: 'Снять публикацию', label: 'Причина, её увидит админ', placeholder: 'Например: запрещённый контент', multiline: true });
-        if (!reason) return;
+        const picked = await reasonByRule('Снять публикацию');
+        if (!picked) return;
+        const reason = picked.reason;
         try {
           await api.removePost(post.id, reason);
           toast('Снято');
@@ -186,34 +189,117 @@ async function drawReels(body) {
   await load('reels');
 }
 
+export function pickRule() {
+  return new Promise((done) => {
+    const rules = ruleList();
+    const body = el(`<div class="col" style="gap:10px">
+      <input class="input" data-find placeholder="Поиск: слово или номер пункта">
+      <div class="row" style="gap:8px">
+        <button class="btn btn-sm grow" data-own>${icon('edit', 15)} Своими словами</button>
+        <button class="btn btn-sm grow" data-all>${icon('book', 15)} Все правила</button>
+      </div>
+      <div class="col" data-list style="gap:6px"></div>
+    </div>`);
+    const sheet = openSheet('Пункт правил', body, { onClose: () => done(null) });
+    const list = body.querySelector('[data-list]');
+
+    const close = (value) => {
+      done(value);
+      document.body.style.overflow = '';
+      sheet.sheet.parentElement.remove();
+    };
+
+    const draw = (query) => {
+      const needle = query.trim().toLowerCase();
+      const rows = needle
+        ? rules.filter((rule) => rule.no.startsWith(needle) || rule.text.toLowerCase().includes(needle) || rule.block.toLowerCase().includes(needle))
+        : rules;
+      if (!rows.length) {
+        list.innerHTML = `<p class="tiny muted" style="text-align:center;padding:14px 0">Ничего не нашлось</p>`;
+        return;
+      }
+      list.innerHTML = '';
+      rows.forEach((rule) => {
+        const row = el(`<button class="rule-pick">
+          <span class="rule-no">${esc(rule.no)}</span>
+          <span class="grow" style="min-width:0;text-align:left">${esc(rule.text)}</span>
+          <span class="rule-pun ${rule.tone}">${esc(rule.label)}</span>
+        </button>`);
+        row.onclick = () => close(rule);
+        list.appendChild(row);
+      });
+    };
+
+    body.querySelector('[data-find]').oninput = (event) => draw(event.target.value);
+    body.querySelector('[data-own]').onclick = () => close('own');
+    body.querySelector('[data-all]').onclick = () => {
+      close(null);
+      openRules();
+    };
+    draw('');
+  });
+}
+
+async function reasonByRule(title) {
+  const rule = await pickRule();
+  if (!rule) return null;
+  const value = rule === 'own' ? '' : `п. ${rule.no} — ${rule.text}`;
+  const reason = await promptSheet({ title, label: 'Причина, её увидят автор и админ', placeholder: 'Опишите подробно', multiline: true, value });
+  if (!reason) return null;
+  return { reason, rule: rule === 'own' ? null : rule };
+}
+
 export function openPunish(user, done) {
   const body = el(`
     <div class="col" style="gap:6px">
       <div class="row" style="padding:0 4px 8px">${avatar(user, 46)}
         <div class="grow"><div class="strong">${esc(user.displayName)}</div><div class="tiny muted">@${esc(user.username)}</div></div></div>
+      <button class="list-item" data-rule style="color:var(--accent)">${icon('book', 18)}<span>По пункту правил</span></button>
+      <div class="tiny muted" style="padding:2px 4px 8px">Мера и срок подставятся сами, но их можно изменить</div>
       <button class="list-item" data-kind="warn">${icon('warn', 18)}<span>Предупреждение</span></button>
       <button class="list-item" data-kind="mute" style="color:#c6b083">${icon('mute', 18)}<span>Мут</span></button>
       <button class="list-item" data-kind="ban" style="color:#c98b8b">${icon('ban', 18)}<span>Блокировка</span></button>
     </div>`);
   const sheet = openSheet('Наказание', body);
+
+  const apply = async ({ kind, reason, suggested }) => {
+    let minutes = 0;
+    if (kind !== 'warn') {
+      minutes = await pickDuration(suggested);
+      if (minutes == null) return;
+    }
+    try {
+      await api.punish({ userId: user.id, kind, minutes, reason });
+      toast('Наказание выдано, админы это увидят');
+      done?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-rule]').onclick = async () => {
+    sheet.close();
+    const rule = await pickRule();
+    if (!rule) return;
+    if (rule === 'own') return openPunish(user, done);
+    const reason = await promptSheet({
+      title: `Пункт ${rule.no}`,
+      label: 'Причина, её увидят автор и админ',
+      placeholder: 'Опишите подробно',
+      multiline: true,
+      value: `п. ${rule.no} — ${rule.text}`
+    });
+    if (!reason) return;
+    await apply({ kind: rule.kind, reason, suggested: rule.minutes });
+  };
+
   body.querySelectorAll('[data-kind]').forEach((button) => {
     button.onclick = async () => {
       const kind = button.dataset.kind;
       sheet.close();
       const reason = await promptSheet({ title: 'Причина', label: 'Что нарушил пользователь', placeholder: 'Опишите подробно', multiline: true });
       if (!reason) return;
-      let minutes = 0;
-      if (kind !== 'warn') {
-        minutes = await pickDuration();
-        if (minutes == null) return;
-      }
-      try {
-        await api.punish({ userId: user.id, kind, minutes, reason });
-        toast('Наказание выдано, админы это увидят');
-        done?.();
-      } catch (error) {
-        toast(error.message, 'err');
-      }
+      await apply({ kind, reason });
     };
   });
 }
