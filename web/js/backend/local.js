@@ -403,6 +403,46 @@ export const local = {
     return { ok: true };
   },
 
+  async saveSession() {
+    return { token: currentToken() };
+  },
+
+  async useSession(tokens) {
+    if (!tokens?.token) fail('Сессия не сохранена, войдите заново');
+    localStorage.setItem(SESSION_KEY, tokens.token);
+    const user = me();
+    if (!user) fail('Сессия устарела, войдите заново');
+    return { user: priv(user) };
+  },
+
+  async notifications() {
+    const user = need();
+    const items = (state.notifications || []).filter((n) => n.userId === user.id).sort((a, b) => b.createdAt - a.createdAt);
+    return { items, unread: items.filter((n) => !n.read).length };
+  },
+
+  async unreadNotifications() {
+    const user = me();
+    if (!user) return { count: 0 };
+    return { count: (state.notifications || []).filter((n) => n.userId === user.id && !n.read).length };
+  },
+
+  async readNotifications() {
+    const user = need();
+    (state.notifications || []).forEach((n) => {
+      if (n.userId === user.id) n.read = true;
+    });
+    save();
+    return { ok: true };
+  },
+
+  async clearNotifications() {
+    const user = need();
+    state.notifications = (state.notifications || []).filter((n) => n.userId !== user.id);
+    save();
+    return { ok: true };
+  },
+
   async linkCode() {
     need();
     fail('Оплата работает только на сервере, локальный режим её не поддерживает');

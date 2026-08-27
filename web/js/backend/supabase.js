@@ -50,6 +50,7 @@ function shapeProfile(row, extra = {}) {
     dayWord: row.day_word || null,
     dayWordAt: ms(row.day_word_at),
     shareWord: !!row.share_word,
+    notifyPosts: row.notify_posts !== false,
     statusIcon: row.status_icon || null,
     premiumUntil: ms(row.premium_until),
     premiumReason: row.premium_reason || '',
@@ -201,6 +202,12 @@ export async function createSupabase(url, key) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         window.dispatchEvent(new CustomEvent('spokum:message', { detail: payload.new }));
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, (payload) => {
+        const row = payload.new;
+        window.dispatchEvent(new CustomEvent('spokum:notify', {
+          detail: { id: row.id, kind: row.kind, title: row.title, body: row.body, meta: row.meta || {}, createdAt: ms(row.created_at), read: false }
+        }));
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'call_signals', filter: `to_id=eq.${uid}` }, (payload) => {
         const row = payload.new;
         window.dispatchEvent(new CustomEvent('spokum:call', {
@@ -294,6 +301,7 @@ export async function createSupabase(url, key) {
         fields.day_word_at = new Date().toISOString();
       }
       if (patch.shareWord !== undefined) fields.share_word = !!patch.shareWord;
+      if (patch.notifyPosts !== undefined) fields.notify_posts = !!patch.notifyPosts;
       if (patch.statusIcon !== undefined) fields.status_icon = patch.statusIcon;
       const { error } = await sb.from('profiles').update(fields).eq('id', id);
       guard(error);
@@ -351,6 +359,76 @@ export async function createSupabase(url, key) {
         } catch {}
       }
       return { users: [...found.values()].map((row) => shapeProfile(row)) };
+    },
+
+    async saveSession() {
+      const { data } = await sb.auth.getSession();
+      if (!data?.session) return null;
+      return {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      };
+    },
+
+    async useSession(tokens) {
+      if (!tokens?.refresh_token) throw new Error('Сессия не сохранена, войдите заново');
+      const { data, error } = await sb.auth.setSession({
+        access_token: tokens.access_token || '',
+        refresh_token: tokens.refresh_token
+      });
+      guard(error);
+      uid = data?.user?.id || data?.session?.user?.id || null;
+      if (!uid) throw new Error('Сессия устарела, войдите заново');
+      listen();
+      const user = await profileById(uid);
+      if (user?.bannedUntil > Date.now()) {
+        await sb.auth.signOut();
+        uid = null;
+        throw new Error('Аккаунт заблокирован');
+      }
+      return { user };
+    },
+
+    async notifications(limit = 40) {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('notifications')
+        .select('*')
+        .eq('user_id', me)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) return { items: [], unread: 0 };
+      const items = (data || []).map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        title: row.title || '',
+        body: row.body || '',
+        meta: row.meta || {},
+        createdAt: ms(row.created_at),
+        read: !!row.read_at
+      }));
+      return { items, unread: items.filter((row) => !row.read).length };
+    },
+
+    async unreadNotifications() {
+      if (!uid) return { count: 0 };
+      const { count, error } = await sb
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', uid)
+        .is('read_at', null);
+      if (error) return { count: 0 };
+      return { count: count || 0 };
+    },
+
+    async readNotifications(ids) {
+      await sb.rpc('mark_notifications', { ids: ids && ids.length ? ids : null });
+      return { ok: true };
+    },
+
+    async clearNotifications() {
+      await sb.rpc('clear_notifications');
+      return { ok: true };
     },
 
     async linkCode() {

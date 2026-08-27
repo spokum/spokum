@@ -74,6 +74,7 @@ export async function render(root) {
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Модерация постов и жалобы</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-contacts>${icon('users', 20)}<div class="grow"><div class="strong small">Контакты</div><div class="tiny muted">Кого ты добавил</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-accounts>${icon('users', 20)}<div class="grow"><div class="strong small">Мои аккаунты</div><div class="tiny muted">Переключиться или добавить ещё</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-logout style="color:#c98b8b">${icon('logout', 20)}<div class="grow" style="text-align:left"><div class="strong small">Выйти</div></div></button>
     </div>
 
@@ -109,8 +110,12 @@ export async function render(root) {
     openMod();
   });
   body.querySelector('[data-contacts]').onclick = openContacts;
+  body.querySelector('[data-accounts]').onclick = () => openAccounts();
+
   body.querySelector('[data-logout]').onclick = async () => {
     if (!(await confirmSheet({ title: 'Выйти из аккаунта', text: 'Сессия на этом устройстве закроется', confirm: 'Выйти', danger: true }))) return;
+    const { forget } = await import('../accounts.js');
+    forget(state.user?.id);
     await api.logout();
     setUser(null);
     location.reload();
@@ -437,6 +442,83 @@ export function openUsernames(done) {
   });
 
   draw();
+}
+
+export async function openAccounts() {
+  const { savedAccounts, switchTo, forget, rememberCurrent, ACCOUNT_LIMIT } = await import('../accounts.js');
+  await rememberCurrent();
+
+  const body = el('<div class="col" style="gap:8px"></div>');
+  const sheet = openSheet('Мои аккаунты', body);
+
+  const draw = () => {
+    const list = savedAccounts();
+    const others = list.filter((row) => String(row.id) !== String(state.user?.id));
+    body.innerHTML = `
+      ${list
+        .map((row) => {
+          const here = String(row.id) === String(state.user?.id);
+          return `<div class="card list-item" style="padding:10px" data-row="${esc(String(row.id))}">
+            ${avatar(row, 46)}
+            <div class="grow" style="min-width:0">
+              <div class="strong small truncate">${esc(row.displayName || row.username)}</div>
+              <div class="tiny muted truncate">@${esc(row.username)}</div>
+            </div>
+            ${here
+              ? '<span class="pill good">сейчас здесь</span>'
+              : `<button class="btn btn-sm" data-use="${esc(String(row.id))}">Войти</button>
+                 <button class="btn btn-icon btn-ghost" data-drop="${esc(String(row.id))}">${icon('close', 16)}</button>`}
+          </div>`;
+        })
+        .join('')}
+      ${list.length < ACCOUNT_LIMIT
+        ? `<button class="btn" data-add style="width:100%">${icon('add_user', 17)} Добавить аккаунт</button>`
+        : '<div class="tiny muted center">Больше пяти аккаунтов не поместится</div>'}
+      <p class="tiny muted" style="margin:0;line-height:1.5">Аккаунты хранятся только на этом устройстве. Переключение мгновенное, вводить пароль заново не нужно. Всего можно держать ${ACCOUNT_LIMIT}, сейчас ${list.length}.</p>`;
+
+    body.querySelectorAll('[data-use]').forEach((button) => {
+      button.onclick = async () => {
+        button.disabled = true;
+        button.textContent = 'Входим';
+        try {
+          const user = await switchTo(button.dataset.use);
+          setUser(user);
+          toast(`Вы в аккаунте @${user.username}`);
+          sheet.close();
+          location.reload();
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Войти';
+          toast(error.message, 'err');
+        }
+      };
+    });
+
+    body.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = async () => {
+        if (!(await confirmSheet({ title: 'Убрать аккаунт', text: 'С устройства пропадёт быстрый вход. Сам аккаунт останется цел', confirm: 'Убрать', danger: true }))) return;
+        forget(button.dataset.drop);
+        draw();
+      };
+    });
+
+    body.querySelector('[data-add]')?.addEventListener('click', async () => {
+      sheet.close();
+      await api.logout();
+      setUser(null);
+      location.reload();
+    });
+
+    if (!others.length && list.length <= 1) {
+      body.insertAdjacentHTML(
+        'beforeend',
+        '<p class="tiny muted" style="margin:0;line-height:1.5">Чтобы добавить второй аккаунт, нажмите «Добавить аккаунт» — откроется вход. Текущий никуда не денется, вернуться к нему можно отсюда же.</p>'
+      );
+    }
+  };
+
+  draw();
+  return sheet;
 }
 
 function mediaTabs(chips, list, posts, postCard, refresh) {

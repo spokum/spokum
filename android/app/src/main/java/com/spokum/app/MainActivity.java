@@ -24,6 +24,10 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+import java.util.concurrent.TimeUnit;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -210,6 +214,33 @@ public class MainActivity extends AppCompatActivity {
       public String version() {
         return getSharedPreferences("spokum", MODE_PRIVATE).getString("web_version", "");
       }
+
+      @JavascriptInterface
+      public void setAuth(String url, String key, String refresh) {
+        getSharedPreferences("spokum", MODE_PRIVATE).edit()
+            .putString("sb_url", url == null ? "" : url.replaceAll("/+$", ""))
+            .putString("sb_key", key == null ? "" : key)
+            .putString("refresh", refresh == null ? "" : refresh)
+            .apply();
+        scheduleNotifications();
+      }
+
+      @JavascriptInterface
+      public void clearAuth() {
+        getSharedPreferences("spokum", MODE_PRIVATE).edit()
+            .remove("refresh").remove("last_note").apply();
+        WorkManager.getInstance(MainActivity.this).cancelUniqueWork("spokum-notify");
+      }
+
+      @JavascriptInterface
+      public void notify(String title, String body) {
+        NotifyWorker.show(MainActivity.this, (int) (System.currentTimeMillis() % 100000), title, body);
+      }
+
+      @JavascriptInterface
+      public boolean canNotify() {
+        return androidx.core.app.NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled();
+      }
     }, "SpokumHost");
 
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -233,7 +264,26 @@ public class MainActivity extends AppCompatActivity {
       webView.loadUrl("https://appassets.androidplatform.net/www/index.html");
     }
 
+    NotifyWorker.ensureChannel(this);
+    askNotificationPermission();
     checkForUpdate(false);
+  }
+
+  private void askNotificationPermission() {
+    if (Build.VERSION.SDK_INT < 33) {
+      return;
+    }
+    if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS")
+        != PackageManager.PERMISSION_GRANTED) {
+      ActivityCompat.requestPermissions(this, new String[] { "android.permission.POST_NOTIFICATIONS" }, 77);
+    }
+  }
+
+  private void scheduleNotifications() {
+    PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(NotifyWorker.class, 15, TimeUnit.MINUTES)
+        .build();
+    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        "spokum-notify", ExistingPeriodicWorkPolicy.UPDATE, request);
   }
 
   @Override
@@ -381,6 +431,9 @@ public class MainActivity extends AppCompatActivity {
   @Override
   public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
     super.onRequestPermissionsResult(code, permissions, results);
+    if (code == 77) {
+      return;
+    }
     if (code != 42 || pendingMicRequest == null) {
       return;
     }

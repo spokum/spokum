@@ -160,6 +160,10 @@ export function renderAuth(root, done) {
             setUser(user);
           } catch {}
         }
+        try {
+          const { rememberCurrent } = await import('../accounts.js');
+          await rememberCurrent();
+        } catch {}
         done();
       } catch (error) {
         toast(error.message, 'err');

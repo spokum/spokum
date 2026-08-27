@@ -344,9 +344,15 @@ svg { display: block; flex: none; }
   padding: 16px 0 12px;
   background: linear-gradient(var(--bg) 68%, transparent);
 }
-.topbar h1 { margin: 0; font-size: 21px; letter-spacing: -.02em; font-weight: 700; }
-.topbar .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.topbar h1 { margin: 0; font-size: 21px; letter-spacing: -.02em; font-weight: 700; white-space: nowrap; }
+.topbar .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar .spacer { flex: 1; }
+.topbar > div:first-child { min-width: 0; }
+.topbar .btn-icon { flex: none; }
+@media (max-width: 400px) {
+  .topbar { gap: 8px; }
+  .topbar .btn-icon { width: 36px; height: 36px; }
+}
 
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark {
@@ -1171,3 +1177,22 @@ svg { display: block; flex: none; }
 }
 
 .link-btn { color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+[data-bell] { position: relative; }
+.bell-dot {
+  position: absolute; top: -3px; right: -3px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: #d4736f; color: #fff;
+  font-size: 10px; line-height: 16px; font-weight: 700; text-align: center;
+  border: 2px solid var(--bg);
+}
+.note { transition: background .16s var(--ease); }
+.note-new { border-color: color-mix(in srgb, var(--accent) 38%, transparent); background: var(--accent-soft); }
+.note-icon {
+  width: 32px; height: 32px; border-radius: 10px; flex: none;
+  display: grid; place-items: center;
+  background: var(--surface-2); color: var(--muted);
+}
+.note-icon.good { background: rgba(135,183,163,.16); color: #7fb3a0; }
+.note-icon.warn { background: rgba(198,176,131,.16); color: #c6b083; }
+.note-icon.bad { background: rgba(201,139,139,.16); color: #c98b8b; }

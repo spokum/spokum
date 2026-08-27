@@ -114,6 +114,19 @@ async function boot() {
   }
 }
 
+async function handOverSession() {
+  if (!window.SpokumHost?.setAuth || !state.user) return;
+  try {
+    const tokens = await api.saveSession?.();
+    if (!tokens?.refresh_token) return;
+    window.SpokumHost.setAuth(
+      window.SPOKUM_SUPABASE_URL || '',
+      window.SPOKUM_SUPABASE_KEY || '',
+      tokens.refresh_token
+    );
+  } catch {}
+}
+
 function start() {
   window.__spokum = { openTab };
   buildShell();
@@ -121,6 +134,9 @@ function start() {
   connectSocket();
   askJournal();
   import('./call.js').then((module) => module.initCalls()).catch(() => {});
+  import('./views/notifications.js').then((module) => module.refreshBell()).catch(() => {});
+  import('./accounts.js').then((module) => module.rememberCurrent()).catch(() => {});
+  handOverSession();
 }
 
 async function askJournal() {
@@ -216,6 +232,11 @@ async function openTab(tab) {
   } catch (error) {
     host.innerHTML = `<div class="empty">${error.message}</div>`;
   }
+  try {
+    const bell = await import('./views/notifications.js');
+    bell.mountBell(host);
+    bell.refreshBell();
+  } catch {}
   refreshUnread();
 }
 
@@ -296,6 +317,23 @@ document.addEventListener('click', async (event) => {
 }, true);
 
 window.addEventListener('spokum:message', () => refreshUnread());
+
+window.addEventListener('spokum:notify', async (event) => {
+  const bell = await import('./views/notifications.js');
+  bell.bumpBell();
+  const item = event.detail || {};
+  if (state.quiet) return;
+  if (document.hidden) bell.systemNotify(item);
+  else if (item.kind !== 'message' && item.kind !== 'newpost') toast(item.title || 'Новое уведомление');
+});
+
+setInterval(async () => {
+  if (!state.user) return;
+  try {
+    const bell = await import('./views/notifications.js');
+    bell.refreshBell();
+  } catch {}
+}, 20000);
 setInterval(refreshUnread, 15000);
 setInterval(refreshUser, 30000);
 subscribe((event) => {

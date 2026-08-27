@@ -710,6 +710,12 @@ begin
          premium_granted_at = now()
    where id = target;
 
+  perform public.notify_user(
+    target, 'premium', 'Вам выдали СпокУм Премиум',
+    'До ' || to_char(result, 'DD.MM.YYYY') || '. ' || coalesce(nullif(trim(reason), ''), 'Без причины'),
+    jsonb_build_object('until', result)
+  );
+
   perform public.log_action('admin.premium.grant',
     jsonb_build_object('user', target, 'days', days, 'reason', reason, 'until', result));
 
@@ -1291,3 +1297,302 @@ returns json language sql security definer set search_path = public as $$
 $$;
 
 revoke execute on function public.bot_stats() from public, anon, authenticated;
+
+create table if not exists public.notifications (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  kind text not null,
+  title text not null default '',
+  body text not null default '',
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+create index if not exists notifications_unread_idx on public.notifications (user_id) where read_at is null;
+
+alter table public.notifications enable row level security;
+
+drop policy if exists notifications_own on public.notifications;
+create policy notifications_own on public.notifications for select using (user_id = auth.uid());
+
+drop policy if exists notifications_touch on public.notifications;
+create policy notifications_touch on public.notifications for update using (user_id = auth.uid());
+
+drop policy if exists notifications_drop on public.notifications;
+create policy notifications_drop on public.notifications for delete using (user_id = auth.uid());
+
+grant select, update, delete on table public.notifications to authenticated;
+
+alter table public.profiles add column if not exists notify_posts boolean not null default true;
+
+create or replace function public.notify_user(target uuid, kind text, title text, body text, meta jsonb default '{}'::jsonb)
+returns void language sql security definer set search_path = public as $$
+  insert into public.notifications (user_id, kind, title, body, meta)
+  select target, kind, title, body, coalesce(meta, '{}'::jsonb)
+  where target is not null;
+$$;
+
+create or replace function public.notify_staff(kind text, title text, body text, meta jsonb default '{}'::jsonb, skip uuid default null)
+returns void language sql security definer set search_path = public as $$
+  insert into public.notifications (user_id, kind, title, body, meta)
+  select p.id, kind, title, body, coalesce(meta, '{}'::jsonb)
+  from public.profiles p
+  where (p.is_moderator or p.is_admin)
+    and (skip is null or p.id <> skip)
+    and coalesce(p.banned_until, to_timestamp(0)) < now();
+$$;
+
+create or replace function public.notify_admins(kind text, title text, body text, meta jsonb default '{}'::jsonb, skip uuid default null)
+returns void language sql security definer set search_path = public as $$
+  insert into public.notifications (user_id, kind, title, body, meta)
+  select p.id, kind, title, body, coalesce(meta, '{}'::jsonb)
+  from public.profiles p
+  where p.is_admin and (skip is null or p.id <> skip);
+$$;
+
+create or replace function public.notify_new_message()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  sender text;
+  preview text;
+begin
+  if new.kind = 'call' then
+    return new;
+  end if;
+  select display_name into sender from public.profiles where id = new.author_id;
+  preview := case
+    when new.kind = 'image' then 'Фото'
+    when new.kind = 'voice' then 'Голосовое сообщение'
+    when new.kind = 'sticker' then 'Стикер'
+    else left(coalesce(new.body, ''), 90)
+  end;
+  insert into public.notifications (user_id, kind, title, body, meta)
+  select m.user_id, 'message', coalesce(sender, 'Новое сообщение'), preview,
+         jsonb_build_object('chat', new.chat_id, 'from', new.author_id)
+  from public.chat_members m
+  where m.chat_id = new.chat_id and m.user_id <> new.author_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists messages_notify on public.messages;
+create trigger messages_notify
+  after insert on public.messages
+  for each row execute function public.notify_new_message();
+
+create or replace function public.notify_new_report()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  who text;
+begin
+  select display_name into who from public.profiles where id = new.reporter_id;
+  perform public.notify_staff(
+    'report',
+    'Новая жалоба',
+    coalesce(who, 'Кто-то') || ': ' || left(coalesce(new.reason, ''), 90),
+    jsonb_build_object('report', new.id, 'target_kind', new.target_kind),
+    new.reporter_id
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists reports_notify on public.reports;
+create trigger reports_notify
+  after insert on public.reports
+  for each row execute function public.notify_new_report();
+
+create or replace function public.notify_new_post()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  who text;
+  label text;
+begin
+  select display_name into who from public.profiles where id = new.author_id;
+  label := case new.kind when 'video' then 'Новое видео' when 'album' then 'Новый альбом' else 'Новая запись' end;
+  insert into public.notifications (user_id, kind, title, body, meta)
+  select p.id, 'newpost', label,
+         coalesce(who, 'Кто-то') || ': ' || left(coalesce(new.body, 'без текста'), 90),
+         jsonb_build_object('post', new.id, 'author', new.author_id)
+  from public.profiles p
+  where (p.is_moderator or p.is_admin)
+    and p.notify_posts
+    and p.id <> new.author_id
+    and coalesce(p.banned_until, to_timestamp(0)) < now();
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_notify on public.posts;
+create trigger posts_notify
+  after insert on public.posts
+  for each row execute function public.notify_new_post();
+
+create or replace function public.mark_notifications(ids bigint[] default null)
+returns void language sql security definer set search_path = public as $$
+  update public.notifications
+     set read_at = now()
+   where user_id = auth.uid()
+     and read_at is null
+     and (ids is null or id = any(ids));
+$$;
+
+create or replace function public.clear_notifications()
+returns void language sql security definer set search_path = public as $$
+  delete from public.notifications where user_id = auth.uid();
+$$;
+
+grant execute on function public.mark_notifications(bigint[]) to authenticated;
+grant execute on function public.clear_notifications() to authenticated;
+revoke execute on function public.notify_user(uuid, text, text, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.notify_staff(text, text, text, jsonb, uuid) from public, anon, authenticated;
+revoke execute on function public.notify_admins(text, text, text, jsonb, uuid) from public, anon, authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.notifications;
+exception when duplicate_object then null;
+end $$;
+
+create or replace function public.mod_remove_post(target bigint, reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  author uuid;
+  actor text;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  if coalesce(trim(reason), '') = '' then raise exception 'Нужна причина'; end if;
+
+  select author_id into author from public.posts where id = target;
+  if author is null then raise exception 'Пост не найден'; end if;
+
+  update public.posts
+     set removed = true, removed_by = auth.uid(), removed_reason = reason, removed_at = now()
+   where id = target;
+
+  insert into public.punishments (actor_id, user_id, kind, reason, post_id)
+  values (auth.uid(), author, 'post_removed', reason, target);
+
+  perform public.notify_user(
+    author, 'removed', 'Ваша запись снята с публикации',
+    'Причина: ' || reason,
+    jsonb_build_object('post', target)
+  );
+
+  select display_name into actor from public.profiles where id = auth.uid();
+  perform public.notify_admins(
+    'modaction', 'Модератор снял запись',
+    coalesce(actor, 'Модератор') || ': ' || left(reason, 90),
+    jsonb_build_object('post', target),
+    auth.uid()
+  );
+
+  perform public.log_action('post.remove', jsonb_build_object('post', target, 'reason', reason));
+end;
+$$;
+
+create or replace function public.mod_punish(target uuid, kind text, minutes integer, reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  until timestamptz;
+  actor text;
+  label text;
+  who text;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  if kind not in ('warn', 'mute', 'ban') then raise exception 'Неизвестное наказание'; end if;
+  if coalesce(trim(reason), '') = '' then raise exception 'Нужна причина'; end if;
+  if (select is_admin from public.profiles where id = target) then raise exception 'Нельзя наказать админа'; end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+  until := now() + make_interval(mins => greatest(0, coalesce(minutes, 0)));
+
+  if kind = 'mute' then
+    update public.profiles set muted_until = until where id = target;
+  elsif kind = 'ban' then
+    update public.profiles set banned_until = until, ban_reason = reason where id = target;
+  end if;
+
+  insert into public.punishments (actor_id, user_id, kind, minutes, reason)
+  values (auth.uid(), target, kind, coalesce(minutes, 0), reason);
+
+  label := case kind
+    when 'warn' then 'Вам вынесли предупреждение'
+    when 'mute' then 'Вам ограничили публикации'
+    else 'Ваш аккаунт заблокирован'
+  end;
+
+  perform public.notify_user(
+    target, 'punish', label,
+    'Причина: ' || reason || case when kind <> 'warn' and coalesce(minutes, 0) > 0
+      then '. До ' || to_char(until, 'DD.MM.YYYY HH24:MI') else '' end,
+    jsonb_build_object('kind', kind, 'minutes', minutes)
+  );
+
+  select display_name into actor from public.profiles where id = auth.uid();
+  select display_name into who from public.profiles where id = target;
+  perform public.notify_admins(
+    'modaction', 'Модератор выдал наказание',
+    coalesce(actor, 'Модератор') || ' → ' || coalesce(who, 'человек') || ': ' || kind,
+    jsonb_build_object('user', target, 'kind', kind),
+    auth.uid()
+  );
+
+  perform public.log_action('mod.punish', jsonb_build_object('user', target, 'kind', kind, 'minutes', minutes));
+end;
+$$;
+
+create or replace function public.bot_grant_premium(tg bigint, days integer, stars integer, charge text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  target uuid;
+  base timestamptz;
+  result timestamptz;
+  who public.profiles;
+begin
+  select user_id into target from public.tg_links where tg_id = tg;
+  if target is null then
+    return json_build_object('ok', false, 'error', 'Аккаунт не привязан');
+  end if;
+  if exists (select 1 from public.payments where charge_id = charge) then
+    select premium_until into result from public.profiles where id = target;
+    return json_build_object('ok', true, 'until', result, 'repeat', true);
+  end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+
+  select greatest(coalesce(premium_until, now()), now()) into base from public.profiles where id = target;
+  result := base + make_interval(days => days);
+
+  update public.profiles
+     set premium_until = result,
+         premium_reason = 'Оплачено звёздами Telegram',
+         premium_granted_at = now()
+   where id = target;
+
+  insert into public.payments (user_id, tg_id, charge_id, stars, days)
+  values (target, tg, charge, stars, days);
+
+  insert into public.audit (actor_id, action, meta)
+  values (target, 'premium_paid', json_build_object('stars', stars, 'days', days)::jsonb);
+
+  perform public.notify_user(
+    target, 'premium', 'СпокУм Премиум подключён',
+    'Оплата принята. Действует до ' || to_char(result, 'DD.MM.YYYY'),
+    jsonb_build_object('until', result)
+  );
+
+  perform public.notify_admins(
+    'payment', 'Новая оплата',
+    stars::text || ' звёзд за ' || days::text || ' дн.',
+    jsonb_build_object('user', target, 'stars', stars),
+    null
+  );
+
+  select * into who from public.profiles where id = target;
+  return json_build_object('ok', true, 'until', result, 'username', who.username);
+end;
+$$;
+
+revoke execute on function public.bot_grant_premium(bigint, integer, integer, text) from public, anon, authenticated;

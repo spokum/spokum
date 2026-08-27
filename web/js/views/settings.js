@@ -69,7 +69,16 @@ export async function render(root) {
       <label class="row between" style="padding:8px 0"><span class="small">Плавные анимации</span><input type="checkbox" data-pref="motion" ${current.motion !== false ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Звук уведомлений</span><input type="checkbox" data-pref="sound" ${current.sound ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Звук в видео сразу</span><input type="checkbox" data-video-sound ${localStorage.getItem('spokum.sound') !== 'off' ? 'checked' : ''}></label>
+      ${state.user?.isModerator || state.user?.isAdmin
+        ? `<label class="row between" style="padding:8px 0"><span class="small">Уведомлять о новых записях</span><input type="checkbox" data-notify-posts ${state.user.notifyPosts !== false ? 'checked' : ''}></label>`
+        : ''}
       <label class="row between" style="padding:8px 0"><span class="small">Тихий режим по вечерам</span><input type="checkbox" data-pref="quiet" ${current.quiet ? 'checked' : ''}></label>
+    </div>
+
+    <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('bell', 18)}<span class="strong small">Уведомления</span></div>
+      <button class="list-item" data-push>${icon('bell', 18)}<div class="grow"><div class="small strong">Уведомления на телефон</div><div class="tiny muted" data-push-state>Проверяем</div></div>${icon('forward', 15)}</button>
+      <div class="tiny muted" style="margin-top:8px;line-height:1.5">Сообщения, звонки, жалобы и решения модераторов будут приходить, даже когда приложение закрыто.</div>
     </div>
 
     <div class="card appear">
@@ -141,6 +150,45 @@ export async function render(root) {
       }
     };
   });
+
+  root.querySelector('[data-notify-posts]')?.addEventListener('change', async (event) => {
+    try {
+      const { user } = await api.updateMe({ notifyPosts: event.target.checked });
+      setUser(user);
+      toast(event.target.checked ? 'Будем сообщать о новых записях' : 'Уведомления о записях выключены');
+    } catch (error) {
+      event.target.checked = !event.target.checked;
+      toast(error.message, 'err');
+    }
+  });
+
+  const pushState = root.querySelector('[data-push-state]');
+  const paintPush = async () => {
+    const { systemAllowed } = await import('./notifications.js');
+    const inApp = !!window.SpokumHost;
+    if (systemAllowed()) {
+      pushState.textContent = inApp ? 'Включены' : 'Включены в этом браузере';
+      return;
+    }
+    if (!inApp && 'Notification' in window && Notification.permission === 'denied') {
+      pushState.textContent = 'Запрещены — включите в настройках браузера';
+      return;
+    }
+    pushState.textContent = inApp ? 'Выключены в настройках телефона' : 'Нажмите, чтобы включить';
+  };
+  paintPush();
+
+  root.querySelector('[data-push]').onclick = async () => {
+    const { askSystemPermission } = await import('./notifications.js');
+    if (window.SpokumHost) {
+      toast('Разрешение спрашивает сам телефон. Если отказали — включите СпокУм в настройках уведомлений', 'err');
+      paintPush();
+      return;
+    }
+    const ok = await askSystemPermission();
+    toast(ok ? 'Уведомления включены' : 'Разрешение не выдано', ok ? '' : 'err');
+    paintPush();
+  };
 
   root.querySelector('[data-rules]').onclick = async () => {
     const { openRules } = await import('./rules.js');
