@@ -546,20 +546,17 @@ async function drawTeam(body) {
   const list = body.querySelector('[data-list]');
   team.forEach((mod) => {
     const grown = mod.deserved > mod.rank;
-    const card = el(`<div class="card" style="padding:13px">
-      <div class="row" style="gap:10px;align-items:flex-start">
-        ${avatar(mod, 42)}
-        <div class="grow" style="min-width:0">
-          <div class="row" style="gap:6px"><span class="strong small truncate">${esc(mod.displayName)}</span>${mod.isAdmin ? '<span class="pill">админ</span>' : ''}</div>
-          <div class="tiny muted">@${esc(mod.username)}</div>
-          <div class="row" style="gap:6px;margin-top:7px;flex-wrap:wrap">
-            <span class="rank-pill">${icon('shield', 13)}<span>${esc(mod.rankName)}</span></span>
-            ${grown ? `<span class="rank-pill up">${icon('spark', 13)}<span>заслуживает: ${esc(RANKS[mod.deserved])}</span></span>` : ''}
-            ${mod.strikes ? `<span class="pill bad">${mod.strikes} предупр.</span>` : ''}
-          </div>
-        </div>
+    const card = el(`<div class="card team-card" style="padding:14px">
+      <div class="team-head">
+        ${avatar(mod, 38)}
+        <span class="strong small">${esc(mod.displayName)}</span>
+        <span class="tiny muted">@${esc(mod.username)}</span>
+        <span class="rank-pill">${icon('shield', 13)}<span>${esc(mod.rankName)}</span></span>
+        ${mod.isAdmin ? '<span class="pill">админ</span>' : ''}
+        ${grown ? `<span class="rank-pill up">${icon('spark', 13)}<span>заслуживает: ${esc(RANKS[mod.deserved])}</span></span>` : ''}
+        ${mod.strikes ? `<span class="pill bad">${mod.strikes} предупр.</span>` : ''}
       </div>
-      <div class="info-grid" style="margin-top:11px">
+      <div class="info-grid" style="margin-top:13px">
         <div><span class="tiny muted">Жалоб разобрано</span><span class="small strong">${mod.reports}</span></div>
         <div><span class="tiny muted">Записей снято</span><span class="small strong">${mod.removals}</span></div>
         <div><span class="tiny muted">Наказаний</span><span class="small strong">${mod.punishments}</span></div>

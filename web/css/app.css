@@ -1177,6 +1177,13 @@ svg { display: block; flex: none; }
   background: var(--accent-soft); color: var(--accent);
   font-size: 12px; font-weight: 700;
 }
+.team-card { text-align: center; }
+.team-head {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.team-head .avatar { margin-bottom: 3px; }
+.team-head .strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-card .info-grid { text-align: left; }
 .rank-pill {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 9px; border-radius: 999px;
