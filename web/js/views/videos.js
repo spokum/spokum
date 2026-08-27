@@ -38,10 +38,12 @@ async function more(stage) {
   try {
     const query = { kind: 'reels', limit: 6 };
     if (feed.cursor) query.before = feed.cursor;
-    const { posts, cursor, more: hasMore } = await api.listPosts(query);
-    feed.cursor = cursor ?? (posts.length ? posts[posts.length - 1].createdAt : null);
-    feed.more = hasMore ?? posts.length >= 6;
-    if (!feed.items.length) stage.innerHTML = '';
+    const result = await api.listPosts(query);
+    const all = result.posts || [];
+    const posts = all.filter((post) => post.kind === 'video' || post.kind === 'album' || !!post.video);
+    feed.cursor = result.cursor ?? (all.length ? all[all.length - 1].createdAt : null);
+    feed.more = result.more ?? all.length >= 6;
+    if (!feed.items.length && posts.length) stage.innerHTML = '';
     posts.forEach((post) => {
       feed.items.push(post);
       stage.appendChild(slide(post, stage));
@@ -64,16 +66,10 @@ function watch(stage) {
       for (const entry of entries) {
         const video = entry.target.querySelector('video');
         const visible = entry.isIntersecting && entry.intersectionRatio > 0.6;
+        entry.target.dataset.visible = visible ? '1' : '0';
         if (video) {
-          if (visible) {
-            if (!video.dataset.ready) {
-              video.dataset.ready = '1';
-              video.src = video.dataset.src;
-            }
-            video.play().catch(() => {});
-          } else {
-            video.pause();
-          }
+          if (visible) entry.target.play?.();
+          else video.pause();
         }
         if (!visible) continue;
         if (!entry.target.dataset.counted) {
@@ -103,8 +99,10 @@ function slide(post, stage) {
   const node = el(`
     <div class="shorts-slide" data-post="${post.id}">
       ${isVideo
-        ? `<video playsinline loop muted preload="none" data-src="${esc(post.video || '')}" ${post.poster ? `poster="${esc(post.poster)}"` : ''}></video>
-           <button class="shorts-sound" data-sound>${icon('mute', 18)}</button>`
+        ? `<video playsinline webkit-playsinline loop muted autoplay preload="auto" src="${esc(post.video || '')}" ${post.poster ? `poster="${esc(post.poster)}"` : ''}></video>
+           <button class="shorts-sound" data-sound>${icon('mute', 18)}</button>
+           <button class="reel-play" data-play hidden>${icon('play', 30)}</button>
+           <div class="reel-error" data-error hidden>${icon('warn', 22)}<span>Не удалось проиграть это видео</span></div>`
         : albumBody(post)}
       <div class="shorts-shade"></div>
       <div class="shorts-rail">
@@ -129,14 +127,58 @@ function slide(post, stage) {
   const video = node.querySelector('video');
   if (video) {
     const sound = node.querySelector('[data-sound]');
+    const playHint = node.querySelector('[data-play]');
+    const fault = node.querySelector('[data-error]');
+
+    node.play = () => {
+      if (fault.hidden === false) return;
+      const attempt = video.play();
+      if (attempt?.then) {
+        attempt.then(() => {
+          playHint.hidden = true;
+        }).catch(() => {
+          playHint.hidden = false;
+        });
+      }
+    };
+
+    video.addEventListener('loadeddata', () => {
+      node.dataset.loaded = '1';
+      if (node.dataset.visible === '1') node.play();
+    });
+    video.addEventListener('playing', () => {
+      playHint.hidden = true;
+      fault.hidden = true;
+    });
+    video.addEventListener('pause', () => {
+      if (!video.ended && node.dataset.visible === '1') playHint.hidden = false;
+    });
+    video.addEventListener('error', () => {
+      fault.hidden = false;
+      playHint.hidden = true;
+    });
+    video.addEventListener('stalled', () => {
+      video.load();
+    });
+
     sound.onclick = (event) => {
       event.stopPropagation();
       video.muted = !video.muted;
       sound.innerHTML = icon(video.muted ? 'mute' : 'volume', 18);
+      if (video.paused) node.play();
     };
+
+    playHint.onclick = (event) => {
+      event.stopPropagation();
+      node.play();
+    };
+
     tapper(video, node, post, () => {
-      if (video.paused) video.play().catch(() => {});
+      if (video.paused) node.play();
       else video.pause();
+    }, () => {
+      if (!video.paused) return;
+      node.play();
     });
   }
 
@@ -158,22 +200,18 @@ function slide(post, stage) {
   return node;
 }
 
-function tapper(target, node, post, single) {
+function tapper(target, node, post, single, undo) {
   let last = 0;
-  let timer = 0;
   target.addEventListener('click', () => {
     const now = Date.now();
-    if (now - last < 320) {
+    if (now - last < 300) {
       last = 0;
-      clearTimeout(timer);
+      undo?.();
       like(node, post, true);
       return;
     }
     last = now;
-    timer = setTimeout(() => {
-      last = 0;
-      single();
-    }, 330);
+    single();
   });
 }
 
@@ -373,11 +411,8 @@ export function openVideo(post) {
   const node = slide(post, stage);
   stage.appendChild(node);
   const video = node.querySelector('video');
-  if (video) {
-    video.dataset.ready = '1';
-    video.src = video.dataset.src;
-    video.play().catch(() => {});
-  }
+  node.dataset.visible = '1';
+  node.play?.();
   api.bumpViews?.(post.id).catch(() => {});
   view.querySelector('[data-close]').onclick = () => {
     video?.pause();

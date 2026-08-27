@@ -435,9 +435,11 @@ export async function createSupabase(url, key) {
       const me = requireUid();
       const response = await fetch(dataUrl);
       const blob = await response.blob();
-      const ext = (blob.type.split('/')[1] || hint).replace('quicktime', 'mov').split(';')[0];
+      const known = /^(video|image)\//.test(blob.type || '') ? blob.type.split(';')[0] : '';
+      const type = known || (hint === 'mp4' ? 'video/mp4' : 'image/jpeg');
+      const ext = (type.split('/')[1] || hint).replace('quicktime', 'mov');
       const path = `${me}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const upload = await sb.storage.from('media').upload(path, blob, { contentType: blob.type, upsert: false });
+      const upload = await sb.storage.from('media').upload(path, blob, { contentType: type, upsert: false });
       if (upload.error) {
         if (/bucket/i.test(upload.error.message)) throw new Error('В Supabase нет хранилища media. Прогоните schema.sql заново');
         guard(upload.error);

@@ -329,7 +329,10 @@ async function load(root, options = {}) {
     if (state.moodFilter) query.mood = state.moodFilter;
     if (options.append && feedState.cursor) query.before = feedState.cursor;
     const result = await api.listPosts(query);
-    const posts = result.posts || [];
+    const posts = (result.posts || []).filter((post) => {
+      const own = post.kind || 'text';
+      return own !== 'video' && own !== 'album' && !post.video;
+    });
     feedState.cursor = result.cursor ?? (posts.length ? posts[posts.length - 1].createdAt : null);
     feedState.more = result.more ?? posts.length >= 12;
     feedState.posts = options.append ? [...feedState.posts, ...posts] : posts;
