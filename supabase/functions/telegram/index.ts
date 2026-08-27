@@ -249,6 +249,37 @@ async function handleUpdate(update: Record<string, any>) {
   await greet(chat, await rpc('bot_whoami', { tg: from }));
 }
 
+async function probeDatabase() {
+  if (!SUPABASE_URL || !SERVICE_KEY) return 'нечем проверить, нет PROJECT_URL или SERVICE_KEY';
+  const headers = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
+  try {
+    const table = await fetch(`${SUPABASE_URL}/rest/v1/tg_links?select=tg_id&limit=1`, { headers });
+    if (table.status === 401 || table.status === 403) {
+      return 'ключ не подошёл: в SERVICE_KEY нужен service_role, а не anon';
+    }
+    if (table.status === 404) {
+      return 'нет таблицы tg_links — прогоните schema.sql заново';
+    }
+    if (!table.ok) {
+      return `база ответила ${table.status}: ${(await table.text()).slice(0, 200)}`;
+    }
+    const call = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bot_whoami`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tg: 0 })
+    });
+    if (call.status === 404) {
+      return 'таблицы есть, а функций бота нет — прогоните schema.sql целиком, до самого конца';
+    }
+    if (!call.ok) {
+      return `функция bot_whoami ответила ${call.status}: ${(await call.text()).slice(0, 200)}`;
+    }
+    return 'на связи, таблицы и функции бота на месте';
+  } catch (error) {
+    return `нет связи с базой: ${String(error).slice(0, 200)}`;
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') {
     const report = {
@@ -260,12 +291,7 @@ Deno.serve(async (request) => {
       WEBHOOK_SECRET: WEBHOOK_SECRET ? 'есть' : 'не задан, проверка отключена',
       database: 'проверяем...'
     };
-    if (SUPABASE_URL && SERVICE_KEY) {
-      const probe = await rpc('bot_whoami', { tg: 0 });
-      report.database = probe === null ? 'НЕ ОТВЕЧАЕТ, проверьте SERVICE_KEY и прогон schema.sql' : 'на связи';
-    } else {
-      report.database = 'нечем проверить, нет PROJECT_URL или SERVICE_KEY';
-    }
+    report.database = await probeDatabase();
     return new Response(JSON.stringify(report, null, 2), {
       status: 200,
       headers: { 'Content-Type': 'application/json; charset=utf-8' }
