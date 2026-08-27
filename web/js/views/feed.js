@@ -106,8 +106,7 @@ function renderComposer(root) {
       <div class="composer-actions">
         <div class="composer-tools">
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
-          <button class="icon-btn" data-album>${icon('album', 18)}<span>Альбом</span></button>
-          <button class="icon-btn" data-video>${icon('video', 18)}<span>Видео</span></button>
+          <button class="icon-btn" data-reels>${icon('video', 18)}<span>В Видео</span></button>
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
@@ -154,57 +153,30 @@ function renderComposer(root) {
 
   const preview = card.querySelector('[data-preview]');
   const drawPreview = () => {
-    if (draft.video) {
-      preview.innerHTML = `<div class="post-image" style="position:relative">
-        <img src="${esc(draft.video.poster || '')}" alt="">
-        <span class="post-video-play">${icon('play', 22)}</span>
-        <button class="btn btn-icon" data-drop style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55)">${icon('close', 16)}</button></div>`;
-    } else if (draft.media.length) {
-      preview.innerHTML = `<div class="composer-shots">${draft.media
-        .map((src, i) => `<span class="composer-shot"><img src="${esc(src)}" alt=""><button class="shot-drop" data-drop-one="${i}">${icon('close', 13)}</button></span>`)
-        .join('')}</div>`;
-    } else {
-      preview.innerHTML = '';
-    }
+    preview.innerHTML = draft.media.length
+      ? `<div class="post-image" style="position:relative"><img src="${esc(draft.media[0])}" alt="">
+          <button class="btn btn-icon" data-drop style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55)">${icon('close', 16)}</button></div>`
+      : '';
     preview.querySelector('[data-drop]')?.addEventListener('click', () => {
-      draft.video = null;
+      draft.media = [];
       drawPreview();
-    });
-    preview.querySelectorAll('[data-drop-one]').forEach((button) => {
-      button.onclick = () => {
-        draft.media.splice(Number(button.dataset.dropOne), 1);
-        drawPreview();
-      };
     });
   };
   drawPreview();
 
-  const addImages = async (many) => {
-    const limit = isPremium(state.user) ? 10 : 6;
-    for (let i = 0; i < (many ? limit : 1); i++) {
-      if (draft.media.length >= limit) {
-        toast(`Не больше ${limit} фото в альбоме`, 'err');
-        break;
-      }
-      const image = await pickImage(isPremium(state.user) ? 2000 : 1400);
-      if (!image) break;
-      draft.video = null;
-      draft.media.push(image);
-      drawPreview();
-      if (!many) break;
-    }
+  card.querySelector('[data-image]').onclick = async () => {
+    const image = await pickImage(isPremium(state.user) ? 2000 : 1400);
+    if (!image) return;
+    draft.media = [image];
+    drawPreview();
   };
 
-  card.querySelector('[data-image]').onclick = () => addImages(false);
-  card.querySelector('[data-album]').onclick = () => addImages(true);
-
-  card.querySelector('[data-video]').onclick = async () => {
-    const { pickVideo } = await import('../ui.js');
-    const picked = await pickVideo(90);
-    if (!picked) return;
-    draft.media = [];
-    draft.video = picked;
-    drawPreview();
+  card.querySelector('[data-reels]').onclick = async () => {
+    const { publishReel } = await import('./videos.js');
+    publishReel(() => {
+      const { openTab } = window.__spokum || {};
+      openTab?.('videos');
+    });
   };
 
   card.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => load(root)));
@@ -216,35 +188,16 @@ function renderComposer(root) {
     const label = button.querySelector('span');
     const previous = label ? label.textContent : '';
     try {
-      let media = draft.media;
-      let video = null;
-      let poster = null;
-      if (api.uploadMedia && api.mode === 'supabase') {
+      let image = draft.media[0] || null;
+      if (image && api.uploadMedia && api.mode === 'supabase') {
         if (label) label.textContent = 'Загружаем';
-        media = [];
-        for (const item of draft.media) media.push(await api.uploadMedia(item, 'jpg'));
-        if (draft.video) {
-          video = await api.uploadMedia(draft.video.data, 'mp4');
-          poster = draft.video.poster ? await api.uploadMedia(draft.video.poster, 'jpg') : null;
-        }
-      } else if (draft.video) {
-        video = draft.video.data;
-        poster = draft.video.poster;
+        image = await api.uploadMedia(image, 'jpg');
       }
-      await api.createPost({
-        text: draft.text,
-        image: media[0] || poster || null,
-        media,
-        video,
-        poster,
-        duration: draft.video?.duration || 0,
-        kind: video ? 'video' : media.length > 1 ? 'album' : 'text',
-        mood: draft.mood
-      });
+      await api.createPost({ text: draft.text, image, media: [], kind: 'text', mood: draft.mood });
       draft = { text: '', media: [], mood: 'calm' };
       renderComposer(root);
       await load(root);
-      toast(video ? 'Видео опубликовано' : 'Опубликовано');
+      toast('Опубликовано');
     } catch (error) {
       toast(error.message, 'err');
     } finally {
@@ -688,19 +641,34 @@ export async function openComments(post, refresh) {
   await draw();
 
   const input = body.querySelector('input');
+  const button = body.querySelector('[data-send]');
+  let busy = false;
   const send = async () => {
+    if (busy) return;
     const text = input.value.trim();
     if (!text) return;
+    busy = true;
+    input.value = '';
+    input.disabled = true;
+    if (button) button.disabled = true;
     try {
       await api.addComment(post.id, text);
-      input.value = '';
+      post.comments += 1;
       await draw();
     } catch (error) {
+      input.value = text;
       toast(error.message, 'err');
+    } finally {
+      busy = false;
+      input.disabled = false;
+      if (button) button.disabled = false;
+      input.focus();
     }
   };
-  body.querySelector('[data-send]')?.addEventListener('click', send);
+  button?.addEventListener('click', send);
   input?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') send();
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    send();
   });
 }

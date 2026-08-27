@@ -115,6 +115,7 @@ async function boot() {
 }
 
 function start() {
+  window.__spokum = { openTab };
   buildShell();
   openTab(state.tab || 'feed');
   connectSocket();
@@ -199,6 +200,7 @@ export async function refreshUser() {
 
 async function openTab(tab) {
   state.tab = tab;
+  window.__spokum = { openTab };
   const host = shell.querySelector('[data-view]');
   if (state.user && navigator.onLine) {
     const { loadStories } = await import('./views/stories.js');

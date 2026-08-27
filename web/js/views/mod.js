@@ -7,6 +7,7 @@ import { pickDuration } from './admin.js';
 
 const TABS = [
   ['queue', 'Публикации'],
+  ['reels', 'Видео'],
   ['reports', 'Жалобы'],
   ['strikes', 'Мой статус']
 ];
@@ -53,6 +54,7 @@ export async function openMod() {
     body.innerHTML = '<div class="card" style="height:140px;opacity:.35"></div>';
     try {
       if (active === 'queue') await drawQueue(body);
+      if (active === 'reels') await drawReels(body);
       if (active === 'reports') await drawReports(body);
       if (active === 'strikes') await drawStrikes(body);
     } catch (error) {
@@ -65,7 +67,8 @@ export async function openMod() {
 }
 
 async function drawQueue(body) {
-  const { posts } = await api.modQueue();
+  const result = await api.modQueue();
+  const posts = (result.posts || []).filter((post) => (post.kind || 'text') === 'text');
   if (!posts.length) {
     body.innerHTML = emptyState('leaf', 'Лента пуста', 'Проверять пока нечего');
     return;
@@ -107,6 +110,80 @@ async function drawQueue(body) {
     card.querySelector('[data-punish]').onclick = () => openPunish(post.author, () => drawQueue(body));
     list.appendChild(card);
   });
+}
+
+async function drawReels(body) {
+  body.innerHTML = `
+    <div class="chips" style="margin-bottom:12px">
+      <button class="chip" data-kind="reels" aria-pressed="true">Всё</button>
+      <button class="chip" data-kind="video" aria-pressed="false">Ролики</button>
+      <button class="chip" data-kind="album" aria-pressed="false">Альбомы</button>
+    </div>
+    <div class="col" data-list style="gap:10px"></div>`;
+
+  const list = body.querySelector('[data-list]');
+  const load = async (kind) => {
+    list.innerHTML = '<div class="card" style="height:120px;opacity:.3"></div>';
+    const { posts } = await api.listPosts({ kind, limit: 30, includeRemoved: true });
+    if (!posts.length) {
+      list.innerHTML = emptyState('video', 'Пусто', 'Роликов и альбомов пока нет');
+      return;
+    }
+    list.innerHTML = '';
+    posts.forEach((post) => {
+      const shots = (Array.isArray(post.media) ? post.media.filter(Boolean) : []).slice(0, 4);
+      const card = el(`
+        <div class="card appear" style="padding:14px">
+          <div class="row">
+            ${avatar(post.author, 40)}
+            <div class="grow" style="min-width:0">
+              <div class="row" style="gap:6px"><span class="strong small truncate">${esc(post.author.displayName)}</span>${badges(post.author)}</div>
+              <div class="tiny muted">@${esc(post.author.username)} · ${timeAgo(post.createdAt)} · ${post.kind === 'video' ? 'видео' : 'альбом'}</div>
+            </div>
+            ${post.removed ? '<span class="pill bad">снят</span>' : '<span class="pill good">в разделе</span>'}
+          </div>
+          ${post.text ? `<p class="post-text">${esc(post.text)}</p>` : ''}
+          ${post.kind === 'video'
+            ? `<div class="post-image" style="margin-top:12px;position:relative">${post.poster ? `<img src="${esc(post.poster)}" alt="" loading="lazy">` : '<span class="post-video-blank"></span>'}<span class="post-video-play">${icon('play', 22)}</span></div>`
+            : shots.length
+              ? `<div class="composer-shots" style="margin-top:12px">${shots.map((src) => `<span class="composer-shot"><img src="${esc(src)}" alt="" loading="lazy"></span>`).join('')}</div>`
+              : ''}
+          ${post.removed ? `<div class="tiny muted" style="margin-top:8px">Причина: ${esc(post.removedReason)}</div>` : ''}
+          <div class="row" style="margin-top:12px;gap:8px">
+            <button class="btn btn-sm" data-watch>${icon('eye', 15)} Открыть</button>
+            <button class="btn btn-sm" data-author>${icon('profile', 15)} Автор</button>
+            ${post.removed ? '' : `<button class="btn btn-sm btn-danger grow" data-remove>${icon('trash', 15)} Снять</button>`}
+            <button class="btn btn-sm grow" data-punish>${icon('warn', 15)} Наказать</button>
+          </div>
+        </div>`);
+      card.querySelector('[data-watch]').onclick = async () => {
+        const { openVideo } = await import('./videos.js');
+        openVideo(post);
+      };
+      card.querySelector('[data-author]').onclick = () => openProfile(post.author.username);
+      card.querySelector('[data-remove]')?.addEventListener('click', async () => {
+        const reason = await promptSheet({ title: 'Снять публикацию', label: 'Причина, её увидит админ', placeholder: 'Например: запрещённый контент', multiline: true });
+        if (!reason) return;
+        try {
+          await api.removePost(post.id, reason);
+          toast('Снято');
+          load(kind);
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      });
+      card.querySelector('[data-punish]').onclick = () => openPunish(post.author, () => load(kind));
+      list.appendChild(card);
+    });
+  };
+
+  body.querySelectorAll('[data-kind]').forEach((chip) => {
+    chip.onclick = () => {
+      body.querySelectorAll('[data-kind]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      load(chip.dataset.kind);
+    };
+  });
+  await load('reels');
 }
 
 export function openPunish(user, done) {

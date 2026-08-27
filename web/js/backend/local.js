@@ -414,12 +414,18 @@ export const local = {
     };
   },
 
-  async listPosts({ mood, kind, before, limit } = {}) {
+  async listPosts({ mood, kind, before, limit, includeRemoved } = {}) {
     const viewer = me();
     const size = Math.min(40, Math.max(4, Number(limit) || 12));
     const all = state.posts
-      .filter((p) => !p.removed && (!mood || p.mood === mood))
-      .filter((p) => (kind === 'video' ? (p.kind || 'text') === 'video' : kind === 'feed' ? (p.kind || 'text') !== 'video' : true))
+      .filter((p) => (includeRemoved || !p.removed) && (!mood || p.mood === mood))
+      .filter((p) => {
+        const own = p.kind || 'text';
+        if (kind === 'reels') return own === 'video' || own === 'album';
+        if (kind === 'feed') return own === 'text';
+        if (kind === 'video' || kind === 'album') return own === kind;
+        return true;
+      })
       .filter((p) => (before ? p.createdAt < Number(before) : true))
       .sort((a, b) => b.createdAt - a.createdAt);
     const posts = all.slice(0, size).map((p) => shapePost(p, viewer?.id));
@@ -577,8 +583,13 @@ export const local = {
     notMuted(user);
     const body = String(text || '').trim().slice(0, 500);
     if (!body) fail('Пустой комментарий');
-    state.comments.push({ id: next('comments'), postId: id, authorId: user.id, text: body, createdAt: Date.now() });
-    save();
+    const twin = state.comments.some(
+      (c) => c.postId === id && c.authorId === user.id && c.text === body && Date.now() - c.createdAt < 10000
+    );
+    if (!twin) {
+      state.comments.push({ id: next('comments'), postId: id, authorId: user.id, text: body, createdAt: Date.now() });
+      save();
+    }
     return { post: shapePost(state.posts.find((p) => p.id === id), user.id) };
   },
 

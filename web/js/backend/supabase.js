@@ -360,25 +360,24 @@ export async function createSupabase(url, key) {
       };
     },
 
-    async listPosts({ mood, kind, before, limit } = {}) {
+    async listPosts({ mood, kind, before, limit, includeRemoved } = {}) {
       const size = Math.min(40, Math.max(4, Number(limit) || 12));
       const build = () => {
-        let request = sb
-          .from('posts')
-          .select(POST_SELECT())
-          .eq('removed', false)
-          .order('created_at', { ascending: false })
-          .limit(size);
+        let request = sb.from('posts').select(POST_SELECT());
+        if (!includeRemoved) request = request.eq('removed', false);
+        request = request.order('created_at', { ascending: false }).limit(size);
         if (mood) request = request.eq('mood', mood);
+        if (!legacyPosts && kind === 'reels') request = request.in('kind', ['video', 'album']);
         if (!legacyPosts && kind === 'video') request = request.eq('kind', 'video');
-        if (!legacyPosts && kind === 'feed') request = request.neq('kind', 'video');
+        if (!legacyPosts && kind === 'album') request = request.eq('kind', 'album');
+        if (!legacyPosts && kind === 'feed') request = request.eq('kind', 'text');
         if (before) request = request.lt('created_at', new Date(Number(before)).toISOString());
         return request;
       };
       let { data, error } = await build();
       if (missingColumn(error)) {
         legacyPosts = true;
-        if (kind === 'video') return { posts: [], more: false, cursor: null };
+        if (kind === 'video' || kind === 'album' || kind === 'reels') return { posts: [], more: false, cursor: null };
         ({ data, error } = await build());
       }
       guard(error);
@@ -522,8 +521,18 @@ export async function createSupabase(url, key) {
       const me = requireUid();
       const body = String(text || '').trim().slice(0, 500);
       if (!body) throw new Error('Пустой комментарий');
-      const { error } = await sb.from('comments').insert({ post_id: id, author_id: me, body });
-      guard(error);
+      const recent = await sb
+        .from('comments')
+        .select('id')
+        .eq('post_id', id)
+        .eq('author_id', me)
+        .eq('body', body)
+        .gt('created_at', new Date(Date.now() - 10000).toISOString())
+        .limit(1);
+      if (!recent.data?.length) {
+        const { error } = await sb.from('comments').insert({ post_id: id, author_id: me, body });
+        guard(error);
+      }
       const { data } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       return { post: shapePost(data, await likedSet([id])) };
     },
