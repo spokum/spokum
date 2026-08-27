@@ -57,7 +57,7 @@ export function badges(user) {
   if (!user) return '';
   const items = [];
   if (user.statusIcon) {
-    items.push(`<img class="status-icon" src="${esc(user.statusIcon)}" alt="" title="Статус">`);
+    items.push(`<img class="status-icon" src="${esc(user.statusIcon)}" alt="" title="Статус ${esc(user.displayName || user.username || '')}" data-caption="Статус ${esc(user.displayName || user.username || '')}">`);
   }
   if (isPremium(user)) items.push(badgeButton('badge-premium', solidIcon('crown', 12), 'СпокУм Премиум'));
   if (user.isVerified) items.push(badgeButton('badge-verified', icon('verified', 12, 2.4), 'Пользователь верифицирован'));
@@ -175,4 +175,144 @@ export function pickImage(maxSide = 1400) {
 
 export function section(title, actionHtml = '') {
   return `<div class="row between" style="margin:20px 2px 10px"><div class="strong small">${esc(title)}</div>${actionHtml}</div>`;
+}
+
+export function openLightbox(sources, options = {}) {
+  const list = (Array.isArray(sources) ? sources : [sources]).filter(Boolean);
+  if (!list.length) return null;
+  let index = Math.min(Math.max(0, Number(options.start) || 0), list.length - 1);
+  const view = el(`
+    <div class="lightbox">
+      <div class="lightbox-top">
+        <div class="grow small strong" data-caption>${esc(options.caption || '')}</div>
+        <button class="btn btn-icon btn-ghost" data-close>${icon('close', 20)}</button>
+      </div>
+      <div class="lightbox-stage" data-stage><img alt="" data-shot></div>
+      <div class="lightbox-dots" data-dots></div>
+    </div>`);
+  document.body.appendChild(view);
+  document.body.style.overflow = 'hidden';
+  const shot = view.querySelector('[data-shot]');
+  const dots = view.querySelector('[data-dots]');
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+
+  const apply = () => {
+    shot.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  };
+  const draw = () => {
+    scale = 1;
+    panX = 0;
+    panY = 0;
+    apply();
+    shot.src = list[index];
+    dots.innerHTML = list.length > 1 ? list.map((_, i) => `<i class="${i === index ? 'on' : ''}"></i>`).join('') : '';
+  };
+  const step = (delta) => {
+    index = (index + delta + list.length) % list.length;
+    draw();
+  };
+  const close = () => {
+    document.body.style.overflow = '';
+    view.remove();
+    document.removeEventListener('keydown', keys);
+  };
+  const keys = (event) => {
+    if (event.key === 'Escape') close();
+    if (event.key === 'ArrowRight') step(1);
+    if (event.key === 'ArrowLeft') step(-1);
+  };
+  document.addEventListener('keydown', keys);
+  view.querySelector('[data-close]').onclick = close;
+  view.addEventListener('click', (event) => {
+    if (event.target === view || event.target.classList.contains('lightbox-stage')) close();
+  });
+
+  let startX = 0;
+  let startY = 0;
+  let moved = false;
+  let baseDistance = 0;
+  let baseScale = 1;
+  const distance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+  shot.addEventListener('touchstart', (event) => {
+    if (event.touches.length === 2) {
+      baseDistance = distance(event.touches);
+      baseScale = scale;
+      return;
+    }
+    startX = event.touches[0].clientX - panX;
+    startY = event.touches[0].clientY - panY;
+    moved = false;
+  }, { passive: true });
+
+  shot.addEventListener('touchmove', (event) => {
+    if (event.touches.length === 2 && baseDistance) {
+      scale = Math.min(4, Math.max(1, (baseScale * distance(event.touches)) / baseDistance));
+      apply();
+      return;
+    }
+    if (scale > 1) {
+      panX = event.touches[0].clientX - startX;
+      panY = event.touches[0].clientY - startY;
+      apply();
+      return;
+    }
+    const shift = event.touches[0].clientX - startX;
+    if (Math.abs(shift) > 60 && !moved) {
+      moved = true;
+      step(shift < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+
+  shot.addEventListener('touchend', () => {
+    baseDistance = 0;
+    if (scale <= 1) {
+      panX = 0;
+      panY = 0;
+      apply();
+    }
+  });
+
+  shot.addEventListener('dblclick', () => {
+    scale = scale > 1 ? 1 : 2.2;
+    panX = 0;
+    panY = 0;
+    apply();
+  });
+
+  draw();
+  return { close };
+}
+
+export function pickVideo(maxSeconds = 60) {
+  return new Promise((done) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.setAttribute('capture', 'user');
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return done(null);
+      if (file.size > 24 * 1024 * 1024) {
+        toast('Видео тяжелее 24 МБ, снимите короче', 'err');
+        return done(null);
+      }
+      const { readRawFile, videoMeta } = await import('./util.js');
+      try {
+        const data = await readRawFile(file);
+        const meta = await videoMeta(data);
+        if (meta.duration > maxSeconds) {
+          toast(`Максимум ${maxSeconds} секунд`, 'err');
+          return done(null);
+        }
+        done({ data, poster: meta.poster, duration: Math.round(meta.duration) });
+      } catch (error) {
+        toast(error.message, 'err');
+        done(null);
+      }
+    };
+    input.click();
+  });
 }

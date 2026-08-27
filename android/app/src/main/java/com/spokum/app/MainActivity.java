@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
   private static final String UPDATE_BASE = "https://spokum.github.io/spokum/";
 
   private WebView webView;
+  private long lastUpdateCheck = System.currentTimeMillis();
   private ValueCallback<Uri[]> filePicker;
   private PermissionRequest pendingMicRequest;
   private ActivityResultLauncher<Intent> fileChooser;
@@ -162,23 +163,34 @@ public class MainActivity extends AppCompatActivity {
       public void onPermissionRequest(final PermissionRequest request) {
         runOnUiThread(() -> {
           boolean wantsAudio = false;
+          boolean wantsVideo = false;
           for (String resource : request.getResources()) {
             if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
               wantsAudio = true;
             }
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+              wantsVideo = true;
+            }
           }
-          if (!wantsAudio) {
+          if (!wantsAudio && !wantsVideo) {
             request.deny();
             return;
           }
-          if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
-              == PackageManager.PERMISSION_GRANTED) {
+          java.util.ArrayList<String> missing = new java.util.ArrayList<>();
+          if (wantsAudio && ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
+              != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.RECORD_AUDIO);
+          }
+          if (wantsVideo && ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)
+              != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.CAMERA);
+          }
+          if (missing.isEmpty()) {
             request.grant(request.getResources());
             return;
           }
           pendingMicRequest = request;
-          ActivityCompat.requestPermissions(MainActivity.this,
-              new String[] { Manifest.permission.RECORD_AUDIO }, 42);
+          ActivityCompat.requestPermissions(MainActivity.this, missing.toArray(new String[0]), 42);
         });
       }
     });
@@ -187,6 +199,16 @@ public class MainActivity extends AppCompatActivity {
       @JavascriptInterface
       public void apply() {
         runOnUiThread(MainActivity.this::recreate);
+      }
+
+      @JavascriptInterface
+      public void checkUpdate() {
+        checkForUpdate(true);
+      }
+
+      @JavascriptInterface
+      public String version() {
+        return getSharedPreferences("spokum", MODE_PRIVATE).getString("web_version", "");
       }
     }, "SpokumHost");
 
@@ -211,10 +233,20 @@ public class MainActivity extends AppCompatActivity {
       webView.loadUrl("https://appassets.androidplatform.net/www/index.html");
     }
 
-    checkForUpdate();
+    checkForUpdate(false);
   }
 
-  private void checkForUpdate() {
+  @Override
+  protected void onResume() {
+    super.onResume();
+    long now = System.currentTimeMillis();
+    if (now - lastUpdateCheck > 900000L) {
+      lastUpdateCheck = now;
+      checkForUpdate(false);
+    }
+  }
+
+  private void checkForUpdate(final boolean loud) {
     Executors.newSingleThreadExecutor().execute(() -> {
       HttpURLConnection connection = null;
       try {
@@ -222,6 +254,9 @@ public class MainActivity extends AppCompatActivity {
         connection.setConnectTimeout(8000);
         connection.setReadTimeout(8000);
         if (connection.getResponseCode() != 200) {
+          if (loud) {
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "Сервер обновлений не ответил", Toast.LENGTH_SHORT).show());
+          }
           return;
         }
 
@@ -241,7 +276,14 @@ public class MainActivity extends AppCompatActivity {
 
         String local = getSharedPreferences("spokum", MODE_PRIVATE).getString("web_version", "");
         if (remote.equals(local)) {
+          if (loud) {
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "У вас последняя версия", Toast.LENGTH_SHORT).show());
+          }
           return;
+        }
+
+        if (loud) {
+          runOnUiThread(() -> Toast.makeText(MainActivity.this, "Скачиваем обновление", Toast.LENGTH_SHORT).show());
         }
 
         if (downloadBundle()) {
@@ -252,7 +294,10 @@ public class MainActivity extends AppCompatActivity {
             }
           });
         }
-      } catch (Exception ignored) {
+      } catch (Exception error) {
+        if (loud) {
+          runOnUiThread(() -> Toast.makeText(MainActivity.this, "Обновление не скачалось", Toast.LENGTH_SHORT).show());
+        }
       } finally {
         if (connection != null) {
           connection.disconnect();
@@ -339,12 +384,17 @@ public class MainActivity extends AppCompatActivity {
     if (code != 42 || pendingMicRequest == null) {
       return;
     }
-    boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+    boolean granted = results.length > 0;
+    for (int result : results) {
+      if (result != PackageManager.PERMISSION_GRANTED) {
+        granted = false;
+      }
+    }
     if (granted) {
       pendingMicRequest.grant(pendingMicRequest.getResources());
     } else {
       pendingMicRequest.deny();
-      Toast.makeText(this, "Без доступа к микрофону голосовые не записать", Toast.LENGTH_SHORT).show();
+      Toast.makeText(this, "Без доступа к микрофону и камере звонки не работают", Toast.LENGTH_SHORT).show();
     }
     pendingMicRequest = null;
   }

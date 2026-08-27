@@ -71,8 +71,8 @@ export function isPremium(user) {
   return !!(user && user.premiumUntil && user.premiumUntil > Date.now());
 }
 
-export const PREMIUM_THEMES = ['aurora', 'sunset'];
-export const PREMIUM_ACCENTS = ['gold', 'rose'];
+export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss'];
+export const PREMIUM_ACCENTS = ['gold', 'rose', 'ice'];
 
 export const PREMIUM_PERKS = [
   ['crown', 'Значок премиума', 'Корона рядом с ником во всей сети'],
@@ -80,8 +80,8 @@ export const PREMIUM_PERKS = [
   ['star', 'Свои стикеры', 'Загружайте картинки и шлите их в чатах'],
   ['image', 'Пины', 'Четыре картинки по углам вашего аватара'],
   ['smile', 'Статус у ника', 'Своя маленькая картинка рядом с именем'],
-  ['palette', 'Закрытые темы', 'Аврора и Закат, недоступные остальным'],
-  ['spark', 'Особые акценты', 'Золотой и розовый цвета интерфейса'],
+  ['palette', 'Закрытые темы', 'Аврора, Закат, Королевская и Бездна'],
+  ['spark', 'Особые акценты', 'Золото, роза и лёд в интерфейсе'],
   ['profile', 'Свечение аватара', 'Мягкая подсветка вокруг фото профиля'],
   ['feed', 'Длинные записи', 'До 5000 символов в посте вместо 2000'],
   ['eye', 'Фото без потерь', 'Снимки грузятся в максимальном качестве']

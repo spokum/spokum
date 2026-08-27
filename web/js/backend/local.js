@@ -50,6 +50,7 @@ function save() {
 }
 
 function next(kind) {
+  if (!state.seq[kind]) state.seq[kind] = 0;
   state.seq[kind] += 1;
   return state.seq[kind];
 }
@@ -180,7 +181,13 @@ function shapePost(post, viewerId) {
     author: pub(author),
     likes: state.likes.filter((l) => l.postId === post.id).length,
     liked: state.likes.some((l) => l.postId === post.id && l.userId === viewerId),
-    comments: state.comments.filter((c) => c.postId === post.id).length
+    comments: state.comments.filter((c) => c.postId === post.id).length,
+    kind: post.kind || 'text',
+    media: Array.isArray(post.media) ? post.media : [],
+    video: post.video || null,
+    poster: post.poster || null,
+    duration: post.duration || 0,
+    views: post.views || 0
   };
 }
 
@@ -407,27 +414,122 @@ export const local = {
     };
   },
 
-  async listPosts({ mood } = {}) {
+  async listPosts({ mood, kind, before, limit } = {}) {
     const viewer = me();
-    return {
-      posts: state.posts
-        .filter((p) => !p.removed && (!mood || p.mood === mood))
-        .sort((a, b) => b.id - a.id)
-        .slice(0, 60)
-        .map((p) => shapePost(p, viewer?.id))
-    };
+    const size = Math.min(40, Math.max(4, Number(limit) || 12));
+    const all = state.posts
+      .filter((p) => !p.removed && (!mood || p.mood === mood))
+      .filter((p) => (kind === 'video' ? (p.kind || 'text') === 'video' : kind === 'feed' ? (p.kind || 'text') !== 'video' : true))
+      .filter((p) => (before ? p.createdAt < Number(before) : true))
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const posts = all.slice(0, size).map((p) => shapePost(p, viewer?.id));
+    return { posts, more: all.length > size, cursor: posts.length ? posts[posts.length - 1].createdAt : null };
   },
 
-  async createPost({ text, image, mood }) {
+  async listAnnouncements() {
+    const now = Date.now();
+    return { announcements: (state.announcements || []).filter((a) => a.until > now).sort((a, b) => b.createdAt - a.createdAt) };
+  },
+
+  async createAnnouncement({ title, body, tone, days }) {
+    const user = need();
+    if (!user.isAdmin) fail('Нет прав');
+    state.announcements = state.announcements || [];
+    state.announcements.push({
+      id: next('announcements'),
+      title: String(title || '').slice(0, 80),
+      body: String(body || '').slice(0, 600),
+      tone: tone || 'info',
+      createdAt: Date.now(),
+      until: Date.now() + Math.max(1, Number(days) || 7) * 86400000
+    });
+    save();
+    return { ok: true };
+  },
+
+  async deleteAnnouncement(id) {
+    const user = need();
+    if (!user.isAdmin) fail('Нет прав');
+    state.announcements = (state.announcements || []).filter((a) => a.id !== id);
+    save();
+    return { ok: true };
+  },
+
+  async bumpViews(id) {
+    const post = state.posts.find((p) => p.id === id);
+    if (post) {
+      post.views = (post.views || 0) + 1;
+      save();
+    }
+    return { ok: true };
+  },
+
+  async uploadMedia(dataUrl) {
+    return dataUrl;
+  },
+
+  async callSignal() {
+    return { ok: true };
+  },
+
+  async callInbox() {
+    return { signals: [] };
+  },
+
+  async callClear() {
+    return { ok: true };
+  },
+
+  async wipePosts(userId) {
+    const user = need();
+    if (!user.isAdmin) fail('Нет прав');
+    const before = state.posts.length;
+    state.posts = state.posts.filter((p) => p.authorId !== userId);
+    save();
+    return { removed: before - state.posts.length };
+  },
+
+  async resetLook(userId) {
+    const user = need();
+    if (!user.isAdmin) fail('Нет прав');
+    const target = state.users.find((u) => u.id === userId);
+    if (!target) fail('Пользователь не найден');
+    target.avatar = null;
+    target.banner = null;
+    target.statusIcon = null;
+    target.pins = [];
+    target.bio = '';
+    save();
+    return { ok: true };
+  },
+
+  async renameUser(userId, name) {
+    const user = need();
+    if (!user.isAdmin) fail('Нет прав');
+    const target = state.users.find((u) => u.id === userId);
+    if (!target) fail('Пользователь не найден');
+    target.displayName = String(name || '').slice(0, 40) || target.displayName;
+    save();
+    return { ok: true };
+  },
+
+  async createPost({ text, image, mood, kind, media, video, poster, duration }) {
     const user = need();
     notMuted(user);
     const body = String(text || '').trim().slice(0, 5000);
-    if (!body && !image) fail('Пустой пост');
+    const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
+    if (!body && !image && !album.length && !video) fail('Пустой пост');
     const post = {
       id: next('posts'),
       authorId: user.id,
       text: body,
-      image: image || null,
+      image: image || album[0] || poster || null,
+      kind: kind || (video ? 'video' : album.length > 1 ? 'album' : 'text'),
+      media: album,
+      video: video || null,
+      poster: poster || null,
+      duration: Math.max(0, Math.round(Number(duration) || 0)),
+      views: 0,
       mood: MOODS.includes(mood) ? mood : 'calm',
       createdAt: Date.now(),
       removed: false,

@@ -105,3 +105,46 @@ export function uid() {
 export function haptic(ms = 8) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
+
+export function readRawFile(file) {
+  return new Promise((done, fail) => {
+    const reader = new FileReader();
+    reader.onload = () => done(String(reader.result));
+    reader.onerror = () => fail(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+}
+
+export function videoMeta(src) {
+  return new Promise((done, fail) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    const guard = setTimeout(() => fail(new Error('Видео не открылось')), 12000);
+    video.onloadeddata = () => {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 720 / Math.max(video.videoWidth || 720, video.videoHeight || 1280));
+      canvas.width = Math.max(1, Math.round((video.videoWidth || 720) * scale));
+      canvas.height = Math.max(1, Math.round((video.videoHeight || 1280) * scale));
+      let poster = null;
+      try {
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        poster = canvas.toDataURL('image/jpeg', 0.72);
+      } catch {}
+      clearTimeout(guard);
+      done({ duration: video.duration || 0, width: video.videoWidth, height: video.videoHeight, poster });
+    };
+    video.onerror = () => {
+      clearTimeout(guard);
+      fail(new Error('Формат видео не поддерживается'));
+    };
+    video.src = src;
+    video.currentTime = 0.1;
+  });
+}
+
+export function fileSizeText(bytes) {
+  if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
+  return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+}

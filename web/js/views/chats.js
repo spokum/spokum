@@ -160,7 +160,8 @@ export async function openChat(chatId) {
           <div class="row" style="gap:6px"><span class="strong small truncate">${esc(chat.title)}</span>${chat.peer ? badges(chat.peer) : ''}</div>
           <div class="tiny muted truncate">${chat.kind === 'dm' ? `@${esc(chat.peer?.username || '')}` : `${chat.members.length} участников`}</div>
         </div>
-        ${chat.kind === 'dm' ? `<button class="btn btn-icon btn-ghost" data-call>${icon('phone', 19)}</button>` : ''}
+        ${chat.kind === 'dm' ? `<button class="btn btn-icon btn-ghost" data-video-call>${icon('video', 19)}</button>
+        <button class="btn btn-icon btn-ghost" data-call>${icon('phone', 19)}</button>` : ''}
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 19)}</button>
       </div>
       <div class="chat-body" data-body></div>
@@ -191,7 +192,14 @@ export async function openChat(chatId) {
     else openMembers(chat);
   };
   view.querySelector('[data-menu]').onclick = () => openChatMenu(chat, view);
-  view.querySelector('[data-call]')?.addEventListener('click', () => startCall(chat));
+  view.querySelector('[data-call]')?.addEventListener('click', async () => {
+    const { startCall } = await import('../call.js');
+    startCall(chat);
+  });
+  view.querySelector('[data-video-call]')?.addEventListener('click', async () => {
+    const { startCall } = await import('../call.js');
+    startCall(chat, { video: true });
+  });
 
   const draw = async () => {
     const { messages } = await api.messages(chatId);
@@ -471,38 +479,4 @@ function openMembers(chat) {
   });
 }
 
-function startCall(chat) {
-  api.callSignal?.(chat.id, 'ring').catch(() => {});
-  const started = Date.now();
-  const overlay = el(`
-    <div class="chat-view" style="background:linear-gradient(180deg,var(--bg-2),var(--bg));z-index:80;align-items:center;justify-content:center">
-      <div class="col center" style="align-items:center;gap:18px">
-        ${avatar(chat.peer, 88)}
-        <div><div class="strong" style="font-size:20px;text-align:center">${esc(chat.title)}</div>
-        <div class="small muted center" data-status>Соединение</div></div>
-        <div class="row" style="gap:14px;margin-top:20px">
-          <button class="btn btn-icon" data-mic style="width:56px;height:56px;border-radius:50%">${icon('mic', 22)}</button>
-          <button class="btn btn-icon btn-danger" data-end style="width:56px;height:56px;border-radius:50%">${icon('phone', 22)}</button>
-        </div>
-      </div>
-    </div>`);
-  document.body.appendChild(overlay);
-  const status = overlay.querySelector('[data-status]');
-  let muted = false;
-  const timer = setInterval(() => {
-    status.textContent = durationText((Date.now() - started) / 1000);
-  }, 500);
-  overlay.querySelector('[data-mic]').onclick = (event) => {
-    muted = !muted;
-    event.currentTarget.innerHTML = icon(muted ? 'mute' : 'mic', 22);
-  };
-  overlay.querySelector('[data-end]').onclick = async () => {
-    clearInterval(timer);
-    overlay.remove();
-    try {
-      await api.callSignal?.(chat.id, 'end');
-    } catch {}
-    await api.sendMessage(chat.id, { kind: 'call', body: `Звонок ${durationText((Date.now() - started) / 1000)}` }).catch(() => {});
-    window.dispatchEvent(new CustomEvent('spokum:message', { detail: { chatId: chat.id } }));
-  };
-}
+

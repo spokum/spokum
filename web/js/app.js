@@ -6,6 +6,7 @@ import { renderAuth } from './views/auth.js';
 
 const TABS = [
   ['feed', 'Лента', 'feed'],
+  ['videos', 'Видео', 'video'],
   ['chats', 'Чаты', 'chats'],
   ['games', 'Игры', 'games'],
   ['settings', 'Настройки', 'settings'],
@@ -14,6 +15,7 @@ const TABS = [
 
 const views = {
   feed: () => import('./views/feed.js'),
+  videos: () => import('./views/videos.js'),
   chats: () => import('./views/chats.js'),
   games: () => import('./views/games.js'),
   settings: () => import('./views/settings.js'),
@@ -117,6 +119,7 @@ function start() {
   openTab(state.tab || 'feed');
   connectSocket();
   askJournal();
+  import('./call.js').then((module) => module.initCalls()).catch(() => {});
 }
 
 async function askJournal() {
@@ -273,6 +276,21 @@ document.addEventListener('click', (event) => {
   event.preventDefault();
   event.stopPropagation();
   toast(badge.dataset.badge);
+}, true);
+
+document.addEventListener('click', async (event) => {
+  const shot = event.target.closest?.('.status-icon, .zoomable, .post-image img, .album-shot');
+  if (!shot || !shot.src) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const { openLightbox } = await import('./ui.js');
+  const group = shot.closest('[data-album]');
+  if (group) {
+    const all = [...group.querySelectorAll('img')].map((node) => node.dataset.full || node.src);
+    openLightbox(all, { start: all.indexOf(shot.dataset.full || shot.src), caption: shot.dataset.caption || '' });
+    return;
+  }
+  openLightbox(shot.dataset.full || shot.src, { caption: shot.dataset.caption || (shot.classList.contains('status-icon') ? 'Статус' : '') });
 }, true);
 
 window.addEventListener('spokum:message', () => refreshUnread());

@@ -54,7 +54,14 @@ const paths = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
   add_user: '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 4 1.5"/><path d="M19 11v6M16 14h6"/>',
-  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>'
+  compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+  video: '<rect x="2" y="6" width="13" height="12" rx="3"/><path d="M15 10.5l7-3.5v10l-7-3.5z"/>',
+  album: '<rect x="7" y="3" width="14" height="14" rx="3"/><path d="M3 7v11a3 3 0 0 0 3 3h11"/><circle cx="12" cy="8.5" r="1.4"/><path d="M21 13l-4-4-6 6"/>',
+  megaphone: '<path d="M4 10v4a2 2 0 0 0 2 2h2l8 4V4L8 8H6a2 2 0 0 0-2 2z"/><path d="M8 16v4"/>',
+  volume: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5M18.5 6.5a8 8 0 0 1 0 11"/>',
+  cam_off: '<path d="M2 6h11v12H5a3 3 0 0 1-3-3z"/><path d="M15 10.5l7-3.5v10l-4-2"/><path d="M3 3l18 18"/>',
+  download: '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>',
+  switch_cam: '<circle cx="12" cy="13" r="4"/><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H8l1.5-2h5L16 6h2.5A2.5 2.5 0 0 1 21 8.5V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
 };
 
 let logoSource = null;

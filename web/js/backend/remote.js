@@ -36,6 +36,43 @@ export function createRemote(base) {
 
   return {
     mode: 'remote',
+    async listAnnouncements() {
+      try {
+        return await call('GET', '/api/announcements');
+      } catch {
+        return { announcements: [] };
+      }
+    },
+    createAnnouncement(payload) {
+      return call('POST', '/api/announcements', payload);
+    },
+    deleteAnnouncement(id) {
+      return call('DELETE', `/api/announcements/${id}`);
+    },
+    async bumpViews() {
+      return { ok: true };
+    },
+    async uploadMedia(dataUrl) {
+      return dataUrl;
+    },
+    async callSignal(chatId, toId, kind, payload) {
+      return call('POST', `/api/chats/${chatId}/call`, { toId, kind, payload });
+    },
+    async callInbox() {
+      return { signals: [] };
+    },
+    async callClear() {
+      return { ok: true };
+    },
+    wipePosts(userId) {
+      return call('POST', `/api/admin/users/${userId}/wipe`);
+    },
+    resetLook(userId) {
+      return call('POST', `/api/admin/users/${userId}/reset-look`);
+    },
+    renameUser(userId, name) {
+      return call('POST', `/api/admin/users/${userId}/rename`, { name });
+    },
     get token() {
       return token;
     },

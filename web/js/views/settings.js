@@ -9,8 +9,12 @@ const THEMES = [
   ['deep', 'Глубина', 'linear-gradient(140deg,#191624,#2c2640)', '#e2dded', false],
   ['dawn', 'Рассвет', 'linear-gradient(140deg,#1f1a16,#3a2c22)', '#ece2d9', false],
   ['neon', 'Неон', 'linear-gradient(140deg,#0d1220,#1b2f52)', '#5be6c7', false],
+  ['forest', 'Лес', 'linear-gradient(140deg,#16211c,#22352b)', '#cfe0d4', false],
+  ['sand', 'Песок', 'linear-gradient(140deg,#fdfaf4,#e8e0d1)', '#2c2721', false],
   ['aurora', 'Аврора', 'linear-gradient(140deg,#101d23,#1d3f42)', '#8fe3c8', true],
-  ['sunset', 'Закат', 'linear-gradient(140deg,#211622,#4a2436)', '#e8a9a0', true]
+  ['sunset', 'Закат', 'linear-gradient(140deg,#211622,#4a2436)', '#e8a9a0', true],
+  ['royal', 'Королевская', 'linear-gradient(140deg,#151130,#3a2a6b)', '#d8b45c', true],
+  ['abyss', 'Бездна', 'linear-gradient(140deg,#000000,#0d1418)', '#7fd7e8', true]
 ];
 
 const ACCENTS = [
@@ -19,8 +23,11 @@ const ACCENTS = [
   ['coral', '#c79486', false],
   ['sky', '#8badca', false],
   ['amber', '#c6b083', false],
+  ['slate', '#93a2ae', false],
+  ['moss', '#9bb37f', false],
   ['gold', '#d8b45c', true],
-  ['rose', '#d98fae', true]
+  ['rose', '#d98fae', true],
+  ['ice', '#7fd7e8', true]
 ];
 
 const PREF_KEY = 'spokum.prefs.v1';
@@ -70,6 +77,12 @@ export async function render(root) {
       <div class="row" style="margin-bottom:10px">${icon('lock', 18)}<span class="strong small">Безопасность</span></div>
       <button class="list-item" data-password>${icon('key', 18)}<div class="grow"><div class="small strong">Сменить пароль</div><div class="tiny muted">Другие сессии закроются</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
+    </div>
+
+    <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('download', 18)}<span class="strong small">Приложение</span></div>
+      <button class="list-item" data-update>${icon('refresh', 18)}<div class="grow"><div class="small strong">Проверить обновление</div><div class="tiny muted">Приложение обновляется само, но можно вручную</div></div>${icon('forward', 15)}</button>
+      <div class="tiny muted" style="margin-top:8px;line-height:1.5">Сборка ${esc(window.SpokumHost?.version?.() || 'веб-версия')}</div>
     </div>
 
     <div class="card appear">
@@ -124,6 +137,18 @@ export async function render(root) {
       }
     };
   });
+
+  root.querySelector('[data-update]').onclick = () => {
+    if (window.SpokumHost?.checkUpdate) {
+      window.SpokumHost.checkUpdate();
+      toast('Проверяем обновление');
+      return;
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((list) => list.forEach((registration) => registration.update()));
+    }
+    toast('Сайт обновляется сам при перезагрузке');
+  };
 
   root.querySelectorAll('[data-pref]').forEach((box) => {
     box.onchange = () => {

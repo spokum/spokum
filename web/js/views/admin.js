@@ -7,6 +7,8 @@ import { openProfile } from './profile.js';
 const TABS = [
   ['stats', 'Аналитика'],
   ['users', 'Люди'],
+  ['content', 'Контент'],
+  ['announce', 'Эфир'],
   ['actions', 'Наказания'],
   ['audit', 'Журнал']
 ];
@@ -52,6 +54,8 @@ export async function openAdmin() {
     try {
       if (active === 'stats') await drawStats(body);
       if (active === 'users') await drawUsers(body);
+      if (active === 'content') await drawContent(body);
+      if (active === 'announce') await drawAnnounce(body);
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
     } catch (error) {
@@ -80,6 +84,11 @@ async function drawStats(body) {
       <div class="stat"><div class="v">${stats.moderators}</div><div class="k">модераторов</div></div>
     </div>
 
+    <div class="row" style="gap:8px;margin-top:12px">
+      <button class="btn grow" data-export>${icon('download', 16)} Выгрузить CSV</button>
+      <button class="btn grow" data-copy-stats>${icon('share', 16)} Скопировать сводку</button>
+    </div>
+
     <div class="card appear" style="margin-top:12px">
       <div class="row between" style="margin-bottom:14px"><span class="strong small">Активность за неделю</span><span class="tiny muted">посты и сообщения</span></div>
       <div class="bars">
@@ -104,6 +113,179 @@ async function drawStats(body) {
           : '<div class="small muted">Нет данных</div>'}
       </div>
     </div>`;
+
+  const summary = [
+    `СпокУм, сводка на ${new Date().toLocaleString('ru-RU')}`,
+    `Пользователей: ${stats.users}, онлайн: ${stats.online}, новых за сутки: ${stats.newToday}`,
+    `Постов: ${stats.posts}, сообщений: ${stats.messages}, чатов: ${stats.chats}`,
+    `Открытых жалоб: ${stats.reportsOpen}, в блокировке: ${stats.banned}, модераторов: ${stats.moderators}`
+  ].join('\n');
+
+  body.querySelector('[data-copy-stats]').onclick = () => {
+    navigator.clipboard?.writeText(summary);
+    toast('Сводка скопирована');
+  };
+
+  body.querySelector('[data-export]').onclick = async () => {
+    try {
+      const { users } = await api.adminUsers('');
+      const rows = [['username', 'display_name', 'posts', 'likes', 'admin', 'moderator', 'verified', 'premium', 'banned', 'muted', 'last_seen']];
+      for (const user of users) {
+        rows.push([
+          user.username,
+          user.displayName,
+          user.posts,
+          user.likes,
+          user.isAdmin ? 1 : 0,
+          user.isModerator ? 1 : 0,
+          user.isVerified ? 1 : 0,
+          isPremium(user) ? 1 : 0,
+          user.bannedUntil > Date.now() ? 1 : 0,
+          user.mutedUntil > Date.now() ? 1 : 0,
+          new Date(user.lastSeen || 0).toISOString()
+        ]);
+      }
+      const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+      link.download = `spokum-users-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      toast('Файл готов');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+}
+
+async function drawContent(body) {
+  body.innerHTML = `
+    <div class="chips" data-kinds style="margin-bottom:12px">
+      <button class="chip" data-kind="" aria-pressed="true">Всё</button>
+      <button class="chip" data-kind="video" aria-pressed="false">Видео</button>
+      <button class="chip" data-kind="feed" aria-pressed="false">Лента</button>
+    </div>
+    <div class="col" data-list style="gap:8px"></div>`;
+
+  const list = body.querySelector('[data-list]');
+  const load = async (kind) => {
+    list.innerHTML = '<div class="card" style="height:90px;opacity:.3"></div>';
+    const { posts } = await api.listPosts({ kind: kind || undefined, limit: 30 });
+    if (!posts.length) {
+      list.innerHTML = emptyState('feed', 'Пусто', 'Записей ещё нет');
+      return;
+    }
+    list.innerHTML = posts
+      .map(
+        (post) => `<div class="card" style="padding:12px" data-post="${post.id}">
+          <div class="row" style="gap:8px">${avatar(post.author, 36)}
+            <div class="grow" style="min-width:0">
+              <div class="small strong truncate">${esc(post.author.displayName)}</div>
+              <div class="tiny muted">@${esc(post.author.username)} · ${timeAgo(post.createdAt)} · ${plural(post.likes, 'лайк', 'лайка', 'лайков')}</div>
+            </div>
+            ${post.kind === 'video' ? `<span class="pill">видео</span>` : post.kind === 'album' ? '<span class="pill">альбом</span>' : ''}
+          </div>
+          ${post.text ? `<div class="small" style="margin-top:8px;line-height:1.45">${esc(post.text.slice(0, 180))}</div>` : ''}
+          <div class="row" style="margin-top:10px;gap:8px">
+            <button class="btn btn-sm grow" data-open="${esc(post.author.username)}">${icon('profile', 15)} Автор</button>
+            <button class="btn btn-sm btn-danger grow" data-drop="${post.id}">${icon('trash', 15)} Удалить</button>
+          </div>
+        </div>`
+      )
+      .join('');
+    list.querySelectorAll('[data-open]').forEach((button) => {
+      button.onclick = () => openProfile(button.dataset.open);
+    });
+    list.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = async () => {
+        if (!(await confirmSheet({ title: 'Удалить запись', text: 'Запись исчезнет навсегда', confirm: 'Удалить', danger: true }))) return;
+        try {
+          await api.deletePost(Number(button.dataset.drop) || button.dataset.drop);
+          toast('Удалено');
+          load(kind);
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  };
+
+  body.querySelectorAll('[data-kind]').forEach((chip) => {
+    chip.onclick = () => {
+      body.querySelectorAll('[data-kind]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      load(chip.dataset.kind);
+    };
+  });
+  await load('');
+}
+
+async function drawAnnounce(body) {
+  const { announcements } = await api.listAnnouncements();
+  body.innerHTML = `
+    <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('megaphone', 18)}<span class="strong small">Объявление в ленте</span></div>
+      <input class="input" data-title placeholder="Заголовок" maxlength="80">
+      <textarea class="textarea" data-body placeholder="Текст объявления" maxlength="600" style="margin-top:10px"></textarea>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <select class="select grow" data-tone>
+          <option value="info">Обычное</option>
+          <option value="warn">Важное</option>
+          <option value="bad">Тревожное</option>
+        </select>
+        <select class="select grow" data-days>
+          <option value="1">1 день</option>
+          <option value="3">3 дня</option>
+          <option value="7" selected>Неделя</option>
+          <option value="30">Месяц</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" data-send style="margin-top:12px">${icon('send', 16)} Опубликовать</button>
+    </div>
+    <div class="col" data-live style="gap:8px;margin-top:12px">
+      ${announcements.length
+        ? announcements
+            .map(
+              (row) => `<div class="card announce tone-${esc(row.tone)}" style="margin:0">
+                <div class="row" style="align-items:flex-start;gap:10px">${icon('megaphone', 18)}
+                <div class="grow"><div class="strong small">${esc(row.title)}</div>
+                <div class="tiny muted" style="margin-top:4px;line-height:1.5">${esc(row.body)}</div>
+                <div class="tiny muted" style="margin-top:6px">до ${esc(fullDate(row.until))}</div></div>
+                <button class="btn btn-icon btn-ghost" data-drop="${row.id}">${icon('trash', 16)}</button></div>
+              </div>`
+            )
+            .join('')
+        : emptyState('megaphone', 'Эфир пуст', 'Объявления появятся здесь')}
+    </div>`;
+
+  body.querySelector('[data-send]').onclick = async () => {
+    const title = body.querySelector('[data-title]').value.trim();
+    const text = body.querySelector('[data-body]').value.trim();
+    if (!title || !text) return toast('Заполните заголовок и текст', 'err');
+    try {
+      await api.createAnnouncement({
+        title,
+        body: text,
+        tone: body.querySelector('[data-tone]').value,
+        days: Number(body.querySelector('[data-days]').value)
+      });
+      toast('Объявление в эфире');
+      drawAnnounce(body);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelectorAll('[data-drop]').forEach((button) => {
+    button.onclick = async () => {
+      try {
+        await api.deleteAnnouncement(Number(button.dataset.drop));
+        toast('Снято с эфира');
+        drawAnnounce(body);
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
 }
 
 async function drawUsers(body) {
@@ -157,6 +339,8 @@ function openUserActions(user, refresh) {
         <div class="tiny muted">@${esc(user.username)}${user.strikes ? ` · предупреждений ${user.strikes}/3` : ''}</div>
         ${isPremium(user) ? `<div class="pill warn" style="margin-top:4px;display:inline-block">Премиум до ${esc(new Date(user.premiumUntil).toLocaleDateString('ru-RU'))}</div>` : ''}</div></div>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Открыть профиль</span></button>
+      <button class="list-item" data-write>${icon('chats', 18)}<span>Написать сообщение</span></button>
+      <button class="list-item" data-copy-id>${icon('share', 18)}<span>Скопировать ID</span></button>
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-flag="isVerified">${icon('verified', 18)}<span>${user.isVerified ? 'Снять галочку' : 'Выдать галочку'}</span></button>
       <button class="list-item" data-flag="isModerator">${icon('shield', 18)}<span>${user.isModerator ? 'Снять щит модератора' : 'Выдать щит модератора'}</span></button>
@@ -166,6 +350,10 @@ function openUserActions(user, refresh) {
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-premium style="color:#c6b083">${icon('crown', 18)}<span>Выдать СпокУм Премиум</span></button>
       ${isPremium(user) ? `<button class="list-item" data-premium-off>${icon('close', 18)}<span>Забрать премиум</span></button>` : ''}
+      <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-rename>${icon('edit', 18)}<span>Сменить отображаемое имя</span></button>
+      <button class="list-item" data-look>${icon('image', 18)}<span>Сбросить оформление</span></button>
+      <button class="list-item" data-wipe style="color:#c98b8b">${icon('trash', 18)}<span>Удалить все записи</span></button>
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-mute style="color:#c6b083">${icon('mute', 18)}<span>${user.mutedUntil > Date.now() ? 'Снять мут' : 'Замутить'}</span></button>
       <button class="list-item" data-ban style="color:#c98b8b">${icon('ban', 18)}<span>${user.bannedUntil > Date.now() ? 'Разблокировать' : 'Заблокировать'}</span></button>
@@ -255,6 +443,59 @@ function openUserActions(user, refresh) {
       toast(error.message, 'err');
     }
   });
+
+  body.querySelector('[data-copy-id]').onclick = () => {
+    navigator.clipboard?.writeText(String(user.id));
+    toast('ID скопирован');
+  };
+
+  body.querySelector('[data-write]').onclick = async () => {
+    sheet.close();
+    try {
+      const { chat } = await api.createChat({ kind: 'dm', members: [user.id] });
+      const { openChat } = await import('./chats.js');
+      openChat(chat.id);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-rename]').onclick = async () => {
+    sheet.close();
+    const name = await promptSheet({ title: 'Новое имя', label: 'Видно всем', value: user.displayName, placeholder: 'Имя' });
+    if (!name) return;
+    try {
+      await api.renameUser(user.id, name);
+      toast('Имя обновлено');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-look]').onclick = async () => {
+    sheet.close();
+    if (!(await confirmSheet({ title: 'Сбросить оформление', text: 'Аватар, баннер, пины, статус и описание будут очищены', confirm: 'Сбросить', danger: true }))) return;
+    try {
+      await api.resetLook(user.id);
+      toast('Оформление сброшено');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-wipe]').onclick = async () => {
+    sheet.close();
+    if (!(await confirmSheet({ title: 'Удалить все записи', text: `Все посты и видео ${user.displayName} исчезнут навсегда`, confirm: 'Удалить', danger: true }))) return;
+    try {
+      const { removed } = await api.wipePosts(user.id);
+      toast(`Удалено записей: ${removed}`);
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 
   body.querySelector('[data-mute]').onclick = () => restrict('mute', user.mutedUntil > Date.now() ? 'unmute' : null);
   body.querySelector('[data-ban]').onclick = () => restrict('ban', user.bannedUntil > Date.now() ? 'unban' : null);

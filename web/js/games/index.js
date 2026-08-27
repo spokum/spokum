@@ -812,7 +812,731 @@ function flow(canvas, report) {
   });
 }
 
+function snake(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let cell = Math.max(13, Math.round(Math.min(width, height) / 20));
+    let cols = Math.max(8, Math.floor(width / cell));
+    let rows = Math.max(8, Math.floor((height - 40) / cell));
+    let state = null;
+
+    const spawnFood = () => {
+      let spot;
+      do {
+        spot = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+      } while (state.body.some((part) => part.x === spot.x && part.y === spot.y));
+      return spot;
+    };
+
+    const reset = () => {
+      state = {
+        body: [{ x: Math.floor(cols / 2), y: Math.floor(rows / 2) }],
+        dir: { x: 1, y: 0 },
+        queued: { x: 1, y: 0 },
+        food: { x: 3, y: 3 },
+        bonus: null,
+        bonusLeft: 0,
+        score: 0,
+        step: 0,
+        speed: 0.14,
+        over: false
+      };
+      state.food = spawnFood();
+    };
+    reset();
+
+    const turn = (x, y) => {
+      if (state.dir.x === -x && state.dir.y === -y) return;
+      state.queued = { x, y };
+    };
+
+    return {
+      score: () => state.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+        cell = Math.max(13, Math.round(Math.min(width, height) / 20));
+        cols = Math.max(8, Math.floor(width / cell));
+        rows = Math.max(8, Math.floor((height - 40) / cell));
+      },
+      bind(bind, node) {
+        let start = null;
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) {
+            reset();
+            return;
+          }
+          start = pointerPos(node, event);
+        });
+        bind('pointerup', (event) => {
+          if (!start) return;
+          const end = pointerPos(node, event);
+          const dx = end.x - start.x;
+          const dy = end.y - start.y;
+          start = null;
+          if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+          if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
+          else turn(0, dy > 0 ? 1 : -1);
+        });
+        bind('keydown', (event) => {
+          if (state.over && (event.key === ' ' || event.key === 'Enter')) return reset();
+          if (event.key === 'ArrowLeft' || event.key === 'a') turn(-1, 0);
+          if (event.key === 'ArrowRight' || event.key === 'd') turn(1, 0);
+          if (event.key === 'ArrowUp' || event.key === 'w') turn(0, -1);
+          if (event.key === 'ArrowDown' || event.key === 's') turn(0, 1);
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        if (state.bonus) {
+          state.bonusLeft -= dt;
+          if (state.bonusLeft <= 0) state.bonus = null;
+        }
+        state.step += dt;
+        const pace = Math.max(0.06, state.speed - state.body.length * 0.0015);
+        if (state.step < pace) return;
+        state.step = 0;
+        state.dir = state.queued;
+        const head = { x: state.body[0].x + state.dir.x, y: state.body[0].y + state.dir.y };
+        if (head.x < 0) head.x = cols - 1;
+        if (head.y < 0) head.y = rows - 1;
+        if (head.x >= cols) head.x = 0;
+        if (head.y >= rows) head.y = 0;
+        if (state.body.some((part) => part.x === head.x && part.y === head.y)) {
+          state.over = true;
+          report(state.score);
+          return;
+        }
+        state.body.unshift(head);
+        if (head.x === state.food.x && head.y === state.food.y) {
+          state.score += 10;
+          state.food = spawnFood();
+          if (!state.bonus && state.score % 50 === 0) {
+            state.bonus = spawnFood();
+            state.bonusLeft = 6;
+          }
+        } else if (state.bonus && head.x === state.bonus.x && head.y === state.bonus.y) {
+          state.score += 50;
+          state.bonus = null;
+        } else {
+          state.body.pop();
+        }
+      },
+      draw(ctx, size) {
+        const { w: cw, h: ch } = size;
+        backdrop(ctx, cw, ch, ['#0a1a14', '#0f2a20']);
+        const offX = (cw - cols * cell) / 2;
+        const offY = (ch - rows * cell) / 2 + 14;
+
+        ctx.strokeStyle = 'rgba(238,242,251,.05)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= cols; x++) {
+          ctx.beginPath();
+          ctx.moveTo(offX + x * cell, offY);
+          ctx.lineTo(offX + x * cell, offY + rows * cell);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= rows; y++) {
+          ctx.beginPath();
+          ctx.moveTo(offX, offY + y * cell);
+          ctx.lineTo(offX + cols * cell, offY + y * cell);
+          ctx.stroke();
+        }
+
+        const dot = (spot, color, scale = 1) => {
+          ctx.fillStyle = color;
+          const pad = (cell * (1 - scale)) / 2;
+          ctx.beginPath();
+          ctx.roundRect(offX + spot.x * cell + 1 + pad, offY + spot.y * cell + 1 + pad, cell - 2 - pad * 2, cell - 2 - pad * 2, 4);
+          ctx.fill();
+        };
+
+        dot(state.food, '#e0937f');
+        if (state.bonus) dot(state.bonus, '#e8cf7a', 0.7 + Math.sin(Date.now() / 120) * 0.15);
+        state.body.forEach((part, i) => {
+          const tone = i === 0 ? '#9fe6c4' : `rgba(127,205,170,${Math.max(0.28, 1 - i / (state.body.length + 6))})`;
+          dot(part, tone);
+        });
+
+        hud(ctx, cw, [`Очки ${state.score}`, `Длина ${state.body.length}`]);
+        if (state.over) overText(ctx, cw, ch, `Итог ${state.score}`, 'Нажмите, чтобы начать заново');
+      }
+    };
+  });
+}
+
+function storm(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let state = null;
+    const keys = new Set();
+    let touch = null;
+
+    const reset = () => {
+      state = {
+        x: width / 2,
+        y: height / 2,
+        hp: 5,
+        shield: 0,
+        rapid: 0,
+        score: 0,
+        wave: 1,
+        spawn: 0,
+        cool: 0,
+        over: false,
+        bullets: [],
+        foes: [],
+        drops: [],
+        sparks: []
+      };
+    };
+    reset();
+
+    const boom = (x, y, color, count = 14) => {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 60 + Math.random() * 220;
+        state.sparks.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.55, color });
+      }
+    };
+
+    const spawnFoe = () => {
+      const side = Math.floor(Math.random() * 4);
+      const heavy = Math.random() < Math.min(0.4, state.wave / 18);
+      const spot = { x: 0, y: 0 };
+      if (side === 0) { spot.x = Math.random() * width; spot.y = -30; }
+      if (side === 1) { spot.x = width + 30; spot.y = Math.random() * height; }
+      if (side === 2) { spot.x = Math.random() * width; spot.y = height + 30; }
+      if (side === 3) { spot.x = -30; spot.y = Math.random() * height; }
+      state.foes.push({
+        x: spot.x,
+        y: spot.y,
+        r: heavy ? 20 : 13,
+        hp: heavy ? 4 : 1,
+        speed: heavy ? 48 + state.wave * 2 : 76 + state.wave * 4,
+        color: heavy ? '#c98b8b' : '#8fa5c9'
+      });
+    };
+
+    return {
+      score: () => state.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const aim = (event) => {
+          event.preventDefault();
+          touch = pointerPos(node, event);
+        };
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) {
+            reset();
+            touch = null;
+            return;
+          }
+          node.setPointerCapture?.(event.pointerId);
+          aim(event);
+        });
+        bind('pointermove', (event) => {
+          if (event.buttons === 0 && event.pointerType === 'mouse') return;
+          aim(event);
+        });
+        bind('pointerup', () => {
+          touch = null;
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          keys.add(event.key);
+        }, window);
+        bind('keyup', (event) => keys.delete(event.key), window);
+      },
+      update(dt) {
+        if (state.over) return;
+        const speed = 260;
+        if (keys.has('ArrowLeft') || keys.has('a')) state.x -= speed * dt;
+        if (keys.has('ArrowRight') || keys.has('d')) state.x += speed * dt;
+        if (keys.has('ArrowUp') || keys.has('w')) state.y -= speed * dt;
+        if (keys.has('ArrowDown') || keys.has('s')) state.y += speed * dt;
+        if (touch) {
+          state.x += (touch.x - state.x) * Math.min(1, dt * 9);
+          state.y += (touch.y - state.y) * Math.min(1, dt * 9);
+        }
+        state.x = Math.max(16, Math.min(width - 16, state.x));
+        state.y = Math.max(16, Math.min(height - 16, state.y));
+
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.28, 1.5 - state.wave * 0.06);
+          spawnFoe();
+        }
+
+        state.rapid = Math.max(0, state.rapid - dt);
+        state.shield = Math.max(0, state.shield - dt);
+
+        state.cool -= dt;
+        if (state.cool <= 0 && state.foes.length) {
+          state.cool = state.rapid > 0 ? 0.08 : 0.19;
+          let near = null;
+          let best = Infinity;
+          for (const foe of state.foes) {
+            const distance = Math.hypot(foe.x - state.x, foe.y - state.y);
+            if (distance < best) {
+              best = distance;
+              near = foe;
+            }
+          }
+          if (near) {
+            const angle = Math.atan2(near.y - state.y, near.x - state.x);
+            state.bullets.push({ x: state.x, y: state.y, vx: Math.cos(angle) * 640, vy: Math.sin(angle) * 640, life: 1.4 });
+          }
+        }
+
+        for (const bullet of state.bullets) {
+          bullet.x += bullet.vx * dt;
+          bullet.y += bullet.vy * dt;
+          bullet.life -= dt;
+        }
+
+        for (const foe of state.foes) {
+          const angle = Math.atan2(state.y - foe.y, state.x - foe.x);
+          foe.x += Math.cos(angle) * foe.speed * dt;
+          foe.y += Math.sin(angle) * foe.speed * dt;
+          for (const bullet of state.bullets) {
+            if (bullet.life <= 0) continue;
+            if (Math.hypot(bullet.x - foe.x, bullet.y - foe.y) > foe.r) continue;
+            bullet.life = 0;
+            foe.hp -= 1;
+            if (foe.hp <= 0) {
+              foe.dead = true;
+              state.score += foe.r > 16 ? 40 : 12;
+              boom(foe.x, foe.y, foe.color);
+              if (Math.random() < 0.12) {
+                state.drops.push({ x: foe.x, y: foe.y, kind: Math.random() < 0.5 ? 'rapid' : 'shield', life: 8 });
+              }
+              if (state.score > state.wave * 160) state.wave += 1;
+            }
+          }
+          if (!foe.dead && Math.hypot(foe.x - state.x, foe.y - state.y) < foe.r + 13) {
+            foe.dead = true;
+            boom(foe.x, foe.y, '#ff9c9c');
+            if (state.shield > 0) state.shield = 0;
+            else state.hp -= 1;
+          }
+        }
+
+        for (const drop of state.drops) {
+          drop.life -= dt;
+          if (Math.hypot(drop.x - state.x, drop.y - state.y) < 22) {
+            drop.life = 0;
+            if (drop.kind === 'rapid') state.rapid = 6;
+            else state.shield = 7;
+          }
+        }
+
+        for (const spark of state.sparks) {
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.life -= dt;
+        }
+
+        state.foes = state.foes.filter((foe) => !foe.dead);
+        state.bullets = state.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < width + 40 && b.y > -40 && b.y < height + 40);
+        state.drops = state.drops.filter((d) => d.life > 0);
+        state.sparks = state.sparks.filter((s) => s.life > 0);
+
+        if (state.hp <= 0 && !state.over) {
+          state.over = true;
+          report(state.score);
+        }
+      },
+      draw(ctx, size) {
+        const { w: cw, h: ch } = size;
+        backdrop(ctx, cw, ch, ['#0a0d18', '#161a33']);
+
+        ctx.strokeStyle = 'rgba(238,242,251,.045)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < cw; x += 42) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, ch);
+          ctx.stroke();
+        }
+        for (let y = 0; y < ch; y += 42) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(cw, y);
+          ctx.stroke();
+        }
+
+        for (const drop of state.drops) {
+          ctx.fillStyle = drop.kind === 'rapid' ? '#e8cf7a' : '#7fd7e8';
+          ctx.beginPath();
+          ctx.arc(drop.x, drop.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (const foe of state.foes) {
+          ctx.fillStyle = foe.color;
+          ctx.beginPath();
+          ctx.arc(foe.x, foe.y, foe.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(5,7,13,.5)';
+          ctx.beginPath();
+          ctx.arc(foe.x, foe.y, foe.r * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#eef2fb';
+        for (const bullet of state.bullets) {
+          ctx.beginPath();
+          ctx.arc(bullet.x, bullet.y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (const spark of state.sparks) {
+          ctx.globalAlpha = Math.max(0, spark.life * 1.6);
+          ctx.fillStyle = spark.color;
+          ctx.fillRect(spark.x - 1.5, spark.y - 1.5, 3, 3);
+        }
+        ctx.globalAlpha = 1;
+
+        if (state.shield > 0) {
+          ctx.strokeStyle = 'rgba(127,215,232,.7)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(state.x, state.y, 22, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = state.rapid > 0 ? '#e8cf7a' : '#9fe6c4';
+        ctx.beginPath();
+        ctx.arc(state.x, state.y, 13, 0, Math.PI * 2);
+        ctx.fill();
+
+        hud(ctx, cw, [`Очки ${state.score}`, `Волна ${state.wave}`, `Жизни ${Math.max(0, state.hp)}`]);
+        if (state.over) overText(ctx, cw, ch, `Итог ${state.score}`, 'Нажмите, чтобы начать заново');
+      }
+    };
+  });
+}
+
+const MAZE_SIZE = 15;
+
+function buildMaze(size) {
+  const grid = Array.from({ length: size }, () => Array.from({ length: size }, () => 1));
+  const carve = (x, y) => {
+    grid[y][x] = 0;
+    const dirs = [[2, 0], [-2, 0], [0, 2], [0, -2]].sort(() => Math.random() - 0.5);
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx <= 0 || ny <= 0 || nx >= size - 1 || ny >= size - 1 || grid[ny][nx] === 0) continue;
+      grid[y + dy / 2][x + dx / 2] = 0;
+      carve(nx, ny);
+    }
+  };
+  carve(1, 1);
+  return grid;
+}
+
+function maze3d(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let state = null;
+    const keys = new Set();
+    let drag = null;
+    let stick = null;
+
+    const reset = () => {
+      const grid = buildMaze(MAZE_SIZE);
+      const open = [];
+      for (let y = 1; y < MAZE_SIZE - 1; y++) {
+        for (let x = 1; x < MAZE_SIZE - 1; x++) {
+          if (grid[y][x] === 0 && (x > 3 || y > 3)) open.push({ x: x + 0.5, y: y + 0.5 });
+        }
+      }
+      open.sort(() => Math.random() - 0.5);
+      const facings = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+      let facing = 0;
+      let bestRun = -1;
+      for (const option of facings) {
+        let run = 0;
+        while (run < MAZE_SIZE) {
+          const nx = Math.floor(1.5 + Math.cos(option) * (run + 1));
+          const ny = Math.floor(1.5 + Math.sin(option) * (run + 1));
+          if (nx < 0 || ny < 0 || nx >= MAZE_SIZE || ny >= MAZE_SIZE || grid[ny][nx] === 1) break;
+          run += 1;
+        }
+        if (run > bestRun) {
+          bestRun = run;
+          facing = option;
+        }
+      }
+      state = {
+        grid,
+        px: 1.5,
+        py: 1.5,
+        angle: facing,
+        crystals: open.slice(0, 6).map((spot) => ({ ...spot, taken: false })),
+        score: 0,
+        time: 120,
+        over: false,
+        won: false
+      };
+    };
+    reset();
+
+    const solid = (x, y) => {
+      const gx = Math.floor(x);
+      const gy = Math.floor(y);
+      if (gx < 0 || gy < 0 || gx >= MAZE_SIZE || gy >= MAZE_SIZE) return true;
+      return state.grid[gy][gx] === 1;
+    };
+
+    const move = (dx, dy) => {
+      if (!solid(state.px + dx * 1.6, state.py)) state.px += dx;
+      if (!solid(state.px, state.py + dy * 1.6)) state.py += dy;
+    };
+
+    return {
+      score: () => state.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) {
+            reset();
+            return;
+          }
+          node.setPointerCapture?.(event.pointerId);
+          const spot = pointerPos(node, event);
+          if (spot.x < width * 0.42 && spot.y > height * 0.55) stick = { id: event.pointerId, ox: spot.x, oy: spot.y, x: spot.x, y: spot.y };
+          else drag = { id: event.pointerId, x: spot.x };
+        });
+        bind('pointermove', (event) => {
+          const spot = pointerPos(node, event);
+          if (stick && stick.id === event.pointerId) {
+            stick.x = spot.x;
+            stick.y = spot.y;
+            return;
+          }
+          if (drag && drag.id === event.pointerId) {
+            state.angle += (spot.x - drag.x) * 0.006;
+            drag.x = spot.x;
+          }
+        });
+        const release = (event) => {
+          if (stick && stick.id === event.pointerId) stick = null;
+          if (drag && drag.id === event.pointerId) drag = null;
+        };
+        bind('pointerup', release);
+        bind('pointercancel', release);
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          keys.add(event.key);
+        }, window);
+        bind('keyup', (event) => keys.delete(event.key), window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.time -= dt;
+        const walk = 2.4 * dt;
+        const spin = 2.2 * dt;
+        if (keys.has('ArrowLeft')) state.angle -= spin;
+        if (keys.has('ArrowRight')) state.angle += spin;
+        if (keys.has('ArrowUp') || keys.has('w')) move(Math.cos(state.angle) * walk, Math.sin(state.angle) * walk);
+        if (keys.has('ArrowDown') || keys.has('s')) move(-Math.cos(state.angle) * walk, -Math.sin(state.angle) * walk);
+        if (keys.has('a')) move(Math.sin(state.angle) * walk, -Math.cos(state.angle) * walk);
+        if (keys.has('d')) move(-Math.sin(state.angle) * walk, Math.cos(state.angle) * walk);
+
+        if (stick) {
+          const dx = stick.x - stick.ox;
+          const dy = stick.y - stick.oy;
+          const power = Math.min(1, Math.hypot(dx, dy) / 60);
+          if (power > 0.12) {
+            const forward = (-dy / Math.max(1, Math.hypot(dx, dy))) * power * walk * 1.4;
+            const strafe = (dx / Math.max(1, Math.hypot(dx, dy))) * power * walk * 1.1;
+            move(Math.cos(state.angle) * forward - Math.sin(state.angle) * strafe, Math.sin(state.angle) * forward + Math.cos(state.angle) * strafe);
+          }
+        }
+
+        for (const crystal of state.crystals) {
+          if (crystal.taken) continue;
+          if (Math.hypot(crystal.x - state.px, crystal.y - state.py) < 0.45) {
+            crystal.taken = true;
+            state.score += 100;
+          }
+        }
+
+        if (state.crystals.every((c) => c.taken) && !state.over) {
+          state.over = true;
+          state.won = true;
+          state.score += Math.round(Math.max(0, state.time) * 5);
+          report(state.score);
+        } else if (state.time <= 0 && !state.over) {
+          state.over = true;
+          report(state.score);
+        }
+      },
+      draw(ctx, size) {
+        const { w: cw, h: ch } = size;
+        const horizon = ch * 0.5;
+
+        const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+        sky.addColorStop(0, '#0a1220');
+        sky.addColorStop(1, '#1b2740');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, cw, horizon);
+        const floor = ctx.createLinearGradient(0, horizon, 0, ch);
+        floor.addColorStop(0, '#131a16');
+        floor.addColorStop(1, '#070b09');
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, horizon, cw, ch - horizon);
+
+        const fov = Math.PI / 3;
+        const rays = Math.min(280, Math.max(120, Math.round(cw / 2)));
+        const step = fov / rays;
+        const bandWidth = cw / rays;
+        const depths = new Array(rays).fill(60);
+
+        for (let i = 0; i < rays; i++) {
+          const angle = state.angle - fov / 2 + i * step;
+          const sin = Math.sin(angle);
+          const cos = Math.cos(angle);
+          let mapX = Math.floor(state.px);
+          let mapY = Math.floor(state.py);
+          const deltaX = Math.abs(1 / (cos || 1e-6));
+          const deltaY = Math.abs(1 / (sin || 1e-6));
+          const stepX = cos < 0 ? -1 : 1;
+          const stepY = sin < 0 ? -1 : 1;
+          let sideX = cos < 0 ? (state.px - mapX) * deltaX : (mapX + 1 - state.px) * deltaX;
+          let sideY = sin < 0 ? (state.py - mapY) * deltaY : (mapY + 1 - state.py) * deltaY;
+          let hitSide = 0;
+          let distance = 22;
+          for (let guard = 0; guard < 64; guard++) {
+            if (sideX < sideY) {
+              sideX += deltaX;
+              mapX += stepX;
+              hitSide = 0;
+            } else {
+              sideY += deltaY;
+              mapY += stepY;
+              hitSide = 1;
+            }
+            if (mapX < 0 || mapY < 0 || mapX >= MAZE_SIZE || mapY >= MAZE_SIZE) break;
+            if (state.grid[mapY][mapX] === 1) {
+              distance = hitSide === 0 ? sideX - deltaX : sideY - deltaY;
+              break;
+            }
+          }
+          const corrected = distance * Math.cos(angle - state.angle);
+          depths[i] = corrected;
+          const wall = Math.min(ch, (ch * 0.92) / Math.max(0.15, corrected));
+          const shade = Math.max(0.08, 1 - corrected / 12) * (hitSide ? 0.72 : 1);
+          ctx.fillStyle = `rgb(${Math.round(96 * shade + 12)}, ${Math.round(150 * shade + 14)}, ${Math.round(130 * shade + 16)})`;
+          ctx.fillRect(i * bandWidth, horizon - wall / 2, bandWidth + 1, wall);
+        }
+
+        const sprites = state.crystals
+          .filter((c) => !c.taken)
+          .map((c) => {
+            const dx = c.x - state.px;
+            const dy = c.y - state.py;
+            return { c, dist: Math.hypot(dx, dy), angle: Math.atan2(dy, dx) };
+          })
+          .sort((a, b) => b.dist - a.dist);
+
+        for (const sprite of sprites) {
+          let delta = sprite.angle - state.angle;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          if (Math.abs(delta) > fov / 2 + 0.2) continue;
+          const screenX = cw / 2 + (delta / (fov / 2)) * (cw / 2);
+          const column = Math.max(0, Math.min(rays - 1, Math.round((screenX / cw) * rays)));
+          if (sprite.dist > depths[column] + 0.2) continue;
+          const scale = Math.min(ch * 0.5, (ch * 0.4) / Math.max(0.3, sprite.dist));
+          const glow = 0.5 + Math.sin(Date.now() / 260) * 0.2;
+          ctx.fillStyle = `rgba(232,207,122,${glow})`;
+          ctx.beginPath();
+          ctx.moveTo(screenX, horizon - scale * 0.5);
+          ctx.lineTo(screenX + scale * 0.24, horizon);
+          ctx.lineTo(screenX, horizon + scale * 0.5);
+          ctx.lineTo(screenX - scale * 0.24, horizon);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        const mapSize = Math.min(96, cw * 0.28);
+        const tile = mapSize / MAZE_SIZE;
+        ctx.fillStyle = 'rgba(5,7,13,.55)';
+        ctx.fillRect(cw - mapSize - 12, 12, mapSize, mapSize);
+        for (let y = 0; y < MAZE_SIZE; y++) {
+          for (let x = 0; x < MAZE_SIZE; x++) {
+            if (!state.grid[y][x]) continue;
+            ctx.fillStyle = 'rgba(238,242,251,.22)';
+            ctx.fillRect(cw - mapSize - 12 + x * tile, 12 + y * tile, tile, tile);
+          }
+        }
+        for (const crystal of state.crystals) {
+          if (crystal.taken) continue;
+          ctx.fillStyle = '#e8cf7a';
+          ctx.fillRect(cw - mapSize - 12 + crystal.x * tile - 1, 12 + crystal.y * tile - 1, 3, 3);
+        }
+        ctx.fillStyle = '#9fe6c4';
+        ctx.fillRect(cw - mapSize - 12 + state.px * tile - 2, 12 + state.py * tile - 2, 4, 4);
+
+        if (stick) {
+          ctx.strokeStyle = 'rgba(238,242,251,.25)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(stick.ox, stick.oy, 46, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(238,242,251,.35)';
+          ctx.beginPath();
+          ctx.arc(stick.ox + Math.max(-46, Math.min(46, stick.x - stick.ox)), stick.oy + Math.max(-46, Math.min(46, stick.y - stick.oy)), 18, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const left = state.crystals.filter((c) => !c.taken).length;
+        hud(ctx, cw, [`Кристаллы ${state.crystals.length - left}/${state.crystals.length}`, `Время ${Math.max(0, Math.ceil(state.time))}`, `Очки ${state.score}`]);
+        if (state.over) {
+          overText(ctx, cw, ch, state.won ? `Выход найден: ${state.score}` : `Время вышло: ${state.score}`, 'Нажмите, чтобы начать заново');
+        }
+      }
+    };
+  });
+}
+
 export const GAMES = [
+  {
+    id: 'snake',
+    title: 'Змейка',
+    desc: 'Классика со свайпами',
+    tint: ['#0f2a20', '#1a4433'],
+    mount: snake
+  },
+  {
+    id: 'storm',
+    title: 'Шторм',
+    desc: 'Арена: волны врагов и бонусы',
+    tint: ['#161a33', '#2b2050'],
+    mount: storm
+  },
+  {
+    id: 'maze3d',
+    title: 'Лабиринт 3D',
+    desc: 'Настоящий 3D от первого лица',
+    tint: ['#1b2740', '#2f4a3c'],
+    mount: maze3d
+  },
   {
     id: 'orbit',
     title: 'Орбита',

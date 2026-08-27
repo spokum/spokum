@@ -787,3 +787,147 @@ create policy "stories bucket insert" on storage.objects for insert to authentic
 drop policy if exists "stories bucket delete" on storage.objects;
 create policy "stories bucket delete" on storage.objects for delete to authenticated
   using (bucket_id = 'stories' and owner = auth.uid());
+
+alter table public.posts add column if not exists kind text not null default 'text';
+alter table public.posts add column if not exists media jsonb not null default '[]'::jsonb;
+alter table public.posts add column if not exists video text;
+alter table public.posts add column if not exists poster text;
+alter table public.posts add column if not exists duration integer not null default 0;
+alter table public.posts add column if not exists views integer not null default 0;
+create index if not exists posts_kind_idx on public.posts (kind, created_at desc);
+
+create table if not exists public.announcements (
+  id bigint generated always as identity primary key,
+  title text not null default '',
+  body text not null default '',
+  tone text not null default 'info',
+  author_id uuid references public.profiles on delete set null,
+  created_at timestamptz not null default now(),
+  until timestamptz not null default now() + interval '7 days'
+);
+create index if not exists announcements_until_idx on public.announcements (until desc);
+
+alter table public.announcements enable row level security;
+
+drop policy if exists announcements_read on public.announcements;
+create policy announcements_read on public.announcements for select using (true);
+
+drop policy if exists announcements_write on public.announcements;
+create policy announcements_write on public.announcements for insert
+  with check (public.viewer_is_admin() and author_id = auth.uid());
+
+drop policy if exists announcements_delete on public.announcements;
+create policy announcements_delete on public.announcements for delete using (public.viewer_is_admin());
+
+create table if not exists public.call_signals (
+  id bigint generated always as identity primary key,
+  chat_id bigint not null references public.chats on delete cascade,
+  from_id uuid not null references public.profiles on delete cascade,
+  to_id uuid not null references public.profiles on delete cascade,
+  kind text not null,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists call_signals_to_idx on public.call_signals (to_id, created_at desc);
+
+alter table public.call_signals enable row level security;
+
+drop policy if exists call_signals_read on public.call_signals;
+create policy call_signals_read on public.call_signals for select
+  using (to_id = auth.uid() or from_id = auth.uid());
+
+drop policy if exists call_signals_insert on public.call_signals;
+create policy call_signals_insert on public.call_signals for insert
+  with check (from_id = auth.uid() and public.is_chat_member(chat_id));
+
+drop policy if exists call_signals_delete on public.call_signals;
+create policy call_signals_delete on public.call_signals for delete
+  using (to_id = auth.uid() or from_id = auth.uid());
+
+create or replace function public.purge_call_signals()
+returns void language sql security definer set search_path = public as $$
+  delete from public.call_signals where created_at < now() - interval '2 minutes';
+$$;
+
+create or replace function public.bump_post_views(target bigint)
+returns void language sql security definer set search_path = public as $$
+  update public.posts set views = views + 1 where id = target;
+$$;
+
+create or replace function public.admin_wipe_posts(target uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  removed integer;
+begin
+  if not public.viewer_is_admin() then
+    raise exception 'Нет прав';
+  end if;
+  delete from public.posts where author_id = target;
+  get diagnostics removed = row_count;
+  insert into public.audit (actor_id, action) values (auth.uid(), 'wipe_posts');
+  return removed;
+end;
+$$;
+
+create or replace function public.admin_reset_look(target uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then
+    raise exception 'Нет прав';
+  end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles
+     set avatar = null, banner = null, status_icon = null, pins = '[]'::jsonb, bio = ''
+   where id = target;
+  insert into public.audit (actor_id, action) values (auth.uid(), 'reset_look');
+end;
+$$;
+
+create or replace function public.admin_rename(target uuid, name text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then
+    raise exception 'Нет прав';
+  end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set display_name = left(coalesce(name, ''), 40) where id = target;
+  insert into public.audit (actor_id, action) values (auth.uid(), 'rename');
+end;
+$$;
+
+grant execute on function public.purge_call_signals() to authenticated;
+grant execute on function public.bump_post_views(bigint) to authenticated, anon;
+grant execute on function public.admin_wipe_posts(uuid) to authenticated;
+grant execute on function public.admin_reset_look(uuid) to authenticated;
+grant execute on function public.admin_rename(uuid, text) to authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.call_signals;
+exception when duplicate_object then null;
+end $$;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'media',
+  'media',
+  true,
+  26214400,
+  array['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+  set public = true,
+      file_size_limit = 26214400,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "media bucket read" on storage.objects;
+create policy "media bucket read" on storage.objects for select
+  using (bucket_id = 'media');
+
+drop policy if exists "media bucket insert" on storage.objects;
+create policy "media bucket insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'media' and public.viewer_can_write());
+
+drop policy if exists "media bucket delete" on storage.objects;
+create policy "media bucket delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'media' and owner = auth.uid());

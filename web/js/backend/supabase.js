@@ -71,7 +71,13 @@ function shapePost(row, likedIds) {
     author: shapeProfile(row.author),
     likes: row.likes?.[0]?.count ?? 0,
     comments: row.comments?.[0]?.count ?? 0,
-    liked: likedIds ? likedIds.has(row.id) : false
+    liked: likedIds ? likedIds.has(row.id) : false,
+    kind: row.kind || 'text',
+    media: Array.isArray(row.media) ? row.media : [],
+    video: row.video || null,
+    poster: row.poster || null,
+    duration: row.duration || 0,
+    views: row.views || 0
   };
 }
 
@@ -181,7 +187,7 @@ export async function createSupabase(url, key) {
     return new Set((data || []).map((row) => row.post_id));
   };
 
-  const POST_SELECT = 'id, body, image, mood, created_at, removed, removed_reason, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const POST_SELECT = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
 
   const listen = () => {
     if (channel || !uid) return;
@@ -189,6 +195,12 @@ export async function createSupabase(url, key) {
       .channel('spokum-messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         window.dispatchEvent(new CustomEvent('spokum:message', { detail: payload.new }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'call_signals', filter: `to_id=eq.${uid}` }, (payload) => {
+        const row = payload.new;
+        window.dispatchEvent(new CustomEvent('spokum:call', {
+          detail: { id: row.id, chatId: row.chat_id, fromId: row.from_id, kind: row.kind, payload: row.payload || {} }
+        }));
       })
       .subscribe();
   };
@@ -338,27 +350,103 @@ export async function createSupabase(url, key) {
       };
     },
 
-    async listPosts({ mood } = {}) {
+    async listPosts({ mood, kind, before, limit } = {}) {
+      const size = Math.min(40, Math.max(4, Number(limit) || 12));
       let request = sb
         .from('posts')
         .select(POST_SELECT)
         .eq('removed', false)
         .order('created_at', { ascending: false })
-        .limit(60);
+        .limit(size);
       if (mood) request = request.eq('mood', mood);
+      if (kind === 'video') request = request.eq('kind', 'video');
+      if (kind === 'feed') request = request.neq('kind', 'video');
+      if (before) request = request.lt('created_at', new Date(Number(before)).toISOString());
       const { data, error } = await request;
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
-      return { posts: (data || []).map((row) => shapePost(row, liked)) };
+      const posts = (data || []).map((row) => shapePost(row, liked));
+      return { posts, more: posts.length === size, cursor: posts.length ? posts[posts.length - 1].createdAt : null };
     },
 
-    async createPost({ text, image, mood }) {
+    async listAnnouncements() {
+      const { data, error } = await sb
+        .from('announcements')
+        .select('*')
+        .gt('until', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(4);
+      if (error) return { announcements: [] };
+      return {
+        announcements: (data || []).map((row) => ({
+          id: row.id,
+          title: row.title || '',
+          body: row.body || '',
+          tone: row.tone || 'info',
+          createdAt: ms(row.created_at),
+          until: ms(row.until)
+        }))
+      };
+    },
+
+    async createAnnouncement({ title, body, tone, days }) {
+      const me = requireUid();
+      const until = new Date(Date.now() + Math.max(1, Number(days) || 7) * 86400000).toISOString();
+      const { error } = await sb.from('announcements').insert({
+        title: String(title || '').slice(0, 80),
+        body: String(body || '').slice(0, 600),
+        tone: tone || 'info',
+        author_id: me,
+        until
+      });
+      guard(error);
+      return { ok: true };
+    },
+
+    async deleteAnnouncement(id) {
+      const { error } = await sb.from('announcements').delete().eq('id', id);
+      guard(error);
+      return { ok: true };
+    },
+
+    async bumpViews(id) {
+      await sb.rpc('bump_post_views', { target: id });
+      return { ok: true };
+    },
+
+    async uploadMedia(dataUrl, hint = 'jpg') {
+      const me = requireUid();
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const ext = (blob.type.split('/')[1] || hint).replace('quicktime', 'mov').split(';')[0];
+      const path = `${me}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const upload = await sb.storage.from('media').upload(path, blob, { contentType: blob.type, upsert: false });
+      if (upload.error) {
+        if (/bucket/i.test(upload.error.message)) throw new Error('В Supabase нет хранилища media. Прогоните schema.sql заново');
+        guard(upload.error);
+      }
+      const { data } = sb.storage.from('media').getPublicUrl(path);
+      return data.publicUrl;
+    },
+
+    async createPost({ text, image, mood, kind, media, video, poster, duration }) {
       const id = requireUid();
       const body = String(text || '').trim().slice(0, 5000);
-      if (!body && !image) throw new Error('Пустой пост');
+      const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
+      if (!body && !image && !album.length && !video) throw new Error('Пустой пост');
       const { data, error } = await sb
         .from('posts')
-        .insert({ author_id: id, body, image: image || null, mood: mood || 'calm' })
+        .insert({
+          author_id: id,
+          body,
+          image: image || album[0] || poster || null,
+          mood: mood || 'calm',
+          kind: kind || (video ? 'video' : album.length > 1 ? 'album' : 'text'),
+          media: album,
+          video: video || null,
+          poster: poster || null,
+          duration: Math.max(0, Math.round(Number(duration) || 0))
+        })
         .select(POST_SELECT)
         .single();
       guard(error);
@@ -556,7 +644,62 @@ export async function createSupabase(url, key) {
       return { ok: true };
     },
 
-    async callSignal() {
+    async callSignal(chatId, toId, kind, payload) {
+      const me = requireUid();
+      const { error } = await sb.from('call_signals').insert({
+        chat_id: chatId,
+        from_id: me,
+        to_id: toId,
+        kind,
+        payload: payload || {}
+      });
+      guard(error);
+      return { ok: true };
+    },
+
+    async callInbox(since) {
+      if (!uid) return { signals: [] };
+      const { data, error } = await sb
+        .from('call_signals')
+        .select('*')
+        .eq('to_id', uid)
+        .gt('id', Number(since) || 0)
+        .order('id', { ascending: true })
+        .limit(50);
+      if (error) return { signals: [] };
+      return {
+        signals: (data || []).map((row) => ({
+          id: row.id,
+          chatId: row.chat_id,
+          fromId: row.from_id,
+          kind: row.kind,
+          payload: row.payload || {},
+          createdAt: ms(row.created_at)
+        }))
+      };
+    },
+
+    async callClear(chatId) {
+      if (!uid) return { ok: true };
+      await sb.from('call_signals').delete().eq('chat_id', chatId).or(`to_id.eq.${uid},from_id.eq.${uid}`);
+      return { ok: true };
+    },
+
+    async wipePosts(userId) {
+      const { data, error } = await sb.rpc('admin_wipe_posts', { target: userId });
+      guard(error);
+      return { removed: data || 0 };
+    },
+
+    async resetLook(userId) {
+      const { error } = await sb.rpc('admin_reset_look', { target: userId });
+      guard(error);
+      return { ok: true };
+    },
+
+    async renameUser(userId, name) {
+      const { error } = await sb.rpc('admin_rename', { target: userId, name });
+      guard(error);
       return { ok: true };
     },
 
