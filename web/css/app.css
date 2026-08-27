@@ -1154,9 +1154,15 @@ svg { display: block; flex: none; }
 .shorts-sound.on { background: var(--accent); color: var(--accent-ink); }
 
 .rule-block { padding: 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
-.rule-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
-.rule-list li { font-size: 13.5px; line-height: 1.5; color: var(--text); }
-.rule-list li::marker { color: var(--accent); }
+.rule-list { display: flex; flex-direction: column; gap: 9px; }
+.rule-item { display: flex; gap: 9px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.rule-no { flex: none; min-width: 30px; color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rule-num {
+  min-width: 22px; height: 22px; border-radius: 7px;
+  display: grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 12px; font-weight: 700;
+}
 .rule-note {
   display: flex; align-items: flex-start; gap: 8px; margin-top: 10px;
   padding: 10px 12px; border-radius: 12px;
