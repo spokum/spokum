@@ -114,10 +114,29 @@ export function setUser(user) {
 
 export function applyAppearance(user) {
   const root = document.documentElement;
-  root.dataset.theme = user?.theme || localStorage.getItem('spokum.theme') || 'calm';
-  root.dataset.accent = user?.accent || localStorage.getItem('spokum.accent') || 'mint';
-  localStorage.setItem('spokum.theme', root.dataset.theme);
-  localStorage.setItem('spokum.accent', root.dataset.accent);
+  let theme = user?.theme || localStorage.getItem('spokum.theme') || 'calm';
+  let accent = user?.accent || localStorage.getItem('spokum.accent') || 'mint';
+  const premium = user ? isPremium(user) : localStorage.getItem('spokum.premium') === '1';
+  const patch = {};
+  if (!premium) {
+    if (PREMIUM_THEMES.includes(theme)) {
+      theme = 'calm';
+      patch.theme = theme;
+    }
+    if (PREMIUM_ACCENTS.includes(accent)) {
+      accent = 'mint';
+      patch.accent = accent;
+    }
+  }
+  root.dataset.theme = theme;
+  root.dataset.accent = accent;
+  localStorage.setItem('spokum.theme', theme);
+  localStorage.setItem('spokum.accent', accent);
+  localStorage.setItem('spokum.premium', premium ? '1' : '0');
+  if (user && Object.keys(patch).length) {
+    Object.assign(user, patch);
+    api.updateMe(patch).catch(() => {});
+  }
 }
 
 export const MOODS = {
