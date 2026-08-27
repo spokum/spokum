@@ -1152,3 +1152,16 @@ svg { display: block; flex: none; }
 }
 
 .shorts-sound.on { background: var(--accent); color: var(--accent-ink); }
+
+.rule-block { padding: 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+.rule-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
+.rule-list li { font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.rule-list li::marker { color: var(--accent); }
+.rule-note {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 10px;
+  padding: 10px 12px; border-radius: 12px;
+  background: rgba(198,176,131,.1); border: 1px solid rgba(198,176,131,.3);
+  font-size: 12.5px; line-height: 1.5;
+}
+
+.link-btn { color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; }

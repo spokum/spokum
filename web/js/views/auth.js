@@ -112,7 +112,13 @@ export function renderAuth(root, done) {
       ${mode === 'register' ? '<input class="input" data-name placeholder="Как тебя называть" autocomplete="nickname">' : ''}
       <input class="input" type="password" data-password placeholder="Пароль" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}">
       <button class="btn btn-primary" data-submit>${mode === 'login' ? 'Войти' : 'Создать аккаунт'}</button>
-      <p class="tiny muted center" style="margin:0;line-height:1.5">${mode === 'login' ? 'Нет аккаунта? Переключись на регистрацию' : 'Минимум 8 символов в пароле. Данные остаются приватными'}</p>`;
+      <p class="tiny muted center" style="margin:0;line-height:1.5">${mode === 'login' ? 'Нет аккаунта? Переключись на регистрацию' : 'Минимум 8 символов в пароле. Данные остаются приватными'}</p>
+      ${mode === 'register' ? '<p class="tiny muted center" style="margin:0;line-height:1.5">Создавая аккаунт, вы соглашаетесь с <button type="button" class="link-btn" data-rules>правилами СпокУма</button></p>' : ''}`;
+
+    form.querySelector('[data-rules]')?.addEventListener('click', async () => {
+      const { openRules } = await import('./rules.js');
+      openRules();
+    });
 
     const preview = form.querySelector('[data-avatar]');
     const drawAvatar = () => {

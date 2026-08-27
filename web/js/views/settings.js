@@ -73,6 +73,11 @@ export async function render(root) {
     </div>
 
     <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('shield', 18)}<span class="strong small">Правила</span></div>
+      <button class="list-item" data-rules>${icon('feed', 18)}<div class="grow"><div class="small strong">Правила СпокУма</div><div class="tiny muted">Что можно, что нельзя и что за это бывает</div></div>${icon('forward', 15)}</button>
+    </div>
+
+    <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('lock', 18)}<span class="strong small">Безопасность</span></div>
       <button class="list-item" data-password>${icon('key', 18)}<div class="grow"><div class="small strong">Сменить пароль</div><div class="tiny muted">Другие сессии закроются</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
@@ -136,6 +141,11 @@ export async function render(root) {
       }
     };
   });
+
+  root.querySelector('[data-rules]').onclick = async () => {
+    const { openRules } = await import('./rules.js');
+    openRules();
+  };
 
   root.querySelector('[data-video-sound]').onchange = (event) => {
     localStorage.setItem('spokum.sound', event.target.checked ? 'on' : 'off');

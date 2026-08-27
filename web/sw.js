@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v17';
+const VERSION = 'spokum-v18';
 const CORE = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const CORE = [
   './js/saved.js',
   './js/views/auth.js',
   './js/views/videos.js',
+  './js/views/rules.js',
   './js/views/feed.js',
   './js/views/chats.js',
   './js/views/games.js',
