@@ -136,6 +136,8 @@ export async function render(root) {
     };
   });
 
+  root.querySelector('[data-buy]')?.addEventListener('click', openBilling);
+
   root.querySelector('[data-update]').onclick = () => {
     if (window.SpokumHost?.checkUpdate) {
       window.SpokumHost.checkUpdate();
@@ -189,9 +191,54 @@ function premiumCard() {
       <span class="pill ${active ? 'warn' : ''}">${active ? 'активен' : 'нет'}</span>
     </div>
     ${head}
+    <button class="btn btn-primary" data-buy style="margin-top:12px">${icon('crown', 16)} ${active ? 'Продлить премиум' : 'Оформить премиум'}</button>
     <div class="divider"></div>
     ${perks}
   </div>`;
+}
+
+const BOT_NAME = 'spokum_bot';
+
+async function openBilling() {
+  if (!state.user) return toast('Сначала войдите', 'err');
+  if (!api.linkCode) return toast('Оплата появится, когда база будет обновлена', 'err');
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Премиум оформляется в нашем боте: оплата звёздами Telegram, подписка включается сразу.</p>
+    <div class="card" style="padding:12px;background:var(--surface)">
+      <div class="tiny muted">Тарифы</div>
+      <div class="col" style="gap:4px;margin-top:8px">
+        ${[
+          ['День', 10],
+          ['Два дня', 20],
+          ['Три дня', 30],
+          ['Неделя', 70],
+          ['Месяц', 200],
+          ['Три месяца', 550],
+          ['Полгода', 500],
+          ['Год', 1000]
+        ]
+          .map(([label, stars]) => `<div class="row between"><span class="small">${label}</span><span class="small strong">${stars} звёзд</span></div>`)
+          .join('')}
+      </div>
+    </div>
+    <button class="btn btn-primary" data-go>${icon('forward', 16)} Открыть бота</button>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Бот сам поймёт, какому аккаунту выдавать премиум. Ссылка живёт двадцать минут.</p>
+  </div>`);
+  const sheet = openSheet('СпокУм Премиум', body);
+  const go = body.querySelector('[data-go]');
+  go.onclick = async () => {
+    go.disabled = true;
+    go.textContent = 'Готовим ссылку';
+    try {
+      const { code } = await api.linkCode();
+      sheet.close();
+      window.open(`https://t.me/${BOT_NAME}?start=${encodeURIComponent(code)}`, '_blank', 'noopener');
+    } catch (error) {
+      go.disabled = false;
+      go.textContent = 'Открыть бота';
+      toast(error.message, 'err');
+    }
+  };
 }
 
 function openPassword() {

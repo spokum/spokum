@@ -1100,3 +1100,160 @@ drop trigger if exists profiles_protect_login on public.profiles;
 create trigger profiles_protect_login
   before update on public.profiles
   for each row execute function public.protect_login_name();
+
+create table if not exists public.tg_links (
+  tg_id bigint primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  tg_name text not null default '',
+  linked_at timestamptz not null default now()
+);
+create unique index if not exists tg_links_user_idx on public.tg_links (user_id);
+
+create table if not exists public.link_codes (
+  code text primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '20 minutes',
+  used_at timestamptz
+);
+create index if not exists link_codes_user_idx on public.link_codes (user_id, created_at desc);
+
+create table if not exists public.payments (
+  id bigint generated always as identity primary key,
+  user_id uuid references public.profiles on delete set null,
+  tg_id bigint,
+  charge_id text unique,
+  stars integer not null default 0,
+  days integer not null default 0,
+  created_at timestamptz not null default now(),
+  refunded_at timestamptz
+);
+create index if not exists payments_user_idx on public.payments (user_id, created_at desc);
+
+alter table public.tg_links enable row level security;
+alter table public.link_codes enable row level security;
+alter table public.payments enable row level security;
+
+drop policy if exists tg_links_own on public.tg_links;
+create policy tg_links_own on public.tg_links for select
+  using (user_id = auth.uid() or public.viewer_is_admin());
+
+drop policy if exists tg_links_forget on public.tg_links;
+create policy tg_links_forget on public.tg_links for delete using (user_id = auth.uid());
+
+drop policy if exists payments_own on public.payments;
+create policy payments_own on public.payments for select
+  using (user_id = auth.uid() or public.viewer_is_admin());
+
+grant select, delete on table public.tg_links to authenticated;
+grant select on table public.payments to authenticated;
+
+create or replace function public.make_link_code()
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  fresh text;
+begin
+  if auth.uid() is null then
+    raise exception 'Нужен вход';
+  end if;
+  delete from public.link_codes where user_id = auth.uid() and used_at is null;
+  fresh := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
+  insert into public.link_codes (code, user_id) values (fresh, auth.uid());
+  return fresh;
+end;
+$$;
+
+create or replace function public.my_billing()
+returns json language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'telegram', (select tg_name from public.tg_links where user_id = auth.uid()),
+    'payments', coalesce((
+      select json_agg(json_build_object('stars', stars, 'days', days, 'at', created_at) order by created_at desc)
+      from (select * from public.payments where user_id = auth.uid() order by created_at desc limit 10) p
+    ), '[]'::json)
+  );
+$$;
+
+create or replace function public.bot_bind(code text, tg bigint, tg_name text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  found public.link_codes;
+  who public.profiles;
+begin
+  select * into found from public.link_codes
+   where link_codes.code = upper(trim(bot_bind.code))
+     and used_at is null
+     and expires_at > now();
+  if found.code is null then
+    return json_build_object('ok', false, 'error', 'Код не найден или устарел');
+  end if;
+  update public.link_codes set used_at = now() where link_codes.code = found.code;
+  delete from public.tg_links where user_id = found.user_id or tg_id = tg;
+  insert into public.tg_links (tg_id, user_id, tg_name) values (tg, found.user_id, coalesce(tg_name, ''));
+  select * into who from public.profiles where id = found.user_id;
+  return json_build_object('ok', true, 'username', who.username, 'name', who.display_name);
+end;
+$$;
+
+create or replace function public.bot_whoami(tg bigint)
+returns json language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'username', p.username,
+    'name', p.display_name,
+    'premium_until', p.premium_until
+  )
+  from public.tg_links l join public.profiles p on p.id = l.user_id
+  where l.tg_id = tg;
+$$;
+
+create or replace function public.bot_unbind(tg bigint)
+returns void language sql security definer set search_path = public as $$
+  delete from public.tg_links where tg_id = tg;
+$$;
+
+create or replace function public.bot_grant_premium(tg bigint, days integer, stars integer, charge text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  target uuid;
+  base timestamptz;
+  result timestamptz;
+  who public.profiles;
+begin
+  select user_id into target from public.tg_links where tg_id = tg;
+  if target is null then
+    return json_build_object('ok', false, 'error', 'Аккаунт не привязан');
+  end if;
+  if exists (select 1 from public.payments where charge_id = charge) then
+    select premium_until into result from public.profiles where id = target;
+    return json_build_object('ok', true, 'until', result, 'repeat', true);
+  end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+
+  select greatest(coalesce(premium_until, now()), now()) into base from public.profiles where id = target;
+  result := base + make_interval(days => days);
+
+  update public.profiles
+     set premium_until = result,
+         premium_reason = 'Оплачено звёздами Telegram',
+         premium_granted_at = now()
+   where id = target;
+
+  insert into public.payments (user_id, tg_id, charge_id, stars, days)
+  values (target, tg, charge, stars, days);
+
+  insert into public.audit (actor_id, action, meta)
+  values (target, 'premium_paid', json_build_object('stars', stars, 'days', days)::jsonb);
+
+  select * into who from public.profiles where id = target;
+  return json_build_object('ok', true, 'until', result, 'username', who.username);
+end;
+$$;
+
+revoke execute on function public.bot_bind(text, bigint, text) from public, anon, authenticated;
+revoke execute on function public.bot_whoami(bigint) from public, anon, authenticated;
+revoke execute on function public.bot_unbind(bigint) from public, anon, authenticated;
+revoke execute on function public.bot_grant_premium(bigint, integer, integer, text) from public, anon, authenticated;
+
+grant execute on function public.make_link_code() to authenticated;
+grant execute on function public.my_billing() to authenticated;

@@ -403,6 +403,15 @@ export const local = {
     return { ok: true };
   },
 
+  async linkCode() {
+    need();
+    fail('Оплата работает только на сервере, локальный режим её не поддерживает');
+  },
+
+  async billing() {
+    return { telegram: null, payments: [] };
+  },
+
   async myUsernames() {
     const user = need();
     return { names: aliasesOf(user), limit: user.premiumUntil > Date.now() ? 8 : 3 };

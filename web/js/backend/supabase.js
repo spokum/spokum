@@ -353,6 +353,20 @@ export async function createSupabase(url, key) {
       return { users: [...found.values()].map((row) => shapeProfile(row)) };
     },
 
+    async linkCode() {
+      requireUid();
+      const { data, error } = await sb.rpc('make_link_code');
+      guard(error);
+      return { code: data };
+    },
+
+    async billing() {
+      requireUid();
+      const { data, error } = await sb.rpc('my_billing');
+      if (error) return { telegram: null, payments: [] };
+      return data || { telegram: null, payments: [] };
+    },
+
     async myUsernames() {
       const me = requireUid();
       const { data, error } = await sb
