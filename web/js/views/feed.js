@@ -45,12 +45,12 @@ function renderComposer(root) {
       <div data-preview></div>
       <div class="chips" data-moods style="margin:12px 0 10px"></div>
       <div data-offer></div>
-      <div class="row between">
-        <div class="row" style="gap:4px">
+      <div class="composer-actions">
+        <div class="composer-tools">
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
-        <button class="btn btn-primary btn-sm" data-send>${icon('send', 16)} Опубликовать</button>
+        <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
       </div>
     </div>`);
 

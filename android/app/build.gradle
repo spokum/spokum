@@ -10,14 +10,33 @@ android {
     applicationId "com.spokum.app"
     minSdk 24
     targetSdk 34
-    versionCode 1
-    versionName "1.0"
+    versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+    versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+  }
+
+  signingConfigs {
+    release {
+      def keystore = file("release.keystore")
+      if (keystore.exists()) {
+        storeFile keystore
+        storePassword System.getenv("SPOKUM_STORE_PASSWORD")
+        keyAlias System.getenv("SPOKUM_KEY_ALIAS")
+        keyPassword System.getenv("SPOKUM_KEY_PASSWORD")
+      }
+    }
   }
 
   buildTypes {
     release {
       minifyEnabled false
-      signingConfig signingConfigs.debug
+      shrinkResources false
+      signingConfig file("release.keystore").exists() ? signingConfigs.release : signingConfigs.debug
+    }
+  }
+
+  packagingOptions {
+    resources {
+      excludes += ['META-INF/*.version', 'DebugProbesKt.bin']
     }
   }
 

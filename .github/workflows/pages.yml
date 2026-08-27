@@ -21,6 +21,9 @@ jobs:
           for candidate in logo.png logo.jpg logo.jpeg logo.webp logo.svg; do
             if [ -f "$candidate" ] && [ ! -f "web/$candidate" ]; then cp "$candidate" "web/$candidate"; fi
           done
+          git rev-parse --short HEAD > web/version.txt
+          (cd web && zip -qr ../web-bundle.zip . -x '.nojekyll' 'web-bundle.zip')
+          mv web-bundle.zip web/web-bundle.zip
           cd web
           touch .nojekyll
           rm -rf .git

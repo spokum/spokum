@@ -5,6 +5,65 @@ import { toast, openSheet } from '../ui.js';
 
 const WEEKDAYS = ['воскресеньям', 'понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам'];
 const ASKED_KEY = 'spokum.journal.asked';
+const LOCAL_KEY = 'spokum.journal.local';
+
+function localKey() {
+  return `${LOCAL_KEY}.${state.user?.id || 'guest'}`;
+}
+
+function readLocal() {
+  try {
+    const raw = localStorage.getItem(localKey());
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocal(entries) {
+  try {
+    localStorage.setItem(localKey(), JSON.stringify(entries.slice(0, 400)));
+  } catch {}
+}
+
+function saveLocalEntry(entry) {
+  const entries = readLocal().filter((row) => row.day !== entry.day);
+  entries.unshift(entry);
+  entries.sort((a, b) => b.day.localeCompare(a.day));
+  writeLocal(entries);
+}
+
+async function loadEntries() {
+  const local = readLocal();
+  try {
+    const { entries } = await api.journalHistory();
+    const days = new Set(entries.map((row) => row.day));
+    const missing = local.filter((row) => !days.has(row.day));
+    for (const row of missing) {
+      try {
+        await api.saveJournal(row);
+      } catch {
+        break;
+      }
+    }
+    const merged = [...entries, ...missing].sort((a, b) => b.day.localeCompare(a.day));
+    writeLocal(merged);
+    return merged;
+  } catch {
+    return local;
+  }
+}
+
+async function storeEntry(entry) {
+  saveLocalEntry(entry);
+  try {
+    await api.saveJournal(entry);
+    return 'server';
+  } catch {
+    return 'local';
+  }
+}
 
 export function today() {
   const now = new Date();
@@ -18,11 +77,12 @@ export async function shouldAskToday() {
   try {
     if (localStorage.getItem(ASKED_KEY) === today()) return false;
   } catch {}
+  if (readLocal().some((row) => row.day === today())) return false;
   try {
     const { entry } = await api.journalEntry(today());
     return !entry;
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -80,23 +140,21 @@ export function openJournal(done) {
     if (!text && !word) return toast('Напиши хотя бы пару слов', 'err');
 
     button.disabled = true;
-    try {
-      await api.saveJournal({ day: today(), body: text, mood, word });
-      if (word) {
-        const { user } = await api.updateMe({ dayWord: word, shareWord: share });
+    button.textContent = 'Сохраняем';
+    const where = await storeEntry({ day: today(), body: text, mood, word: word || null });
+
+    if (word || !share) {
+      try {
+        const patch = word ? { dayWord: word, shareWord: share } : { shareWord: false };
+        const { user } = await api.updateMe(patch);
         setUser(user);
-      } else if (!share) {
-        const { user } = await api.updateMe({ shareWord: false });
-        setUser(user);
-      }
-      markAsked();
-      sheet.close();
-      toast('Записано, это останется между нами');
-      done?.();
-    } catch (error) {
-      toast(error.message, 'err');
-      button.disabled = false;
+      } catch {}
     }
+
+    markAsked();
+    sheet.close();
+    toast(where === 'server' ? 'Записано, это останется между нами' : 'Записано на этом устройстве');
+    done?.();
   };
 }
 
@@ -195,13 +253,7 @@ export async function openJournalHistory() {
   const body = el('<div class="col" data-host><div class="small muted center">Загружаем</div></div>');
   openSheet('Твой дневник', body);
 
-  let entries = [];
-  try {
-    ({ entries } = await api.journalHistory());
-  } catch (error) {
-    body.innerHTML = `<div class="small muted center">${esc(error.message)}</div>`;
-    return;
-  }
+  const entries = await loadEntries();
 
   const notes = summarize(entries);
   body.innerHTML = `
