@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.PermissionRequest;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -182,6 +183,13 @@ public class MainActivity extends AppCompatActivity {
       }
     });
 
+    webView.addJavascriptInterface(new Object() {
+      @JavascriptInterface
+      public void apply() {
+        runOnUiThread(MainActivity.this::recreate);
+      }
+    }, "SpokumHost");
+
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
       @Override
       public void handleOnBackPressed() {
@@ -238,6 +246,11 @@ public class MainActivity extends AppCompatActivity {
 
         if (downloadBundle()) {
           getSharedPreferences("spokum", MODE_PRIVATE).edit().putString("web_version", remote).apply();
+          runOnUiThread(() -> {
+            if (webView != null) {
+              webView.evaluateJavascript("window.__spokumUpdateReady && window.__spokumUpdateReady()", null);
+            }
+          });
         }
       } catch (Exception ignored) {
       } finally {

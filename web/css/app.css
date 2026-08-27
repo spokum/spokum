@@ -858,6 +858,25 @@ svg { display: block; flex: none; }
 .safe-zone[data-mode='anger'] { background: radial-gradient(70% 50% at 50% 0%, rgba(197,130,121,.14), transparent 70%), var(--bg); }
 .safe-zone[data-mode='tired'] { background: radial-gradient(70% 50% at 50% 0%, rgba(152,160,173,.12), transparent 70%), var(--bg); }
 
+.update-bar {
+  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 135;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px 9px 16px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  font-size: 13px; font-weight: 600;
+  animation: pop .25s var(--ease);
+  max-width: calc(100vw - 32px);
+}
+.update-bar button {
+  padding: 7px 14px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 12.5px; font-weight: 700;
+}
+
 .offline-bar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center; gap: 8px;
