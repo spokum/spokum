@@ -26,6 +26,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.ExistingWorkPolicy;
 import androidx.work.WorkManager;
 import java.util.concurrent.TimeUnit;
 import java.io.File;
@@ -265,11 +267,16 @@ public class MainActivity extends AppCompatActivity {
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
       @Override
       public void handleOnBackPressed() {
-        if (webView.canGoBack()) {
-          webView.goBack();
-        } else {
-          finish();
-        }
+        webView.evaluateJavascript("(function(){try{return window.__spokumBack?window.__spokumBack():false}catch(e){return false}})()", value -> {
+          if ("true".equals(value)) {
+            return;
+          }
+          if (webView.canGoBack()) {
+            webView.goBack();
+          } else {
+            finish();
+          }
+        });
       }
     });
 
@@ -300,9 +307,30 @@ public class MainActivity extends AppCompatActivity {
 
   private void scheduleNotifications() {
     PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(NotifyWorker.class, 15, TimeUnit.MINUTES)
+        .setInitialDelay(2, TimeUnit.MINUTES)
         .build();
     WorkManager.getInstance(this).enqueueUniquePeriodicWork(
         "spokum-notify", ExistingPeriodicWorkPolicy.UPDATE, request);
+  }
+
+  private void quickChecks() {
+    if (getSharedPreferences("spokum", MODE_PRIVATE).getString("refresh", "").isEmpty()) {
+      return;
+    }
+    WorkManager manager = WorkManager.getInstance(this);
+    int[] minutes = { 1, 3, 6, 10 };
+    for (int i = 0; i < minutes.length; i++) {
+      OneTimeWorkRequest soon = new OneTimeWorkRequest.Builder(NotifyWorker.class)
+          .setInitialDelay(minutes[i], TimeUnit.MINUTES)
+          .build();
+      manager.enqueueUniqueWork("spokum-soon-" + i, ExistingWorkPolicy.REPLACE, soon);
+    }
+  }
+
+  @Override
+  protected void onPause() {
+    super.onPause();
+    quickChecks();
   }
 
   @Override

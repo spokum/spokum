@@ -352,6 +352,9 @@ function openUserActions(user, refresh) {
       <button class="list-item" data-flag="isAdmin">${icon('star', 18)}<span>${user.isAdmin ? 'Снять админку' : 'Выдать админку'}</span></button>
       <button class="list-item" data-clear>${icon('close', 18)}<span>Снять все статусы</span></button>
       <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-beta>${icon('spark', 18)}<span>${user.isBeta ? 'Убрать из беты' : 'Пустить в бету'}</span></button>
+      <button class="list-item" data-coins>${icon('coin', 18)}<span>Начислить монеты (сейчас ${user.coins || 0})</span></button>
+      <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-premium style="color:#c6b083">${icon('crown', 18)}<span>Выдать СпокУм Премиум</span></button>
       ${isPremium(user) ? `<button class="list-item" data-premium-off>${icon('close', 18)}<span>Забрать премиум</span></button>` : ''}
       <div class="divider" style="margin:6px 0"></div>
@@ -369,6 +372,32 @@ function openUserActions(user, refresh) {
       await api.setFlags(user.id, payload);
       sheet.close();
       toast('Статусы обновлены');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-beta]').onclick = async () => {
+    try {
+      await api.setBeta(user.id, !user.isBeta);
+      sheet.close();
+      toast(user.isBeta ? 'Убран из беты' : 'Пущен в бету');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-coins]').onclick = async () => {
+    const value = await promptSheet({ title: 'Монеты', label: 'Сколько начислить, можно минус', placeholder: '100', value: '100' });
+    if (!value) return;
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || !amount) return toast('Нужно число', 'err');
+    try {
+      const result = await api.giveCoins(user.id, Math.round(amount));
+      sheet.close();
+      toast(`Теперь монет: ${result.coins}`);
       refresh();
     } catch (error) {
       toast(error.message, 'err');

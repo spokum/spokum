@@ -38,6 +38,16 @@ const ACCENTS = [
 
 const PREF_KEY = 'spokum.prefs.v1';
 
+export function applyNight() {
+  let want = false;
+  try {
+    want = !!JSON.parse(localStorage.getItem(PREF_KEY) || '{}').night;
+  } catch {}
+  const hour = new Date().getHours();
+  document.body.classList.toggle('night-soft', want && (hour >= 23 || hour < 7));
+}
+
+
 function prefs() {
   try {
     return JSON.parse(localStorage.getItem(PREF_KEY)) || {};
@@ -79,6 +89,7 @@ export async function render(root) {
         ? `<label class="row between" style="padding:8px 0"><span class="small">Уведомлять о новых записях</span><input type="checkbox" data-notify-posts ${state.user.notifyPosts !== false ? 'checked' : ''}></label>`
         : ''}
       <label class="row between" style="padding:8px 0"><span class="small">Тихий режим по вечерам</span><input type="checkbox" data-pref="quiet" ${current.quiet ? 'checked' : ''}></label>
+      <label class="row between" style="padding:8px 0"><span class="small">Тихая ночь: мягче экран после 23:00</span><input type="checkbox" data-pref="night" ${current.night ? 'checked' : ''}></label>
     </div>
 
     <div class="card appear">
@@ -226,6 +237,7 @@ export async function render(root) {
       if (box.dataset.pref === 'motion') {
         document.documentElement.style.setProperty('--ease', box.checked ? 'cubic-bezier(.22,.61,.36,1)' : 'linear');
       }
+      if (box.dataset.pref === 'night') applyNight();
       toast('Сохранено');
     };
   });

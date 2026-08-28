@@ -12,7 +12,10 @@ const LOOK = {
   punish: { icon: 'warn', tone: 'bad' },
   premium: { icon: 'crown', tone: 'good' },
   payment: { icon: 'crown', tone: 'good' },
-  modaction: { icon: 'shield', tone: 'warn' }
+  modaction: { icon: 'shield', tone: 'warn' },
+  gift: { icon: 'gift', tone: 'good' },
+  letter: { icon: 'mail', tone: '' },
+  capsule: { icon: 'hourglass', tone: '' }
 };
 
 let unread = 0;
@@ -138,6 +141,21 @@ async function jump(item, sheet) {
     const { users } = await api.searchUsers('');
     const author = users.find((row) => String(row.id) === String(meta.author));
     if (author) openProfile(author.username);
+    return;
+  }
+  if (item.kind === 'gift') {
+    const { openMyGifts } = await import('./gifts.js');
+    openMyGifts(state.user.id, true);
+    return;
+  }
+  if (item.kind === 'letter') {
+    const { openLetters } = await import('./letters.js');
+    openLetters();
+    return;
+  }
+  if (item.kind === 'capsule') {
+    const { openCapsules } = await import('./capsule.js');
+    openCapsules();
     return;
   }
   if (item.kind === 'premium') {

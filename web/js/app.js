@@ -91,6 +91,58 @@ async function detectLogo() {
   }
 }
 
+function topOverlay() {
+  const layers = [...document.querySelectorAll('.sheet-backdrop, .chat-view, .game-stage, .story-view, .lightbox')];
+  return layers.length ? layers[layers.length - 1] : null;
+}
+
+function goBackInside() {
+  const layer = topOverlay();
+  if (layer) {
+    const close = layer.querySelector('[data-back]');
+    if (close) close.click();
+    else layer.remove();
+    document.body.style.overflow = '';
+    return true;
+  }
+  if (state.user && state.tab && state.tab !== 'feed') {
+    openTab('feed');
+    return true;
+  }
+  return false;
+}
+
+function watchSwipes() {
+  let start = null;
+  document.addEventListener('touchstart', (event) => {
+    if (event.touches.length !== 1) return;
+    const point = event.touches[0];
+    const edge = point.clientX < 26 || point.clientX > window.innerWidth - 26;
+    start = edge ? { x: point.clientX, y: point.clientY, at: Date.now() } : null;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (event) => {
+    if (!start) return;
+    const point = event.changedTouches[0];
+    const dx = point.clientX - start.x;
+    const dy = point.clientY - start.y;
+    const quick = Date.now() - start.at < 700;
+    start = null;
+    if (!quick || Math.abs(dx) < 80 || Math.abs(dy) > 70) return;
+    goBackInside();
+  }, { passive: true });
+}
+
+let exitArmed = 0;
+
+window.__spokumBack = () => {
+  if (goBackInside()) return true;
+  if (Date.now() - exitArmed < 2200) return false;
+  exitArmed = Date.now();
+  toast('Ещё раз, чтобы выйти');
+  return true;
+};
+
 async function checkDevice(fresh) {
   if (!api.touchDevice) return false;
   try {
@@ -125,6 +177,11 @@ async function boot() {
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
   registerWorker();
   watchNetwork();
+  watchSwipes();
+  import('./views/settings.js').then((module) => {
+    module.applyNight?.();
+    setInterval(() => module.applyNight?.(), 300000);
+  }).catch(() => {});
   await Promise.race([
     initBackend(),
     new Promise((done) => setTimeout(done, 12000))

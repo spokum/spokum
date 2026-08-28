@@ -1280,6 +1280,15 @@ svg { display: block; flex: none; }
 .team-head .strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-card .info-grid { text-align: left; }
 
+.post-repost {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-bottom: 9px; padding: 3px 9px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted);
+  font-size: 11px; font-weight: 600;
+}
+.night-soft .post-actions .icon-btn span { display: none; }
+.night-soft { --glow: .25; }
+.night-soft img, .night-soft video { filter: brightness(.86); }
 .reel-repost {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 9px; border-radius: 999px; margin-bottom: 8px;

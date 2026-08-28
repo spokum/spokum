@@ -455,6 +455,7 @@ export function postCard(post, refresh, options = {}) {
   const mood = MOODS[post.mood] || MOODS.calm;
   const card = el(`
     <article class="card post appear">
+      ${post.repostOf ? `<div class="post-repost">${icon('refresh', 13)}<span>Репост${post.origin ? ' записи ' + esc(post.origin.displayName) : ''}</span></div>` : ''}
       <div class="row">
         <button data-author style="display:contents">${avatar(post.author, 46)}</button>
         <div class="grow" style="min-width:0">
