@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, isBeta } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
@@ -69,7 +69,7 @@ export async function render(root) {
 
   root.querySelector('[data-saved]').onclick = () => openSaved(root);
 
-  if (isBeta() && api.touchStreak) {
+  if (api.touchStreak) {
     import('./extras.js').then(async ({ refreshStreak }) => {
       const result = await refreshStreak();
       const slot = root.querySelector('[data-streak]');
@@ -136,7 +136,7 @@ function renderComposer(root) {
         <div class="composer-tools">
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
           <button class="icon-btn" data-reels>${icon('video', 18)}<span>В Видео</span></button>
-          ${isBeta() ? `<button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>` : ''}
+          <button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
@@ -246,7 +246,7 @@ function renderComposer(root) {
 
 function renderFilters(root) {
   const host = root.querySelector('[data-filters]');
-  const entries = [['', 'Всё'], ...(isBeta() && api.follow ? [['mine', 'Свои']] : []), ...Object.entries(MOODS).map(([key, m]) => [key, m.label])];
+  const entries = [['', 'Всё'], ...(api.follow ? [['mine', 'Свои']] : []), ...Object.entries(MOODS).map(([key, m]) => [key, m.label])];
   host.innerHTML = entries
     .map(([key, label]) => {
       const active = (state.moodFilter || '') === key;
@@ -618,7 +618,7 @@ export function postCard(post, refresh, options = {}) {
   };
 
   card.querySelector('[data-share]').onclick = async () => {
-    if (isBeta()) {
+    if (api.react) {
       const { openShareCard } = await import('./share.js');
       return openShareCard(post);
     }
@@ -654,7 +654,7 @@ export function postCard(post, refresh, options = {}) {
     if (like) like.hidden = false;
   };
 
-  if (isBeta() && api.react) {
+  if (api.react) {
     import('./extras.js')
       .then(async ({ reactionRow, reactionsReady }) => {
         if (!(await reactionsReady())) return plainLike();
@@ -715,8 +715,8 @@ function openPostMenu(post, refresh, options) {
   const canModerate = state.user && (state.user.isModerator || state.user.isAdmin);
   const body = el(`
     <div class="col" style="gap:6px">
-      ${mine && isBeta() ? `<button class="list-item" data-pin>${icon('star', 18)}<span>${post.pinned ? 'Открепить' : 'Закрепить у себя'}</span></button>` : ''}
-      ${isBeta() ? `<button class="list-item" data-card>${icon('image', 18)}<span>Сохранить картинкой</span></button>` : ''}
+      ${mine && api.pinPost ? `<button class="list-item" data-pin>${icon('star', 18)}<span>${post.pinned ? 'Открепить' : 'Закрепить у себя'}</span></button>` : ''}
+      <button class="list-item" data-card>${icon('image', 18)}<span>Сохранить картинкой</span></button>
       <button class="list-item" data-copy>${icon('share', 18)}<span>Скопировать текст</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Профиль автора</span></button>
       ${canModerate && !mine ? `<button class="list-item" data-remove style="color:#c98b8b">${icon('trash', 18)}<span>Снять с публикации</span></button>` : ''}

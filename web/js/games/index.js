@@ -3627,7 +3627,6 @@ export const GAMES = [
     title: 'Ритм',
     desc: 'Попадай по нотам в такт',
     tint: ['#120e22', '#241a3c'],
-    beta: true,
     mount: rhythm
   },
   {
@@ -3635,7 +3634,6 @@ export const GAMES = [
     title: 'Шарики',
     desc: 'Лопай группы одного цвета',
     tint: ['#0f1a20', '#1a2c34'],
-    beta: true,
     mount: bubbles
   },
   {
@@ -3643,7 +3641,6 @@ export const GAMES = [
     title: 'Прыжок',
     desc: 'Прыгай вверх по платформам',
     tint: ['#0e1a24', '#1b3040'],
-    beta: true,
     mount: jumper
   },
   {
@@ -3651,7 +3648,6 @@ export const GAMES = [
     title: 'Стакан',
     desc: 'Тетрис: свайп двигает, тап поворачивает',
     tint: ['#0e1524', '#191f36'],
-    beta: true,
     mount: tetris
   },
   {
@@ -3659,7 +3655,6 @@ export const GAMES = [
     title: '2048',
     desc: 'Свайпайте и складывайте числа',
     tint: ['#151221', '#26203a'],
-    beta: true,
     mount: puzzle2048
   },
   {
@@ -3667,7 +3662,6 @@ export const GAMES = [
     title: 'Сапёр',
     desc: 'Открывай клетки, ставь флажки',
     tint: ['#101a16', '#1b2b24'],
-    beta: true,
     mount: mines
   },
   {
@@ -3675,7 +3669,6 @@ export const GAMES = [
     title: 'Кирпичи',
     desc: 'Отбивай мяч и ломай стену',
     tint: ['#0b1524', '#152238'],
-    beta: true,
     mount: bricks
   },
   {
@@ -3683,7 +3676,6 @@ export const GAMES = [
     title: 'Полёт',
     desc: 'Тапай, чтобы не упасть',
     tint: ['#16233a', '#2b3c58'],
-    beta: true,
     mount: flap
   },
   {
@@ -3691,7 +3683,6 @@ export const GAMES = [
     title: 'Пары',
     desc: 'Найди все одинаковые карточки',
     tint: ['#141726', '#232840'],
-    beta: true,
     mount: pairs
   },
   {
@@ -3699,7 +3690,6 @@ export const GAMES = [
     title: 'Башня',
     desc: 'Ставь блоки один на другой',
     tint: ['#101a26', '#1d3040'],
-    beta: true,
     mount: tower
   },
   {
@@ -3707,7 +3697,6 @@ export const GAMES = [
     title: 'Кольцо',
     desc: 'Забрасывай мяч в движущееся кольцо',
     tint: ['#1a1020', '#33203a'],
-    beta: true,
     mount: hoops
   },
   {

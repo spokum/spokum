@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, rankName, isBeta } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -72,7 +72,6 @@ export async function render(root) {
     <div class="col" style="margin-top:12px;gap:6px">
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
-      ${isBeta(fresh) ? `<div class="beta-band">${icon('spark', 15)}<span>Новое, пока только у вас</span></div>
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
@@ -81,7 +80,7 @@ export async function render(root) {
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Как дела у всех сразу</div></div>${icon('forward', 16)}</button>
-      <div class="divider" style="margin:8px 0"></div>` : ''}
+      <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-contacts>${icon('users', 20)}<div class="grow"><div class="strong small">Контакты</div><div class="tiny muted">Кого ты добавил</div></div>${icon('forward', 16)}</button>
@@ -700,17 +699,17 @@ export async function openProfile(username) {
           <button class="btn btn-primary grow" data-write>${icon('chats', 17)} Написать</button>
           <button class="btn btn-icon" data-report title="Пожаловаться">${icon('flag', 17)}</button>
         </div>
-        ${isBeta() ? `<div class="row" style="margin-top:8px;gap:8px">
+        <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-follow>${icon('plus', 17)} Подписаться</button>
           ${user.isModerator ? `<button class="btn grow" data-thank>${icon('heart', 17)} Спасибо</button>` : ''}
-        </div>` : ''}
+        </div>
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
         </div>
-        ${isBeta() ? `<div class="row" style="margin-top:8px;gap:8px">
+        <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-gift>${icon('gift', 17)} Подарить</button>
           <button class="btn grow" data-their-gifts>${icon('star', 17)} Подарки</button>
-        </div>` : ''}
+        </div>
         ${state.user?.isModerator || state.user?.isAdmin ? `<div class="col" style="margin-top:8px;gap:8px">
           <button class="btn" data-info style="width:100%">${icon('device', 17)} Информация о человеке</button>
           <button class="btn" data-punish style="width:100%;color:#c98b8b">${icon('warn', 17)} Наказать</button>
@@ -722,7 +721,7 @@ export async function openProfile(username) {
       <div class="chips" data-kinds style="margin-bottom:10px"></div>
       <div class="col" data-posts></div>`;
 
-    if (isBeta()) {
+    {
       try {
         const { gifts } = await api.gifts(user.id);
         const { giftShelf } = await import('./gifts.js');
