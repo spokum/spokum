@@ -1515,7 +1515,686 @@ function maze3d(canvas, report) {
   });
 }
 
+const DREAD_SIZE = 21;
+
+function dreadMap() {
+  const grid = buildMaze(DREAD_SIZE);
+  for (let i = 0; i < DREAD_SIZE * 2; i++) {
+    const x = 1 + Math.floor(Math.random() * (DREAD_SIZE - 2));
+    const y = 1 + Math.floor(Math.random() * (DREAD_SIZE - 2));
+    if (x > 2 || y > 2) grid[y][x] = 0;
+  }
+  return grid;
+}
+
+function dread(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let state = null;
+    const keys = new Set();
+    let drag = null;
+    let stick = null;
+    const depth = [];
+
+    const openCells = (grid, minDist, px, py) => {
+      const spots = [];
+      for (let y = 1; y < DREAD_SIZE - 1; y++) {
+        for (let x = 1; x < DREAD_SIZE - 1; x++) {
+          if (grid[y][x] === 0 && Math.hypot(x + 0.5 - px, y + 0.5 - py) > minDist) spots.push({ x: x + 0.5, y: y + 0.5 });
+        }
+      }
+      spots.sort(() => Math.random() - 0.5);
+      return spots;
+    };
+
+    const bestFacing = (grid, px, py) => {
+      const options = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+      let facing = 0;
+      let far = -1;
+      for (const option of options) {
+        let run = 0;
+        while (run < DREAD_SIZE) {
+          const nx = Math.floor(px + Math.cos(option) * (run + 1));
+          const ny = Math.floor(py + Math.sin(option) * (run + 1));
+          if (nx < 0 || ny < 0 || nx >= DREAD_SIZE || ny >= DREAD_SIZE || grid[ny][nx] === 1) break;
+          run += 1;
+        }
+        if (run > far) {
+          far = run;
+          facing = option;
+        }
+      }
+      return facing;
+    };
+
+    const reset = () => {
+      const grid = dreadMap();
+      const spots = openCells(grid, 6, 1.5, 1.5);
+      state = {
+        grid,
+        px: 1.5,
+        py: 1.5,
+        angle: bestFacing(grid, 1.5, 1.5),
+        torch: 100,
+        heart: 0,
+        pulse: 0,
+        score: 0,
+        depth: 1,
+        shards: spots.slice(0, 4).map((spot) => ({ ...spot, taken: false })),
+        cells: spots.slice(4, 8).map((spot) => ({ ...spot, taken: false })),
+        beasts: spots.slice(8, 10).map((spot) => ({ ...spot, x: spot.x, y: spot.y, seen: 0, speed: 0.9 })),
+        over: false,
+        won: false,
+        flash: 0,
+        shake: 0
+      };
+    };
+    reset();
+
+    const solid = (x, y) => {
+      const gx = Math.floor(x);
+      const gy = Math.floor(y);
+      if (gx < 0 || gy < 0 || gx >= DREAD_SIZE || gy >= DREAD_SIZE) return true;
+      return state.grid[gy][gx] === 1;
+    };
+
+    const move = (dx, dy) => {
+      if (!solid(state.px + dx * 1.8, state.py)) state.px += dx;
+      if (!solid(state.px, state.py + dy * 1.8)) state.py += dy;
+    };
+
+    const clearShot = (ax, ay, bx, by) => {
+      const steps = Math.ceil(Math.hypot(bx - ax, by - ay) * 6);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        if (solid(ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
+      }
+      return true;
+    };
+
+    const nextFloor = () => {
+      state.depth += 1;
+      state.score += 500;
+      const grid = dreadMap();
+      const spots = openCells(grid, 6, 1.5, 1.5);
+      state.grid = grid;
+      state.px = 1.5;
+      state.py = 1.5;
+      state.angle = bestFacing(grid, 1.5, 1.5);
+      state.torch = Math.min(100, state.torch + 35);
+      state.shards = spots.slice(0, 4).map((spot) => ({ ...spot, taken: false }));
+      state.cells = spots.slice(4, 8).map((spot) => ({ ...spot, taken: false }));
+      state.beasts = spots.slice(8, 8 + Math.min(5, 1 + state.depth)).map((spot) => ({ ...spot, seen: 0, speed: 0.9 + state.depth * 0.12 }));
+      state.flash = 1;
+    };
+
+    const castColumn = (angle) => {
+      const sin = Math.sin(angle);
+      const cos = Math.cos(angle);
+      let mapX = Math.floor(state.px);
+      let mapY = Math.floor(state.py);
+      const deltaX = Math.abs(1 / (cos || 1e-6));
+      const deltaY = Math.abs(1 / (sin || 1e-6));
+      const stepX = cos < 0 ? -1 : 1;
+      const stepY = sin < 0 ? -1 : 1;
+      let sideX = cos < 0 ? (state.px - mapX) * deltaX : (mapX + 1 - state.px) * deltaX;
+      let sideY = sin < 0 ? (state.py - mapY) * deltaY : (mapY + 1 - state.py) * deltaY;
+      let side = 0;
+      for (let i = 0; i < 64; i++) {
+        if (sideX < sideY) {
+          sideX += deltaX;
+          mapX += stepX;
+          side = 0;
+        } else {
+          sideY += deltaY;
+          mapY += stepY;
+          side = 1;
+        }
+        if (mapX < 0 || mapY < 0 || mapX >= DREAD_SIZE || mapY >= DREAD_SIZE) return { dist: 64, side };
+        if (state.grid[mapY][mapX] === 1) break;
+      }
+      const dist = side === 0 ? sideX - deltaX : sideY - deltaY;
+      return { dist: Math.max(0.05, dist), side };
+    };
+
+    return {
+      score: () => state.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          node.setPointerCapture?.(event.pointerId);
+          const spot = pointerPos(node, event);
+          if (spot.x < width * 0.42 && spot.y > height * 0.55) stick = { id: event.pointerId, ox: spot.x, oy: spot.y, x: spot.x, y: spot.y };
+          else drag = { id: event.pointerId, x: spot.x };
+        });
+        bind('pointermove', (event) => {
+          const spot = pointerPos(node, event);
+          if (stick && stick.id === event.pointerId) {
+            stick.x = spot.x;
+            stick.y = spot.y;
+            return;
+          }
+          if (drag && drag.id === event.pointerId) {
+            state.angle += (spot.x - drag.x) * 0.006;
+            drag.x = spot.x;
+          }
+        });
+        const release = (event) => {
+          if (stick && stick.id === event.pointerId) stick = null;
+          if (drag && drag.id === event.pointerId) drag = null;
+        };
+        bind('pointerup', release);
+        bind('pointercancel', release);
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          keys.add(event.key);
+        }, window);
+        bind('keyup', (event) => keys.delete(event.key), window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.pulse += dt;
+        state.flash = Math.max(0, state.flash - dt * 2);
+        state.shake = Math.max(0, state.shake - dt * 3);
+        state.torch = Math.max(0, state.torch - dt * 2.4);
+
+        const walk = 2.2 * dt;
+        const spin = 2.1 * dt;
+        if (keys.has('ArrowLeft')) state.angle -= spin;
+        if (keys.has('ArrowRight')) state.angle += spin;
+        if (keys.has('ArrowUp') || keys.has('w')) move(Math.cos(state.angle) * walk, Math.sin(state.angle) * walk);
+        if (keys.has('ArrowDown') || keys.has('s')) move(-Math.cos(state.angle) * walk, -Math.sin(state.angle) * walk);
+        if (keys.has('a')) move(Math.sin(state.angle) * walk, -Math.cos(state.angle) * walk);
+        if (keys.has('d')) move(-Math.sin(state.angle) * walk, Math.cos(state.angle) * walk);
+
+        if (stick) {
+          const dx = stick.x - stick.ox;
+          const dy = stick.y - stick.oy;
+          const len = Math.max(1, Math.hypot(dx, dy));
+          const power = Math.min(1, len / 60);
+          if (power > 0.12) {
+            const forward = (-dy / len) * power * walk * 1.5;
+            const strafe = (dx / len) * power * walk * 1.1;
+            move(Math.cos(state.angle) * forward - Math.sin(state.angle) * strafe, Math.sin(state.angle) * forward + Math.cos(state.angle) * strafe);
+          }
+        }
+
+        for (const cell of state.cells) {
+          if (cell.taken) continue;
+          if (Math.hypot(cell.x - state.px, cell.y - state.py) < 0.5) {
+            cell.taken = true;
+            state.torch = Math.min(100, state.torch + 30);
+            state.score += 40;
+          }
+        }
+
+        let left = 0;
+        for (const shard of state.shards) {
+          if (shard.taken) {
+            continue;
+          }
+          left += 1;
+          if (Math.hypot(shard.x - state.px, shard.y - state.py) < 0.5) {
+            shard.taken = true;
+            state.score += 150;
+            state.flash = 0.6;
+          }
+        }
+        if (!left) nextFloor();
+
+        let nearest = 99;
+        for (const beast of state.beasts) {
+          const dx = state.px - beast.x;
+          const dy = state.py - beast.y;
+          const dist = Math.hypot(dx, dy);
+          nearest = Math.min(nearest, dist);
+          const hunting = dist < 9 && clearShot(beast.x, beast.y, state.px, state.py);
+          beast.seen = hunting ? 1 : Math.max(0, beast.seen - dt * 0.3);
+          const chase = beast.seen > 0.05;
+          const speed = (chase ? beast.speed * 1.25 : beast.speed * 0.45) * dt;
+          if (dist > 0.1) {
+            const stepX = (dx / dist) * speed;
+            const stepY = (dy / dist) * speed;
+            if (!solid(beast.x + stepX * 2, beast.y)) beast.x += stepX;
+            if (!solid(beast.x, beast.y + stepY * 2)) beast.y += stepY;
+          }
+          if (dist < 0.55) {
+            state.over = true;
+            state.shake = 1;
+            report(state.score);
+          }
+        }
+        state.heart = nearest < 6 ? 1 - nearest / 6 : 0;
+        if (state.torch <= 0) state.heart = Math.max(state.heart, 0.5);
+      },
+      draw(ctx, size) {
+        const { w: cw, h: ch } = size;
+        const shake = state.shake * 8;
+        ctx.save();
+        if (shake) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+        const horizon = ch * 0.5;
+        ctx.fillStyle = '#04060a';
+        ctx.fillRect(0, 0, cw, ch);
+        const floor = ctx.createLinearGradient(0, horizon, 0, ch);
+        floor.addColorStop(0, '#0a0c10');
+        floor.addColorStop(1, '#05070a');
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, horizon, cw, ch - horizon);
+
+        const fov = Math.PI / 3;
+        const columns = Math.min(200, Math.floor(cw / 3));
+        const colWidth = cw / columns;
+        const reach = 3 + (state.torch / 100) * 7;
+        depth.length = columns;
+
+        for (let i = 0; i < columns; i++) {
+          const angle = state.angle - fov / 2 + (i / columns) * fov;
+          const hit = castColumn(angle);
+          const dist = hit.dist * Math.cos(angle - state.angle);
+          depth[i] = dist;
+          const wall = Math.min(ch, (ch * 0.9) / dist);
+          const fade = Math.max(0, 1 - dist / reach);
+          const shade = Math.pow(fade, 1.9) * (hit.side ? 0.62 : 1);
+          const tone = Math.round(8 + shade * 96);
+          ctx.fillStyle = `rgb(${Math.round(tone * 0.96)},${Math.round(tone * 0.98)},${Math.round(tone)})`;
+          ctx.fillRect(i * colWidth, horizon - wall / 2, colWidth + 1, wall);
+        }
+
+        const sprites = [];
+        state.cells.forEach((cell) => { if (!cell.taken) sprites.push({ ...cell, type: 'cell' }); });
+        state.shards.forEach((shard) => { if (!shard.taken) sprites.push({ ...shard, type: 'shard' }); });
+        state.beasts.forEach((beast) => sprites.push({ ...beast, type: 'beast' }));
+
+        sprites
+          .map((sprite) => ({ ...sprite, dist: Math.hypot(sprite.x - state.px, sprite.y - state.py) }))
+          .sort((a, b) => b.dist - a.dist)
+          .forEach((sprite) => {
+            let rel = Math.atan2(sprite.y - state.py, sprite.x - state.px) - state.angle;
+            while (rel > Math.PI) rel -= Math.PI * 2;
+            while (rel < -Math.PI) rel += Math.PI * 2;
+            if (Math.abs(rel) > fov / 1.6) return;
+            const col = Math.floor(((rel + fov / 2) / fov) * columns);
+            if (col < 0 || col >= columns) return;
+            if (depth[col] < sprite.dist - 0.2) return;
+            const screenX = ((rel + fov / 2) / fov) * cw;
+            const scale = Math.min(ch, (ch * 0.85) / Math.max(0.3, sprite.dist));
+            const fade = Math.max(0, 1 - sprite.dist / (reach + 1.5));
+
+            if (sprite.type === 'beast') {
+              const glow = 0.35 + fade * 0.65;
+              ctx.globalAlpha = Math.min(1, glow);
+              ctx.fillStyle = '#0b0d11';
+              ctx.beginPath();
+              ctx.ellipse(screenX, horizon + scale * 0.08, scale * 0.17, scale * 0.42, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = `rgba(210,70,60,${0.55 + Math.sin(state.pulse * 6) * 0.25})`;
+              const eye = scale * 0.035;
+              ctx.beginPath();
+              ctx.arc(screenX - scale * 0.055, horizon - scale * 0.2, eye, 0, Math.PI * 2);
+              ctx.arc(screenX + scale * 0.055, horizon - scale * 0.2, eye, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              return;
+            }
+
+            const shardLike = sprite.type === 'shard';
+            ctx.globalAlpha = Math.min(1, 0.25 + fade);
+            ctx.fillStyle = shardLike ? '#8fe3c8' : '#e0c06a';
+            ctx.beginPath();
+            const r = scale * (shardLike ? 0.07 : 0.05);
+            ctx.arc(screenX, horizon + scale * 0.12, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = Math.min(0.35, fade * 0.35);
+            ctx.beginPath();
+            ctx.arc(screenX, horizon + scale * 0.12, r * 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          });
+
+        const vignette = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.12, cw / 2, ch / 2, ch * 0.78);
+        vignette.addColorStop(0, 'rgba(0,0,0,0)');
+        vignette.addColorStop(1, `rgba(0,0,0,${0.84 + state.heart * 0.14})`);
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, cw, ch);
+
+        if (state.heart > 0.02) {
+          const beat = Math.abs(Math.sin(state.pulse * (3 + state.heart * 6)));
+          ctx.fillStyle = `rgba(150,20,20,${state.heart * 0.22 * beat})`;
+          ctx.fillRect(0, 0, cw, ch);
+        }
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(190,230,215,${state.flash * 0.28})`;
+          ctx.fillRect(0, 0, cw, ch);
+        }
+        ctx.restore();
+
+        hud(ctx, cw, [
+          `Этаж ${state.depth}`,
+          `Осколки ${state.shards.filter((sh) => !sh.taken).length}`,
+          `Очки ${state.score}`
+        ]);
+
+        const barW = cw * 0.42;
+        ctx.fillStyle = 'rgba(255,255,255,.12)';
+        ctx.fillRect(cw / 2 - barW / 2, ch - 26, barW, 6);
+        ctx.fillStyle = state.torch > 25 ? '#d8c98a' : '#c9605c';
+        ctx.fillRect(cw / 2 - barW / 2, ch - 26, (barW * state.torch) / 100, 6);
+
+        if (state.over) {
+          ctx.fillStyle = 'rgba(4,4,6,.82)';
+          ctx.fillRect(0, 0, cw, ch);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#e8d5d2';
+          ctx.font = '700 26px Inter, system-ui, sans-serif';
+          ctx.fillText('Оно вас нашло', cw / 2, ch / 2 - 8);
+          ctx.font = '500 14px Inter, system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(232,213,210,.7)';
+          ctx.fillText(`Этаж ${state.depth} · очки ${state.score}`, cw / 2, ch / 2 + 18);
+          ctx.fillText('Коснитесь, чтобы начать заново', cw / 2, ch / 2 + 42);
+          ctx.textAlign = 'start';
+        }
+      }
+    };
+  });
+}
+
+function rally(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let state = null;
+    const keys = new Set();
+    let touch = null;
+
+    const reset = () => {
+      state = {
+        lane: 1,
+        offset: 0,
+        speed: 210,
+        dist: 0,
+        score: 0,
+        curve: 0,
+        curveTarget: 0,
+        traffic: [],
+        coins: [],
+        spawn: 0,
+        coinSpawn: 0,
+        over: false,
+        boost: 0,
+        shake: 0
+      };
+    };
+    reset();
+
+    const lanes = 3;
+    const laneX = (index, size) => size.w * (0.22 + index * 0.28);
+
+    return {
+      score: () => state.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          touch = { x: pointerX(node, event), moved: false };
+        });
+        bind('pointermove', (event) => {
+          if (!touch) return;
+          const x = pointerX(node, event);
+          if (x - touch.x > 34 && state.lane < lanes - 1) {
+            state.lane += 1;
+            touch.x = x;
+            touch.moved = true;
+          } else if (touch.x - x > 34 && state.lane > 0) {
+            state.lane -= 1;
+            touch.x = x;
+            touch.moved = true;
+          }
+        });
+        const release = (event) => {
+          if (touch && !touch.moved) {
+            const x = pointerX(node, event);
+            if (x > width / 2 && state.lane < lanes - 1) state.lane += 1;
+            else if (x <= width / 2 && state.lane > 0) state.lane -= 1;
+          }
+          touch = null;
+        };
+        bind('pointerup', release);
+        bind('pointercancel', () => { touch = null; });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          if ((event.key === 'ArrowLeft' || event.key === 'a') && state.lane > 0) state.lane -= 1;
+          if ((event.key === 'ArrowRight' || event.key === 'd') && state.lane < lanes - 1) state.lane += 1;
+          keys.add(event.key);
+        }, window);
+        bind('keyup', (event) => keys.delete(event.key), window);
+      },
+      update(dt, size) {
+        if (state.over) return;
+        state.speed = Math.min(620, state.speed + dt * 11);
+        state.dist += state.speed * dt;
+        state.score = Math.floor(state.dist / 10);
+        state.offset = (state.offset + state.speed * dt) % 60;
+        state.shake = Math.max(0, state.shake - dt * 3);
+        state.boost = Math.max(0, state.boost - dt);
+
+        if (Math.random() < dt * 0.6) state.curveTarget = (Math.random() - 0.5) * 1.6;
+        state.curve += (state.curveTarget - state.curve) * dt * 1.4;
+
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.42, 1.25 - state.dist / 26000);
+          const busy = new Set();
+          const count = state.dist > 5000 && Math.random() < 0.4 ? 2 : 1;
+          for (let i = 0; i < count; i++) {
+            let lane = Math.floor(Math.random() * lanes);
+            let guard = 0;
+            while (busy.has(lane) && guard++ < 6) lane = Math.floor(Math.random() * lanes);
+            busy.add(lane);
+            state.traffic.push({ lane, y: -140, hue: 200 + Math.random() * 140 });
+          }
+        }
+
+        state.coinSpawn -= dt;
+        if (state.coinSpawn <= 0) {
+          state.coinSpawn = 0.7 + Math.random();
+          state.coins.push({ lane: Math.floor(Math.random() * lanes), y: -80, taken: false });
+        }
+
+        const carY = size.h * 0.78;
+        state.traffic.forEach((car) => { car.y += (state.speed + 120) * dt; });
+        state.coins.forEach((coin) => { coin.y += (state.speed + 120) * dt; });
+        state.traffic = state.traffic.filter((car) => car.y < size.h + 160);
+        state.coins = state.coins.filter((coin) => coin.y < size.h + 80 && !coin.taken);
+
+        for (const car of state.traffic) {
+          if (car.lane === state.lane && Math.abs(car.y - carY) < 58) {
+            state.over = true;
+            state.shake = 1;
+            report(state.score);
+          }
+        }
+        for (const coin of state.coins) {
+          if (coin.lane === state.lane && Math.abs(coin.y - carY) < 46) {
+            coin.taken = true;
+            state.score += 25;
+            state.boost = 0.4;
+          }
+        }
+      },
+      draw(ctx, size) {
+        const { w: cw, h: ch } = size;
+        ctx.save();
+        if (state.shake) ctx.translate((Math.random() - 0.5) * state.shake * 10, 0);
+
+        const sky = ctx.createLinearGradient(0, 0, 0, ch * 0.45);
+        sky.addColorStop(0, '#160f28');
+        sky.addColorStop(1, '#3a2148');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, cw, ch * 0.45);
+        const sunX = cw * 0.5 - state.curve * 90;
+        const sunY = ch * 0.37;
+        const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, ch * 0.14);
+        halo.addColorStop(0, 'rgba(240,194,122,.5)');
+        halo.addColorStop(1, 'rgba(240,194,122,0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(sunX - ch * 0.14, sunY - ch * 0.14, ch * 0.28, ch * 0.28);
+        ctx.fillStyle = '#f0c27a';
+        ctx.beginPath();
+        ctx.arc(sunX, sunY, ch * 0.045, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(20,12,32,.85)';
+        for (let i = 0; i < 14; i++) {
+          const bx = ((i * 97 + Math.floor(state.dist / 40)) % (cw + 120)) - 60;
+          const bh = ch * (0.03 + ((i * 37) % 9) / 120);
+          ctx.fillRect(bx, ch * 0.45 - bh, 26 + (i % 3) * 12, bh);
+        }
+
+        ctx.fillStyle = '#1c1226';
+        ctx.fillRect(0, ch * 0.45, cw, ch * 0.55);
+
+        const roadTop = ch * 0.45;
+        const topW = cw * 0.16;
+        const bottomW = cw * 0.94;
+        const skew = state.curve * cw * 0.12;
+        ctx.fillStyle = '#232030';
+        ctx.beginPath();
+        ctx.moveTo(cw / 2 - topW / 2 + skew, roadTop);
+        ctx.lineTo(cw / 2 + topW / 2 + skew, roadTop);
+        ctx.lineTo(cw / 2 + bottomW / 2, ch);
+        ctx.lineTo(cw / 2 - bottomW / 2, ch);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255,255,255,.5)';
+        ctx.lineWidth = 3;
+        for (let lane = 1; lane < lanes; lane++) {
+          for (let i = 0; i < 16; i++) {
+            const t0 = (i * 60 + state.offset) / (ch - roadTop);
+            const t1 = t0 + 0.045;
+            if (t0 > 1) continue;
+            const y0 = roadTop + (ch - roadTop) * Math.pow(t0, 1.7);
+            const y1 = roadTop + (ch - roadTop) * Math.pow(Math.min(1, t1), 1.7);
+            const p0 = Math.pow(t0, 1.7);
+            const p1 = Math.pow(Math.min(1, t1), 1.7);
+            const w0 = topW + (bottomW - topW) * p0;
+            const w1 = topW + (bottomW - topW) * p1;
+            const c0 = cw / 2 + skew * (1 - p0);
+            const c1 = cw / 2 + skew * (1 - p1);
+            const x0 = c0 - w0 / 2 + (w0 / lanes) * lane;
+            const x1 = c1 - w1 / 2 + (w1 / lanes) * lane;
+            ctx.globalAlpha = 0.15 + p0 * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+
+        const project = (lane, y) => {
+          const t = Math.max(0, Math.min(1, (y - roadTop) / (ch - roadTop)));
+          const p = Math.pow(t, 1.7);
+          const roadW = topW + (bottomW - topW) * p;
+          const center = cw / 2 + skew * (1 - p);
+          return { x: center - roadW / 2 + (roadW / lanes) * (lane + 0.5), scale: 0.25 + p * 0.9 };
+        };
+
+        state.coins.forEach((coin) => {
+          if (coin.y < roadTop) return;
+          const spot = project(coin.lane, coin.y);
+          const r = 9 * spot.scale;
+          ctx.fillStyle = '#e8c46a';
+          ctx.beginPath();
+          ctx.arc(spot.x, coin.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.5)';
+          ctx.beginPath();
+          ctx.arc(spot.x - r * 0.25, coin.y - r * 0.25, r * 0.32, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        const car = (x, y, scale, hue, mine) => {
+          const bw = 46 * scale;
+          const bh = 74 * scale;
+          ctx.fillStyle = mine ? '#8fd7c2' : `hsl(${hue} 55% 58%)`;
+          ctx.beginPath();
+          ctx.roundRect(x - bw / 2, y - bh / 2, bw, bh, 9 * scale);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(10,12,20,.75)';
+          ctx.beginPath();
+          ctx.roundRect(x - bw * 0.34, y - bh * 0.22, bw * 0.68, bh * 0.34, 5 * scale);
+          ctx.fill();
+          ctx.fillStyle = mine ? 'rgba(255,240,190,.9)' : 'rgba(255,120,110,.85)';
+          ctx.fillRect(x - bw * 0.36, y + (mine ? -bh * 0.46 : bh * 0.4), bw * 0.22, 5 * scale);
+          ctx.fillRect(x + bw * 0.14, y + (mine ? -bh * 0.46 : bh * 0.4), bw * 0.22, 5 * scale);
+        };
+
+        state.traffic
+          .filter((row) => row.y > roadTop)
+          .sort((a, b) => a.y - b.y)
+          .forEach((row) => {
+            const spot = project(row.lane, row.y);
+            car(spot.x, row.y, spot.scale, row.hue, false);
+          });
+
+        const carY = ch * 0.78;
+        const mine = project(state.lane, carY);
+        if (state.boost > 0) {
+          ctx.fillStyle = `rgba(232,196,106,${state.boost * 0.5})`;
+          ctx.beginPath();
+          ctx.arc(mine.x, carY, 46, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        car(mine.x, carY, mine.scale, 160, true);
+        ctx.restore();
+
+        hud(ctx, cw, [`${Math.round(state.speed / 3)} км/ч`, `Очки ${state.score}`]);
+
+        if (state.over) {
+          ctx.fillStyle = 'rgba(8,6,14,.82)';
+          ctx.fillRect(0, 0, cw, ch);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#eef2fb';
+          ctx.font = '700 26px Inter, system-ui, sans-serif';
+          ctx.fillText('Разбились', cw / 2, ch / 2 - 8);
+          ctx.font = '500 14px Inter, system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(238,242,251,.7)';
+          ctx.fillText(`Очки ${state.score}`, cw / 2, ch / 2 + 18);
+          ctx.fillText('Коснитесь, чтобы поехать снова', cw / 2, ch / 2 + 42);
+          ctx.textAlign = 'start';
+        }
+      }
+    };
+  });
+}
+
 export const GAMES = [
+  {
+    id: 'dread',
+    title: 'Мрак',
+    desc: 'Хоррор от первого лица: монстры, фонарь, этажи',
+    tint: ['#0a0a10', '#1c1016'],
+    mount: dread
+  },
+  {
+    id: 'rally',
+    title: 'Гонка',
+    desc: 'Уворачивайся от машин и собирай монеты',
+    tint: ['#160f28', '#3a2148'],
+    mount: rally
+  },
   {
     id: 'snake',
     title: 'Змейка',

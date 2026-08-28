@@ -84,6 +84,17 @@ function launch(game, done) {
       try {
         await api.saveScore(game.id, score);
       } catch {}
+      if (api.grantCoins && score > 0) {
+        try {
+          const purse = await api.grantCoins(Math.floor(score / 40), `Игра: ${game.title}`);
+          if (purse?.added > 0) {
+            toast(`+${purse.added} монет`);
+            const { setUser } = await import('../store.js');
+            const { user } = await api.me();
+            if (user) setUser(user);
+          }
+        } catch {}
+      }
     }
   };
 
