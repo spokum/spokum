@@ -630,13 +630,21 @@ export function postCard(post, refresh, options = {}) {
     lastTouch = now;
   });
 
+  const plainLike = () => {
+    const like = card.querySelector('[data-like]');
+    if (like) like.hidden = false;
+  };
+
   if (isBeta() && api.react) {
-    import('./extras.js').then(({ reactionRow }) => {
-      const slot = card.querySelector('[data-reacts]');
-      if (slot) slot.replaceWith(reactionRow(post));
-    }).catch(() => {});
+    import('./extras.js')
+      .then(async ({ reactionRow, reactionsReady }) => {
+        if (!(await reactionsReady())) return plainLike();
+        const slot = card.querySelector('[data-reacts]');
+        if (slot) slot.replaceWith(reactionRow(post));
+      })
+      .catch(plainLike);
   } else {
-    card.querySelector('[data-like]').hidden = false;
+    plainLike();
   }
 
   card.querySelector('[data-like]').onclick = async (event) => {

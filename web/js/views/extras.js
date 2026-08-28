@@ -5,9 +5,9 @@ import { openSheet, toast, emptyState } from '../ui.js';
 
 export const REACTIONS = [
   ['heart', 'heart', 'Сердце'],
-  ['hug', 'group', 'Обнимаю'],
-  ['same', 'wave', 'Я так же'],
-  ['hold', 'shield', 'Держись'],
+  ['hug', 'heart_hands', 'Обнимаю'],
+  ['same', 'same', 'Я так же'],
+  ['hold', 'hold', 'Держись'],
   ['calm', 'leaf', 'Спокойно']
 ];
 
@@ -26,26 +26,94 @@ export const BADGES = {
   rich: ['coin', 'Тысяча монет', 'Накопили целое состояние']
 };
 
+let reactionsOk = null;
+
+export async function reactionsReady() {
+  if (!api.react || !api.reactions) return false;
+  if (reactionsOk !== null) return reactionsOk;
+  try {
+    await api.reactions(0);
+    reactionsOk = true;
+  } catch (error) {
+    reactionsOk = !/does not exist|not find|schema cache|404/i.test(error.message || '');
+  }
+  return reactionsOk;
+}
+
 export function reactionRow(post, refresh) {
-  const row = el(`<div class="react-row">${REACTIONS.map(
-    ([id, glyph, label]) => `<button class="react-btn ${post.myReaction === id ? 'on' : ''}" data-react="${id}" title="${label}">${icon(glyph, 16)}</button>`
-  ).join('')}<span class="react-total">${post.likes || 0}</span></div>`);
-  row.querySelectorAll('[data-react]').forEach((button) => {
-    button.onclick = async (event) => {
-      event.stopPropagation();
-      try {
-        const result = await api.react(post.id, button.dataset.react);
-        post.myReaction = result.mine;
-        post.likes = result.total;
-        row.querySelectorAll('[data-react]').forEach((b) => b.classList.toggle('on', b.dataset.react === result.mine));
-        row.querySelector('.react-total').textContent = result.total;
-        refresh?.();
-      } catch (error) {
-        toast(error.message, 'err');
+  const look = () => REACTIONS.find(([id]) => id === post.myReaction) || REACTIONS[0];
+  const wrap = el(`<span class="react-wrap">
+    <button class="icon-btn ${post.myReaction ? 'on' : ''}" data-react-main>${icon(look()[1], 17)}<span>${post.likes || 0}</span></button>
+  </span>`);
+  const main = wrap.querySelector('[data-react-main]');
+
+  const paint = (result) => {
+    post.myReaction = result.mine;
+    post.likes = result.total;
+    main.classList.toggle('on', !!result.mine);
+    main.innerHTML = `${icon(look()[1], 17)}<span>${result.total}</span>`;
+  };
+
+  const send = async (kind) => {
+    try {
+      paint(await api.react(post.id, kind));
+      refresh?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  const openPicker = () => {
+    wrap.querySelector('.react-pop')?.remove();
+    const pop = el(`<span class="react-pop">${REACTIONS.map(
+      ([id, glyph, label]) => `<button class="react-pick ${post.myReaction === id ? 'on' : ''}" data-pick="${id}" title="${label}"><span>${icon(glyph, 18)}</span><small>${label}</small></button>`
+    ).join('')}</span>`);
+    pop.querySelectorAll('[data-pick]').forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        pop.remove();
+        send(button.dataset.pick);
+      };
+    });
+    wrap.appendChild(pop);
+    const away = (event) => {
+      if (!wrap.contains(event.target)) {
+        pop.remove();
+        document.removeEventListener('pointerdown', away, true);
       }
     };
+    setTimeout(() => document.addEventListener('pointerdown', away, true), 0);
+  };
+
+  let hold = null;
+  main.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+    hold = setTimeout(() => {
+      hold = null;
+      openPicker();
+    }, 380);
   });
-  return row;
+  const release = () => {
+    if (hold) {
+      clearTimeout(hold);
+      hold = null;
+      if (post.myReaction) send(post.myReaction);
+      else openPicker();
+    }
+  };
+  main.addEventListener('pointerup', release);
+  main.addEventListener('pointerleave', () => {
+    clearTimeout(hold);
+    hold = null;
+  });
+  main.onclick = (event) => event.stopPropagation();
+
+  api.reactions?.(post.id).then((counts) => {
+    const total = Object.values(counts || {}).reduce((sum, n) => sum + n, 0);
+    if (total) main.querySelector('span').textContent = total;
+  }).catch(() => {});
+
+  return wrap;
 }
 
 export async function openBadges() {

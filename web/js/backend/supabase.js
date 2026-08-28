@@ -221,10 +221,22 @@ export async function createSupabase(url, key) {
     return map;
   }
 
-  const POST_SELECT_FULL = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
-  const POST_SELECT_BASE = 'id, body, image, mood, created_at, removed, removed_reason, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const POST_CORE = 'id, body, image, mood, created_at, removed, removed_reason';
+  const POST_TAIL = 'author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const POST_TIERS = [
+    `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, ${POST_TAIL}`,
+    `${POST_CORE}, kind, media, video, poster, duration, views, ${POST_TAIL}`,
+    `${POST_CORE}, ${POST_TAIL}`
+  ];
+  let postTier = 0;
   let legacyPosts = false;
-  const POST_SELECT = () => (legacyPosts ? POST_SELECT_BASE : POST_SELECT_FULL);
+  const POST_SELECT = () => POST_TIERS[postTier];
+  const dropTier = () => {
+    if (postTier >= POST_TIERS.length - 1) return false;
+    postTier += 1;
+    legacyPosts = postTier >= POST_TIERS.length - 1;
+    return true;
+  };
   const missingColumn = (error) => !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message || ''));
 
   const listen = () => {
@@ -528,8 +540,7 @@ export async function createSupabase(url, key) {
           .order('created_at', { ascending: false })
           .limit(50);
       let posts = await grab();
-      if (missingColumn(posts.error)) {
-        legacyPosts = true;
+      if (missingColumn(posts.error) && dropTier()) {
         posts = await grab();
       }
       guard(posts.error);
@@ -555,14 +566,13 @@ export async function createSupabase(url, key) {
         return request;
       };
       let { data, error } = await build();
-      if (missingColumn(error)) {
-        legacyPosts = true;
-        if (kind === 'video' || kind === 'album' || kind === 'reels') return { posts: [], more: false, cursor: null };
+      while (missingColumn(error) && dropTier()) {
+        if (legacyPosts && (kind === 'video' || kind === 'album' || kind === 'reels')) return { posts: [], more: false, cursor: null };
         ({ data, error } = await build());
       }
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
-      const origins = legacyPosts ? new Map() : await withOrigins(data || []);
+      const origins = postTier === 0 ? await withOrigins(data || []) : new Map();
       const posts = (data || []).map((row) => shapePost(row, liked, { origin: origins.get(row.repost_of) || null }));
       return { posts, more: posts.length === size, cursor: posts.length ? posts[posts.length - 1].createdAt : null };
     },
@@ -647,17 +657,16 @@ export async function createSupabase(url, key) {
         sound: sound || null,
         poll: poll || null
       };
+      const shed = [['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
       let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
-      if (missingColumn(error)) {
-        legacyPosts = true;
-        if (video || album.length > 1) {
+      for (const keys of shed) {
+        if (!missingColumn(error)) break;
+        dropTier();
+        keys.forEach((key) => delete payload[key]);
+        if (!payload.kind && (video || album.length > 1)) {
           throw new Error('Видео и альбомы появятся после того, как вы прогоните supabase/schema.sql заново');
         }
-        ({ data, error } = await sb
-          .from('posts')
-          .insert({ author_id: id, body, image: payload.image, mood: payload.mood })
-          .select(POST_SELECT())
-          .single());
+        ({ data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single());
       }
       guard(error);
       return { post: shapePost(data, new Set()) };
@@ -968,8 +977,7 @@ export async function createSupabase(url, key) {
     async modQueue() {
       const grab = () => sb.from('posts').select(POST_SELECT()).order('created_at', { ascending: false }).limit(60);
       let { data, error } = await grab();
-      if (missingColumn(error)) {
-        legacyPosts = true;
+      if (missingColumn(error) && dropTier()) {
         ({ data, error } = await grab());
       }
       guard(error);
