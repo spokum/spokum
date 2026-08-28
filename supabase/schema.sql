@@ -1928,3 +1928,779 @@ revoke execute on function public.admin_mod_team() from public, anon;
 grant execute on function public.admin_mod_team() to authenticated;
 revoke execute on function public.admin_set_rank(uuid, integer) from public, anon;
 grant execute on function public.admin_set_rank(uuid, integer) to authenticated;
+
+alter table public.profiles add column if not exists is_beta boolean not null default false;
+alter table public.profiles add column if not exists coins integer not null default 0;
+alter table public.posts add column if not exists sound text;
+alter table public.posts add column if not exists repost_of bigint references public.posts on delete set null;
+alter table public.posts add column if not exists removed_proof text;
+alter table public.messages add column if not exists post_id bigint references public.posts on delete set null;
+
+create or replace function public.viewer_is_beta()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select is_beta or username = 'silver' from public.profiles where id = auth.uid()), false);
+$$;
+
+create or replace function public.protect_profile()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(current_setting('spokum.privileged', true), '') = 'on' then
+    return new;
+  end if;
+  if not public.viewer_is_premium() then
+    new.pins := old.pins;
+    new.status_icon := old.status_icon;
+  end if;
+  new.username := old.username;
+  new.is_admin := old.is_admin;
+  new.is_moderator := old.is_moderator;
+  new.is_developer := old.is_developer;
+  new.is_verified := old.is_verified;
+  new.banned_until := old.banned_until;
+  new.muted_until := old.muted_until;
+  new.ban_reason := old.ban_reason;
+  new.created_at := old.created_at;
+  new.premium_until := old.premium_until;
+  new.premium_reason := old.premium_reason;
+  new.premium_granted_at := old.premium_granted_at;
+  new.mod_rank := old.mod_rank;
+  new.is_beta := old.is_beta;
+  new.coins := old.coins;
+  return new;
+end;
+$$;
+
+create table if not exists public.coin_log (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  amount integer not null,
+  reason text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists coin_log_user_idx on public.coin_log (user_id, created_at desc);
+
+create table if not exists public.gift_types (
+  id text primary key,
+  title text not null,
+  price integer not null default 50,
+  rarity text not null default 'common',
+  art text not null default 'spark',
+  hue integer not null default 220,
+  sort integer not null default 0
+);
+
+create table if not exists public.gifts (
+  id bigint generated always as identity primary key,
+  type_id text not null references public.gift_types on delete cascade,
+  owner_id uuid not null references public.profiles on delete cascade,
+  from_id uuid references public.profiles on delete set null,
+  note text not null default '',
+  pinned boolean not null default false,
+  sold boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists gifts_owner_idx on public.gifts (owner_id, created_at desc);
+
+create table if not exists public.campfire_rooms (
+  id bigint generated always as identity primary key,
+  title text not null default 'Костёр',
+  created_at timestamptz not null default now(),
+  closes_at timestamptz not null default now() + interval '1 hour'
+);
+
+create table if not exists public.campfire_seats (
+  room_id bigint not null references public.campfire_rooms on delete cascade,
+  user_id uuid not null references public.profiles on delete cascade,
+  alias text not null,
+  joined_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+
+create table if not exists public.campfire_messages (
+  id bigint generated always as identity primary key,
+  room_id bigint not null references public.campfire_rooms on delete cascade,
+  author_id uuid references public.profiles on delete set null,
+  alias text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists campfire_messages_room_idx on public.campfire_messages (room_id, id desc);
+
+create table if not exists public.letters (
+  id bigint generated always as identity primary key,
+  author_id uuid not null references public.profiles on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now(),
+  to_id uuid references public.profiles on delete set null,
+  taken_at timestamptz,
+  reply text,
+  replied_at timestamptz
+);
+create index if not exists letters_free_idx on public.letters (taken_at) where taken_at is null;
+create index if not exists letters_author_idx on public.letters (author_id, created_at desc);
+
+create table if not exists public.capsules (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  body text not null,
+  open_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  opened_at timestamptz
+);
+create index if not exists capsules_user_idx on public.capsules (user_id, open_at);
+
+create table if not exists public.mentorships (
+  id bigint generated always as identity primary key,
+  mentor_id uuid not null references public.profiles on delete cascade,
+  student_id uuid not null references public.profiles on delete cascade,
+  created_at timestamptz not null default now(),
+  ended_at timestamptz
+);
+create unique index if not exists mentorships_active_idx on public.mentorships (student_id) where ended_at is null;
+
+create table if not exists public.mentor_reviews (
+  id bigint generated always as identity primary key,
+  mentor_id uuid not null references public.profiles on delete cascade,
+  student_id uuid not null references public.profiles on delete cascade,
+  punishment_id bigint references public.punishments on delete cascade,
+  verdict text not null,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists mentor_reviews_student_idx on public.mentor_reviews (student_id, created_at desc);
+
+alter table public.coin_log enable row level security;
+alter table public.gift_types enable row level security;
+alter table public.gifts enable row level security;
+alter table public.campfire_rooms enable row level security;
+alter table public.campfire_seats enable row level security;
+alter table public.campfire_messages enable row level security;
+alter table public.letters enable row level security;
+alter table public.capsules enable row level security;
+alter table public.mentorships enable row level security;
+alter table public.mentor_reviews enable row level security;
+
+drop policy if exists coin_log_own on public.coin_log;
+create policy coin_log_own on public.coin_log for select using (user_id = auth.uid() or public.viewer_is_admin());
+
+drop policy if exists gift_types_read on public.gift_types;
+create policy gift_types_read on public.gift_types for select using (true);
+
+drop policy if exists gifts_read on public.gifts;
+create policy gifts_read on public.gifts for select using (not sold);
+
+drop policy if exists campfire_rooms_read on public.campfire_rooms;
+create policy campfire_rooms_read on public.campfire_rooms for select using (true);
+
+drop policy if exists campfire_seats_own on public.campfire_seats;
+create policy campfire_seats_own on public.campfire_seats for select using (user_id = auth.uid());
+
+drop policy if exists campfire_messages_read on public.campfire_messages;
+create policy campfire_messages_read on public.campfire_messages for select
+  using (public.viewer_is_moderator() or exists (
+    select 1 from public.campfire_seats s where s.room_id = room_id and s.user_id = auth.uid()));
+
+drop policy if exists letters_mine on public.letters;
+create policy letters_mine on public.letters for select using (author_id = auth.uid() or to_id = auth.uid() or public.viewer_is_moderator());
+
+drop policy if exists capsules_own on public.capsules;
+create policy capsules_own on public.capsules for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists mentorships_read on public.mentorships;
+create policy mentorships_read on public.mentorships for select using (public.viewer_is_moderator());
+
+drop policy if exists mentor_reviews_read on public.mentor_reviews;
+create policy mentor_reviews_read on public.mentor_reviews for select
+  using (student_id = auth.uid() or mentor_id = auth.uid() or public.viewer_is_admin());
+
+insert into public.gift_types (id, title, price, rarity, art, hue, sort) values
+  ('leaf', 'Листок', 40, 'common', 'leaf', 140, 1),
+  ('cup', 'Тёплый чай', 60, 'common', 'cup', 30, 2),
+  ('star', 'Звезда', 90, 'common', 'star', 45, 3),
+  ('heart', 'Сердце', 120, 'rare', 'heart', 350, 4),
+  ('moon', 'Луна', 180, 'rare', 'moon', 230, 5),
+  ('wave', 'Волна', 220, 'rare', 'wave', 200, 6),
+  ('flame', 'Огонёк', 300, 'epic', 'flame', 20, 7),
+  ('crystal', 'Кристалл', 450, 'epic', 'crystal', 190, 8),
+  ('crown', 'Корона', 700, 'legend', 'crown', 45, 9),
+  ('comet', 'Комета', 1200, 'legend', 'comet', 265, 10)
+on conflict (id) do update set title = excluded.title, price = excluded.price,
+  rarity = excluded.rarity, art = excluded.art, hue = excluded.hue, sort = excluded.sort;
+
+create or replace function public.grant_coins(amount integer, reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  today integer;
+  give integer;
+  total integer;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  give := least(greatest(coalesce(amount, 0), 0), 40);
+  if give = 0 then return jsonb_build_object('added', 0); end if;
+
+  select coalesce(sum(l.amount), 0) into today
+    from public.coin_log l
+   where l.user_id = auth.uid() and l.amount > 0 and l.created_at > now() - interval '24 hours';
+
+  give := least(give, greatest(0, 300 - today));
+  if give = 0 then
+    select coins into total from public.profiles where id = auth.uid();
+    return jsonb_build_object('added', 0, 'coins', total, 'limit', true);
+  end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set coins = coins + give where id = auth.uid() returning coins into total;
+  insert into public.coin_log (user_id, amount, reason) values (auth.uid(), give, coalesce(reason, ''));
+  return jsonb_build_object('added', give, 'coins', total);
+end;
+$$;
+
+create or replace function public.buy_gift(gift text, target uuid, note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  kind public.gift_types;
+  purse integer;
+  fresh bigint;
+  who text;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  select * into kind from public.gift_types where id = gift;
+  if kind.id is null then raise exception 'Подарок не найден'; end if;
+  if not exists (select 1 from public.profiles where id = target) then raise exception 'Человек не найден'; end if;
+
+  select coins into purse from public.profiles where id = auth.uid();
+  if purse < kind.price then raise exception 'Не хватает монет: нужно % , у вас %', kind.price, purse; end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set coins = coins - kind.price where id = auth.uid();
+  insert into public.coin_log (user_id, amount, reason) values (auth.uid(), -kind.price, 'Подарок ' || kind.title);
+
+  insert into public.gifts (type_id, owner_id, from_id, note)
+  values (gift, target, auth.uid(), left(coalesce(note, ''), 200))
+  returning id into fresh;
+
+  select display_name into who from public.profiles where id = auth.uid();
+  if target <> auth.uid() then
+    perform public.notify_user(target, 'gift', 'Вам подарок',
+      coalesce(who, 'Кто-то') || ' дарит вам: ' || kind.title,
+      jsonb_build_object('gift', fresh, 'from', auth.uid()));
+  end if;
+
+  return jsonb_build_object('ok', true, 'gift', fresh, 'coins', purse - kind.price);
+end;
+$$;
+
+create or replace function public.sell_gift(target bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  row public.gifts;
+  kind public.gift_types;
+  pay integer;
+  fee integer;
+  boss uuid;
+  purse integer;
+begin
+  select * into row from public.gifts where id = target;
+  if row.id is null then raise exception 'Подарок не найден'; end if;
+  if row.owner_id <> auth.uid() then raise exception 'Это не ваш подарок'; end if;
+  if row.sold then raise exception 'Подарок уже продан'; end if;
+
+  select * into kind from public.gift_types where id = row.type_id;
+  pay := greatest(1, (kind.price * 70) / 100);
+  fee := greatest(1, (kind.price * 15) / 100);
+
+  perform set_config('spokum.privileged', 'on', true);
+  update public.gifts set sold = true, pinned = false where id = target;
+  update public.profiles set coins = coins + pay where id = auth.uid() returning coins into purse;
+  insert into public.coin_log (user_id, amount, reason) values (auth.uid(), pay, 'Продажа: ' || kind.title);
+
+  select id into boss from public.profiles where username = 'vanya8';
+  if boss is not null then
+    update public.profiles set coins = coins + fee where id = boss;
+    insert into public.coin_log (user_id, amount, reason) values (boss, fee, 'Комиссия с продажи ' || kind.title);
+  end if;
+
+  return jsonb_build_object('ok', true, 'paid', pay, 'fee', fee, 'coins', purse);
+end;
+$$;
+
+create or replace function public.pin_gift(target bigint, on_shelf boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  shown integer;
+begin
+  if not exists (select 1 from public.gifts where id = target and owner_id = auth.uid() and not sold) then
+    raise exception 'Подарок не найден';
+  end if;
+  if on_shelf then
+    select count(*) into shown from public.gifts where owner_id = auth.uid() and pinned and not sold;
+    if shown >= 6 then raise exception 'На витрине помещается шесть подарков'; end if;
+  end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.gifts set pinned = on_shelf where id = target;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.campfire_join()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  words text[] := array['Ветер','Туман','Ветка','Камень','Иней','Свет','Тень','Роса','Пепел','Искра','Тихий','Дальний','Ночной','Снежный','Лесной','Серый','Мятный','Синий'];
+  room bigint;
+  mine text;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+
+  delete from public.campfire_messages where created_at < now() - interval '1 hour';
+  delete from public.campfire_rooms where closes_at < now();
+
+  select r.id into mine from public.campfire_seats s join public.campfire_rooms r on r.id = s.room_id
+   where s.user_id = auth.uid() and r.closes_at > now() limit 1;
+  if mine is not null then
+    select room_id, alias into room, mine from public.campfire_seats where user_id = auth.uid() and room_id = mine::bigint;
+    return jsonb_build_object('room', room, 'alias', mine);
+  end if;
+
+  select r.id into room from public.campfire_rooms r
+   where r.closes_at > now()
+     and (select count(*) from public.campfire_seats s where s.room_id = r.id) < 10
+   order by r.created_at limit 1;
+
+  if room is null then
+    insert into public.campfire_rooms default values returning id into room;
+  end if;
+
+  mine := words[1 + floor(random() * array_length(words, 1))::int] || ' ' ||
+          words[1 + floor(random() * array_length(words, 1))::int];
+
+  insert into public.campfire_seats (room_id, user_id, alias)
+  values (room, auth.uid(), mine)
+  on conflict (room_id, user_id) do update set joined_at = now()
+  returning alias into mine;
+
+  return jsonb_build_object('room', room, 'alias', mine);
+end;
+$$;
+
+create or replace function public.campfire_say(room bigint, body text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  mine text;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if coalesce(trim(body), '') = '' then raise exception 'Пустое сообщение'; end if;
+  select alias into mine from public.campfire_seats where room_id = room and user_id = auth.uid();
+  if mine is null then raise exception 'Вы не у этого костра'; end if;
+  if (select closes_at from public.campfire_rooms where id = room) < now() then raise exception 'Костёр погас'; end if;
+
+  insert into public.campfire_messages (room_id, author_id, alias, body)
+  values (room, auth.uid(), mine, left(body, 600));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.campfire_read(room bigint, after bigint default 0)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  mine text;
+  result jsonb;
+begin
+  select alias into mine from public.campfire_seats where room_id = room and user_id = auth.uid();
+  if mine is null then raise exception 'Вы не у этого костра'; end if;
+
+  select jsonb_build_object(
+    'alias', mine,
+    'people', (select count(*) from public.campfire_seats where room_id = room),
+    'closesAt', (select closes_at from public.campfire_rooms where id = room),
+    'messages', coalesce((
+      select jsonb_agg(jsonb_build_object('id', m.id, 'alias', m.alias, 'body', m.body, 'createdAt', m.created_at, 'mine', m.alias = mine) order by m.id)
+        from (select * from public.campfire_messages where room_id = room and id > coalesce(after, 0) order by id desc limit 80) m
+    ), '[]'::jsonb)
+  ) into result;
+  return result;
+end;
+$$;
+
+create or replace function public.campfire_leave(room bigint)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  delete from public.campfire_seats where room_id = room and user_id = auth.uid();
+end;
+$$;
+
+create or replace function public.letter_send(body text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  fresh bigint;
+  waiting integer;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if length(coalesce(trim(body), '')) < 10 then raise exception 'Напишите хотя бы пару строк'; end if;
+
+  select count(*) into waiting from public.letters
+   where author_id = auth.uid() and created_at > now() - interval '24 hours';
+  if waiting >= 3 then raise exception 'Не больше трёх писем в сутки'; end if;
+
+  insert into public.letters (author_id, body) values (auth.uid(), left(body, 2000)) returning id into fresh;
+  return jsonb_build_object('ok', true, 'letter', fresh);
+end;
+$$;
+
+create or replace function public.letter_take()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  row public.letters;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+
+  select * into row from public.letters
+   where taken_at is null and author_id <> auth.uid()
+   order by random() limit 1
+   for update skip locked;
+
+  if row.id is null then return jsonb_build_object('empty', true); end if;
+
+  update public.letters set to_id = auth.uid(), taken_at = now() where id = row.id;
+  return jsonb_build_object('id', row.id, 'body', row.body, 'createdAt', row.created_at);
+end;
+$$;
+
+create or replace function public.letter_reply(target bigint, answer text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  row public.letters;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  select * into row from public.letters where id = target;
+  if row.id is null or row.to_id <> auth.uid() then raise exception 'Письмо не ваше'; end if;
+  if row.reply is not null then raise exception 'Ответ уже отправлен'; end if;
+  if coalesce(trim(answer), '') = '' then raise exception 'Пустой ответ'; end if;
+
+  update public.letters set reply = left(answer, 2000), replied_at = now() where id = target;
+
+  perform public.notify_user(row.author_id, 'letter', 'На ваше письмо ответили',
+    'Незнакомец написал вам в ответ', jsonb_build_object('letter', target));
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.my_letters()
+returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', l.id, 'body', l.body, 'reply', l.reply,
+    'createdAt', l.created_at, 'takenAt', l.taken_at, 'repliedAt', l.replied_at
+  ) order by l.created_at desc), '[]'::jsonb)
+  from public.letters l where l.author_id = auth.uid();
+$$;
+
+create or replace function public.capsule_add(body text, days integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  fresh bigint;
+  waiting integer;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if coalesce(trim(body), '') = '' then raise exception 'Пустое письмо'; end if;
+  if days < 1 or days > 1825 then raise exception 'Срок от одного дня до пяти лет'; end if;
+
+  select count(*) into waiting from public.capsules where user_id = auth.uid() and opened_at is null;
+  if waiting >= 20 then raise exception 'Больше двадцати капсул сразу нельзя'; end if;
+
+  insert into public.capsules (user_id, body, open_at)
+  values (auth.uid(), left(body, 4000), now() + make_interval(days => days))
+  returning id into fresh;
+  return jsonb_build_object('ok', true, 'capsule', fresh);
+end;
+$$;
+
+create or replace function public.capsule_check()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  ready integer;
+begin
+  if auth.uid() is null then return jsonb_build_object('ready', 0); end if;
+  select count(*) into ready from public.capsules
+   where user_id = auth.uid() and opened_at is null and open_at <= now();
+
+  if ready > 0 then
+    update public.capsules set opened_at = now()
+     where user_id = auth.uid() and opened_at is null and open_at <= now();
+    perform public.notify_user(auth.uid(), 'capsule', 'Капсула времени открылась',
+      'Вы писали это себе. Пора прочитать', jsonb_build_object('count', ready));
+  end if;
+  return jsonb_build_object('ready', ready);
+end;
+$$;
+
+create or replace function public.mentor_take(student uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  rank integer;
+  who text;
+begin
+  select mod_rank into rank from public.profiles where id = auth.uid();
+  if not public.viewer_is_admin() and coalesce(rank, 0) < 3 then
+    raise exception 'Брать учеников может старший модератор и выше';
+  end if;
+  if student = auth.uid() then raise exception 'Себя брать нельзя'; end if;
+  if not exists (select 1 from public.profiles where id = student and is_moderator) then
+    raise exception 'Ученик должен быть модератором';
+  end if;
+  if exists (select 1 from public.mentorships where student_id = student and ended_at is null) then
+    raise exception 'У него уже есть наставник';
+  end if;
+
+  insert into public.mentorships (mentor_id, student_id) values (auth.uid(), student);
+  select display_name into who from public.profiles where id = auth.uid();
+  perform public.notify_user(student, 'modaction', 'У вас появился наставник',
+    coalesce(who, 'Старший модератор') || ' будет смотреть ваши решения и подсказывать',
+    jsonb_build_object('mentor', auth.uid()));
+  perform public.log_action('mentor.take', jsonb_build_object('student', student));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.mentor_drop(student uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  update public.mentorships set ended_at = now()
+   where student_id = student and ended_at is null and (mentor_id = auth.uid() or public.viewer_is_admin());
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.mentor_review(target bigint, verdict text, note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  act public.punishments;
+  link public.mentorships;
+begin
+  if verdict not in ('good', 'soft', 'hard', 'wrong') then raise exception 'Неизвестная оценка'; end if;
+  select * into act from public.punishments where id = target;
+  if act.id is null then raise exception 'Решение не найдено'; end if;
+
+  select * into link from public.mentorships
+   where student_id = act.actor_id and ended_at is null and mentor_id = auth.uid();
+  if link.id is null and not public.viewer_is_admin() then raise exception 'Это не ваш ученик'; end if;
+
+  insert into public.mentor_reviews (mentor_id, student_id, punishment_id, verdict, note)
+  values (auth.uid(), act.actor_id, target, verdict, left(coalesce(note, ''), 500));
+
+  perform public.notify_user(act.actor_id, 'modaction',
+    case verdict when 'good' then 'Наставник одобрил решение'
+                 when 'soft' then 'Наставник: мягковато'
+                 when 'hard' then 'Наставник: слишком строго'
+                 else 'Наставник: решение неверное' end,
+    coalesce(nullif(trim(note), ''), 'Без комментария'),
+    jsonb_build_object('punishment', target, 'verdict', verdict));
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.mentor_board()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+
+  select jsonb_build_object(
+    'students', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', p.id, 'username', p.username, 'displayName', p.display_name,
+        'avatar', p.avatar, 'hue', p.hue, 'rank', p.mod_rank,
+        'rankName', public.rank_name(p.mod_rank),
+        'since', m.created_at,
+        'actions', (select count(*) from public.punishments x where x.actor_id = p.id),
+        'good', (select count(*) from public.mentor_reviews r where r.student_id = p.id and r.verdict = 'good'),
+        'bad', (select count(*) from public.mentor_reviews r where r.student_id = p.id and r.verdict <> 'good')
+      ) order by m.created_at desc)
+      from public.mentorships m join public.profiles p on p.id = m.student_id
+      where m.mentor_id = auth.uid() and m.ended_at is null), '[]'::jsonb),
+    'mentor', (
+      select jsonb_build_object('id', p.id, 'displayName', p.display_name, 'username', p.username,
+        'rankName', public.rank_name(p.mod_rank), 'since', m.created_at)
+      from public.mentorships m join public.profiles p on p.id = m.mentor_id
+      where m.student_id = auth.uid() and m.ended_at is null),
+    'reviews', coalesce((
+      select jsonb_agg(jsonb_build_object('id', r.id, 'verdict', r.verdict, 'note', r.note,
+        'createdAt', r.created_at, 'mentor', p.display_name) order by r.created_at desc)
+      from public.mentor_reviews r join public.profiles p on p.id = r.mentor_id
+      where r.student_id = auth.uid() limit 30), '[]'::jsonb),
+    'free', coalesce((
+      select jsonb_agg(jsonb_build_object('id', p.id, 'username', p.username, 'displayName', p.display_name,
+        'avatar', p.avatar, 'hue', p.hue, 'rankName', public.rank_name(p.mod_rank)))
+      from public.profiles p
+      where p.is_moderator and not p.is_admin and p.id <> auth.uid() and coalesce(p.mod_rank, 0) < 3
+        and not exists (select 1 from public.mentorships m where m.student_id = p.id and m.ended_at is null)), '[]'::jsonb)
+  ) into result;
+  return result;
+end;
+$$;
+
+create or replace function public.mentor_feed()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  select coalesce(jsonb_agg(row order by (row->>'createdAt') desc), '[]'::jsonb) into result
+  from (
+    select jsonb_build_object(
+      'id', x.id, 'kind', x.kind, 'reason', x.reason, 'minutes', x.minutes,
+      'createdAt', x.created_at, 'proof', p.removed_proof,
+      'student', s.display_name, 'studentId', s.id,
+      'target', t.display_name,
+      'review', (select jsonb_build_object('verdict', r.verdict, 'note', r.note)
+                   from public.mentor_reviews r where r.punishment_id = x.id limit 1)
+    ) as row
+    from public.punishments x
+    join public.mentorships m on m.student_id = x.actor_id and m.ended_at is null and m.mentor_id = auth.uid()
+    join public.profiles s on s.id = x.actor_id
+    left join public.profiles t on t.id = x.user_id
+    left join public.posts p on p.id = x.post_id
+    order by x.created_at desc limit 40
+  ) rows;
+  return result;
+end;
+$$;
+
+drop function if exists public.mod_remove_post(bigint, text);
+
+create or replace function public.mod_remove_post(target bigint, reason text, proof text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  author uuid;
+  title text;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  if coalesce(trim(reason), '') = '' then raise exception 'Нужна причина'; end if;
+  if coalesce(trim(proof), '') = '' then raise exception 'Приложите снимок нарушения, без него снять запись нельзя'; end if;
+
+  select author_id into author from public.posts where id = target;
+  if author is null then raise exception 'Пост не найден'; end if;
+
+  update public.posts
+     set removed = true, removed_by = auth.uid(), removed_reason = reason,
+         removed_at = now(), removed_proof = proof
+   where id = target;
+
+  insert into public.punishments (actor_id, user_id, kind, reason, post_id)
+  values (auth.uid(), author, 'post_removed', reason, target);
+
+  perform public.notify_user(author, 'removed', 'Ваша запись снята с публикации', reason,
+    jsonb_build_object('post', target));
+
+  select display_name into title from public.profiles where id = auth.uid();
+  perform public.notify_admins('modaction', 'Модератор снял запись',
+    coalesce(title, 'Модератор') || ': ' || reason,
+    jsonb_build_object('post', target, 'mod', auth.uid()), auth.uid());
+
+  perform public.log_action('post.remove', jsonb_build_object('post', target, 'reason', reason));
+end;
+$$;
+
+create or replace function public.repost(target bigint, note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  source public.posts;
+  fresh bigint;
+  who text;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  select * into source from public.posts where id = target and not removed;
+  if source.id is null then raise exception 'Запись не найдена'; end if;
+  if source.repost_of is not null then
+    select * into source from public.posts where id = source.repost_of and not removed;
+    if source.id is null then raise exception 'Исходная запись пропала'; end if;
+  end if;
+  if exists (select 1 from public.posts where author_id = auth.uid() and repost_of = source.id) then
+    raise exception 'Вы это уже репостнули';
+  end if;
+
+  insert into public.posts (author_id, body, mood, kind, media, video, poster, duration, sound, repost_of)
+  values (auth.uid(), left(coalesce(note, ''), 500), source.mood, source.kind, source.media,
+          source.video, source.poster, source.duration, source.sound, source.id)
+  returning id into fresh;
+
+  select display_name into who from public.profiles where id = auth.uid();
+  if source.author_id <> auth.uid() then
+    perform public.notify_user(source.author_id, 'newpost', 'Ваш ролик репостнули',
+      coalesce(who, 'Кто-то') || ' поделился вашей записью',
+      jsonb_build_object('post', fresh, 'from', auth.uid()));
+  end if;
+
+  return jsonb_build_object('ok', true, 'post', fresh);
+end;
+$$;
+
+create or replace function public.send_post(chat bigint, target bigint, note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  source public.posts;
+  fresh bigint;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if not public.is_chat_member(chat) then raise exception 'Вы не в этом чате'; end if;
+  select * into source from public.posts where id = target and not removed;
+  if source.id is null then raise exception 'Запись не найдена'; end if;
+
+  insert into public.messages (chat_id, author_id, kind, body, media, duration, post_id)
+  values (chat, auth.uid(),
+          case when source.video is not null then 'video' else 'post' end,
+          left(coalesce(note, ''), 500),
+          coalesce(source.video, source.poster, source.image), source.duration, source.id)
+  returning id into fresh;
+
+  return jsonb_build_object('ok', true, 'message', fresh);
+end;
+$$;
+
+create or replace function public.admin_set_beta(target uuid, on_beta boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set is_beta = coalesce(on_beta, false) where id = target;
+  perform public.log_action('admin.beta', jsonb_build_object('user', target, 'on', on_beta));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.admin_give_coins(target uuid, amount integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  purse integer;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set coins = greatest(0, coins + amount) where id = target returning coins into purse;
+  insert into public.coin_log (user_id, amount, reason) values (target, amount, 'От администрации');
+  if amount > 0 then
+    perform public.notify_user(target, 'gift', 'Монеты от администрации',
+      'Вам начислено ' || amount::text, jsonb_build_object('coins', amount));
+  end if;
+  return jsonb_build_object('ok', true, 'coins', purse);
+end;
+$$;
+
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.campfire_messages;
+  exception when others then null;
+  end;
+end $$;
+
+revoke execute on function public.mentor_take(uuid) from public, anon;
+grant execute on function public.mentor_take(uuid) to authenticated;
+revoke execute on function public.mentor_review(bigint, text, text) from public, anon;
+grant execute on function public.mentor_review(bigint, text, text) to authenticated;
+revoke execute on function public.admin_set_beta(uuid, boolean) from public, anon;
+grant execute on function public.admin_set_beta(uuid, boolean) to authenticated;
+revoke execute on function public.admin_give_coins(uuid, integer) from public, anon;
+grant execute on function public.admin_give_coins(uuid, integer) to authenticated;
+revoke execute on function public.grant_coins(integer, text) from public, anon;
+grant execute on function public.grant_coins(integer, text) to authenticated;
