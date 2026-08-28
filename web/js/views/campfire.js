@@ -26,7 +26,13 @@ function resetRoom() {
   lastId = 0;
 }
 
+export const CAMPFIRE_OFF = true;
+
 export async function openCampfire() {
+  if (CAMPFIRE_OFF) {
+    toast('Костёр временно закрыт', 'err');
+    return null;
+  }
   stopCampfire();
   resetRoom();
   const view = el(`

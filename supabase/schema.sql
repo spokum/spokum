@@ -2944,3 +2944,12 @@ begin
   return jsonb_build_object('ok', true);
 end;
 $$;
+
+delete from public.campfire_messages;
+delete from public.campfire_seats;
+delete from public.campfire_rooms;
+
+revoke execute on function public.campfire_join() from public, anon, authenticated;
+revoke execute on function public.campfire_say(bigint, text) from public, anon, authenticated;
+revoke execute on function public.campfire_read(bigint, bigint) from public, anon, authenticated;
+revoke execute on function public.campfire_leave(bigint) from public, anon, authenticated;
