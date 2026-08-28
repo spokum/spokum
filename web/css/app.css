@@ -1372,17 +1372,30 @@ svg { display: block; flex: none; }
   font-size: 11.5px; font-weight: 700;
 }
 .camp-view { background: radial-gradient(120% 70% at 50% 100%, rgba(255,140,60,.09), transparent 70%), var(--bg); }
-.camp-fire { color: #e08a4a; }
-.camp-body { display: flex; flex-direction: column; gap: 9px; padding: 14px; overflow-y: auto; }
-.camp-hint { text-align: center; padding: 18px 14px; color: var(--accent); }
+.camp-fire { color: #e08a4a; flex: none; }
+.camp-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: stretch; gap: 9px;
+  padding: 14px 14px 6px;
+}
+.camp-hint { text-align: center; padding: 10px 6px 16px; }
+.camp-hint-icon { display: inline-flex; color: #e08a4a; margin-bottom: 8px; }
+.camp-hint p { margin: 6px 0 0; line-height: 1.5; }
 .camp-line {
-  align-self: flex-start; max-width: 86%;
+  align-self: flex-start; max-width: 84%;
   padding: 9px 13px; border-radius: 16px 16px 16px 5px;
   background: var(--surface-2); border: 1px solid var(--line);
 }
 .camp-line.mine { align-self: flex-end; border-radius: 16px 16px 5px 16px; background: var(--accent-soft); border-color: transparent; }
 .camp-alias { display: block; font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
-.camp-body-text { font-size: 14px; line-height: 1.45; word-break: break-word; }
+.camp-body-text { display: block; font-size: 14px; line-height: 1.45; word-break: break-word; }
+.camp-form {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); background: var(--bg-2);
+}
+.camp-input { flex: 1; min-width: 0; }
+.camp-send { flex: none; }
 
 .letter-paper { padding: 16px; background: var(--surface-2); border-left: 3px solid var(--accent); }
 .letter-reply { margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--line-strong); }
