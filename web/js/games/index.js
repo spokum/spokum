@@ -2180,7 +2180,1131 @@ function rally(canvas, report) {
   });
 }
 
+function tetris(canvas, report) {
+  return runner(canvas, () => {
+    const cols = 10;
+    const rows = 20;
+    const SHAPES = [
+      [[1, 1, 1, 1]],
+      [[1, 1], [1, 1]],
+      [[0, 1, 0], [1, 1, 1]],
+      [[1, 0, 0], [1, 1, 1]],
+      [[0, 0, 1], [1, 1, 1]],
+      [[1, 1, 0], [0, 1, 1]],
+      [[0, 1, 1], [1, 1, 0]]
+    ];
+    const TINTS = ['#6fc5ff', '#e8c46a', '#a58bff', '#7fb0ff', '#f0a06a', '#8fd7a8', '#e88f9a'];
+    let state = null;
+    let swipe = null;
+
+    const spawn = () => {
+      const index = Math.floor(Math.random() * SHAPES.length);
+      return { cells: SHAPES[index].map((row) => [...row]), tint: TINTS[index], x: 3, y: 0 };
+    };
+
+    const reset = () => {
+      state = {
+        board: Array.from({ length: rows }, () => Array(cols).fill(null)),
+        piece: spawn(),
+        next: spawn(),
+        drop: 0,
+        speed: 0.62,
+        score: 0,
+        lines: 0,
+        over: false
+      };
+    };
+    reset();
+
+    const hits = (piece, ox, oy, cells) => {
+      const shape = cells || piece.cells;
+      for (let y = 0; y < shape.length; y++) {
+        for (let x = 0; x < shape[y].length; x++) {
+          if (!shape[y][x]) continue;
+          const nx = piece.x + x + ox;
+          const ny = piece.y + y + oy;
+          if (nx < 0 || nx >= cols || ny >= rows) return true;
+          if (ny >= 0 && state.board[ny][nx]) return true;
+        }
+      }
+      return false;
+    };
+
+    const merge = () => {
+      state.piece.cells.forEach((row, y) => {
+        row.forEach((cell, x) => {
+          if (!cell) return;
+          const ny = state.piece.y + y;
+          if (ny >= 0) state.board[ny][state.piece.x + x] = state.piece.tint;
+        });
+      });
+      let cleared = 0;
+      for (let y = rows - 1; y >= 0; y--) {
+        if (state.board[y].every(Boolean)) {
+          state.board.splice(y, 1);
+          state.board.unshift(Array(cols).fill(null));
+          cleared += 1;
+          y += 1;
+        }
+      }
+      if (cleared) {
+        state.lines += cleared;
+        state.score += [0, 100, 300, 600, 1000][cleared];
+        state.speed = Math.max(0.13, 0.62 - state.lines * 0.012);
+      }
+      state.piece = state.next;
+      state.next = spawn();
+      if (hits(state.piece, 0, 0)) {
+        state.over = true;
+        report(state.score);
+      }
+    };
+
+    const rotate = () => {
+      const cells = state.piece.cells;
+      const turned = cells[0].map((_, i) => cells.map((row) => row[i]).reverse());
+      for (const shift of [0, -1, 1, -2, 2]) {
+        if (!hits(state.piece, shift, 0, turned)) {
+          state.piece.cells = turned;
+          state.piece.x += shift;
+          return;
+        }
+      }
+    };
+
+    const shift = (dir) => {
+      if (!hits(state.piece, dir, 0)) state.piece.x += dir;
+    };
+
+    const fall = () => {
+      if (!hits(state.piece, 0, 1)) state.piece.y += 1;
+      else merge();
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          swipe = { ...pointerPos(node, event), at: Date.now(), moved: false };
+        });
+        bind('pointermove', (event) => {
+          if (!swipe) return;
+          const spot = pointerPos(node, event);
+          const dx = spot.x - swipe.x;
+          const dy = spot.y - swipe.y;
+          if (Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy)) {
+            shift(dx > 0 ? 1 : -1);
+            swipe.x = spot.x;
+            swipe.moved = true;
+          } else if (dy > 30) {
+            fall();
+            swipe.y = spot.y;
+            swipe.moved = true;
+          }
+        });
+        bind('pointerup', () => {
+          if (swipe && !swipe.moved && Date.now() - swipe.at < 320) rotate();
+          swipe = null;
+        });
+        bind('keydown', (event) => {
+          if (state.over) {
+            if (event.key === ' ') reset();
+            return;
+          }
+          if (event.key === 'ArrowLeft') shift(-1);
+          if (event.key === 'ArrowRight') shift(1);
+          if (event.key === 'ArrowDown') fall();
+          if (event.key === 'ArrowUp' || event.key === ' ') rotate();
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.drop += dt;
+        if (state.drop >= state.speed) {
+          state.drop = 0;
+          fall();
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0e1524', '#191f36']);
+        const pad = 12;
+        const cell = Math.min((w - pad * 2) / cols, (h - 90) / rows);
+        const boardW = cell * cols;
+        const boardH = cell * rows;
+        const ox = (w - boardW) / 2;
+        const oy = 62;
+
+        ctx.fillStyle = 'rgba(255,255,255,.04)';
+        ctx.fillRect(ox, oy, boardW, boardH);
+        ctx.strokeStyle = 'rgba(255,255,255,.06)';
+        ctx.lineWidth = 1;
+        for (let x = 1; x < cols; x++) {
+          ctx.beginPath();
+          ctx.moveTo(ox + x * cell, oy);
+          ctx.lineTo(ox + x * cell, oy + boardH);
+          ctx.stroke();
+        }
+
+        const block = (bx, by, tint) => {
+          ctx.fillStyle = tint;
+          ctx.beginPath();
+          ctx.roundRect(ox + bx * cell + 1, oy + by * cell + 1, cell - 2, cell - 2, 3);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.18)';
+          ctx.fillRect(ox + bx * cell + 3, oy + by * cell + 3, cell - 6, 3);
+        };
+
+        state.board.forEach((row, y) => row.forEach((tint, x) => { if (tint) block(x, y, tint); }));
+        state.piece.cells.forEach((row, y) => row.forEach((cell2, x) => {
+          if (cell2 && state.piece.y + y >= 0) block(state.piece.x + x, state.piece.y + y, state.piece.tint);
+        }));
+
+        hud(ctx, w, [`Очки ${state.score}`, `Линии ${state.lines}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.55)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('свайп — двигать, тап — повернуть', w / 2, h - 12);
+        ctx.textAlign = 'start';
+
+        if (state.over) overText(ctx, w, h, 'Стакан полон', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function puzzle2048(canvas, report) {
+  return runner(canvas, () => {
+    let state = null;
+    let swipe = null;
+
+    const empty = () => {
+      const spots = [];
+      state.grid.forEach((row, y) => row.forEach((v, x) => { if (!v) spots.push({ x, y }); }));
+      return spots;
+    };
+
+    const drop = () => {
+      const spots = empty();
+      if (!spots.length) return;
+      const spot = spots[Math.floor(Math.random() * spots.length)];
+      state.grid[spot.y][spot.x] = Math.random() < 0.9 ? 2 : 4;
+    };
+
+    const reset = () => {
+      state = { grid: Array.from({ length: 4 }, () => Array(4).fill(0)), score: 0, best: 0, over: false };
+      drop();
+      drop();
+    };
+    reset();
+
+    const slide = (line) => {
+      const packed = line.filter(Boolean);
+      const out = [];
+      for (let i = 0; i < packed.length; i++) {
+        if (packed[i] === packed[i + 1]) {
+          out.push(packed[i] * 2);
+          state.score += packed[i] * 2;
+          state.best = Math.max(state.best, packed[i] * 2);
+          i += 1;
+        } else out.push(packed[i]);
+      }
+      while (out.length < 4) out.push(0);
+      return out;
+    };
+
+    const move = (dir) => {
+      if (state.over) return;
+      const before = JSON.stringify(state.grid);
+      for (let i = 0; i < 4; i++) {
+        let line;
+        if (dir === 'left') line = state.grid[i];
+        else if (dir === 'right') line = [...state.grid[i]].reverse();
+        else if (dir === 'up') line = [0, 1, 2, 3].map((j) => state.grid[j][i]);
+        else line = [3, 2, 1, 0].map((j) => state.grid[j][i]);
+
+        const out = slide(line);
+        if (dir === 'left') state.grid[i] = out;
+        else if (dir === 'right') state.grid[i] = out.reverse();
+        else if (dir === 'up') out.forEach((v, j) => { state.grid[j][i] = v; });
+        else out.forEach((v, j) => { state.grid[3 - j][i] = v; });
+      }
+      if (JSON.stringify(state.grid) !== before) drop();
+
+      const stuck = !empty().length && !state.grid.some((row, y) => row.some((v, x) =>
+        (x < 3 && v === state.grid[y][x + 1]) || (y < 3 && v === state.grid[y + 1][x])));
+      if (stuck) {
+        state.over = true;
+        report(state.score);
+      }
+    };
+
+    const tint = (value) => {
+      const map = {
+        2: '#3a4460', 4: '#46557a', 8: '#6f7fb0', 16: '#8f7fc0', 32: '#a87fb8',
+        64: '#c98fa0', 128: '#d3a06a', 256: '#d8b45c', 512: '#c9c05c', 1024: '#8fd7a8', 2048: '#5be6c7'
+      };
+      return map[value] || '#5be6c7';
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          swipe = pointerPos(node, event);
+        });
+        bind('pointerup', (event) => {
+          if (!swipe) return;
+          const spot = pointerPos(node, event);
+          const dx = spot.x - swipe.x;
+          const dy = spot.y - swipe.y;
+          swipe = null;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+          if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+          else move(dy > 0 ? 'down' : 'up');
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+          if (map[event.key]) move(map[event.key]);
+        }, window);
+      },
+      update() {},
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#151221', '#26203a']);
+        const board = Math.min(w - 28, h - 130);
+        const ox = (w - board) / 2;
+        const oy = 74;
+        const cell = board / 4;
+
+        ctx.fillStyle = 'rgba(255,255,255,.05)';
+        ctx.beginPath();
+        ctx.roundRect(ox - 6, oy - 6, board + 12, board + 12, 14);
+        ctx.fill();
+
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            const value = state.grid[y][x];
+            ctx.fillStyle = value ? tint(value) : 'rgba(255,255,255,.05)';
+            ctx.beginPath();
+            ctx.roundRect(ox + x * cell + 4, oy + y * cell + 4, cell - 8, cell - 8, 9);
+            ctx.fill();
+            if (!value) continue;
+            ctx.fillStyle = value > 4 ? '#0d1018' : '#e8edf6';
+            ctx.font = `700 ${value > 999 ? cell * 0.28 : cell * 0.36}px Inter, system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(value), ox + x * cell + cell / 2, oy + y * cell + cell / 2);
+          }
+        }
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'alphabetic';
+        hud(ctx, w, [`Очки ${state.score}`, `Лучшая плитка ${state.best}`]);
+        if (state.over) overText(ctx, w, h, 'Ходов нет', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function mines(canvas, report) {
+  return runner(canvas, () => {
+    const cols = 9;
+    const rows = 12;
+    const bombs = 16;
+    let state = null;
+    let press = null;
+
+    const reset = () => {
+      const field = Array.from({ length: rows }, () => Array(cols).fill(0));
+      let placed = 0;
+      while (placed < bombs) {
+        const x = Math.floor(Math.random() * cols);
+        const y = Math.floor(Math.random() * rows);
+        if (field[y][x] === -1) continue;
+        field[y][x] = -1;
+        placed += 1;
+      }
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (field[y][x] === -1) continue;
+          let n = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ny = y + dy;
+              const nx = x + dx;
+              if (ny >= 0 && nx >= 0 && ny < rows && nx < cols && field[ny][nx] === -1) n += 1;
+            }
+          }
+          field[y][x] = n;
+        }
+      }
+      state = {
+        field,
+        open: Array.from({ length: rows }, () => Array(cols).fill(false)),
+        flags: Array.from({ length: rows }, () => Array(cols).fill(false)),
+        score: 0,
+        over: false,
+        won: false,
+        flagMode: false
+      };
+    };
+    reset();
+
+    const reveal = (x, y) => {
+      if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+      if (state.open[y][x] || state.flags[y][x]) return;
+      state.open[y][x] = true;
+      if (state.field[y][x] === -1) {
+        state.over = true;
+        report(state.score);
+        return;
+      }
+      state.score += 10;
+      if (state.field[y][x] === 0) {
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) reveal(x + dx, y + dy);
+      }
+      const left = state.open.flat().filter(Boolean).length;
+      if (left === cols * rows - bombs && !state.won) {
+        state.won = true;
+        state.over = true;
+        state.score += 500;
+        report(state.score);
+      }
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          press = { ...pointerPos(node, event), at: Date.now() };
+        });
+        bind('pointerup', (event) => {
+          if (!press) return;
+          const spot = pointerPos(node, event);
+          const long = Date.now() - press.at > 380;
+          press = null;
+          if (state.over) return reset();
+          const size = state.layout;
+          if (!size) return;
+          if (spot.y < size.oy - 40 && spot.y > size.oy - 76) {
+            state.flagMode = !state.flagMode;
+            return;
+          }
+          const x = Math.floor((spot.x - size.ox) / size.cell);
+          const y = Math.floor((spot.y - size.oy) / size.cell);
+          if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+          if (long || state.flagMode) {
+            if (!state.open[y][x]) state.flags[y][x] = !state.flags[y][x];
+            return;
+          }
+          reveal(x, y);
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') reset();
+        }, window);
+      },
+      update() {},
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#101a16', '#1b2b24']);
+        const cell = Math.min((w - 24) / cols, (h - 150) / rows);
+        const ox = (w - cell * cols) / 2;
+        const oy = 108;
+        state.layout = { ox, oy, cell };
+
+        ctx.fillStyle = state.flagMode ? 'rgba(216,180,92,.24)' : 'rgba(255,255,255,.07)';
+        ctx.beginPath();
+        ctx.roundRect(ox, oy - 74, cell * cols, 34, 10);
+        ctx.fill();
+        ctx.fillStyle = state.flagMode ? '#e8c46a' : 'rgba(238,242,251,.75)';
+        ctx.font = '600 13px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(state.flagMode ? 'Режим флажков включён' : 'Тап — открыть, долгий тап — флажок', w / 2, oy - 52);
+        ctx.textAlign = 'start';
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const px = ox + x * cell;
+            const py = oy + y * cell;
+            const open = state.open[y][x];
+            ctx.fillStyle = open ? 'rgba(255,255,255,.05)' : 'rgba(255,255,255,.13)';
+            ctx.beginPath();
+            ctx.roundRect(px + 1.5, py + 1.5, cell - 3, cell - 3, 5);
+            ctx.fill();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if (state.flags[y][x] && !open) {
+              ctx.fillStyle = '#e8c46a';
+              ctx.font = `700 ${cell * 0.5}px Inter, system-ui, sans-serif`;
+              ctx.fillText('!', px + cell / 2, py + cell / 2);
+            } else if (open && state.field[y][x] === -1) {
+              ctx.fillStyle = '#d4736f';
+              ctx.beginPath();
+              ctx.arc(px + cell / 2, py + cell / 2, cell * 0.22, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (open && state.field[y][x] > 0) {
+              const tints = ['', '#7fb0ff', '#8fd7a8', '#e8c46a', '#c98fa0', '#a58bff', '#5be6c7', '#eef2fb', '#d4736f'];
+              ctx.fillStyle = tints[state.field[y][x]] || '#eef2fb';
+              ctx.font = `700 ${cell * 0.46}px Inter, system-ui, sans-serif`;
+              ctx.fillText(String(state.field[y][x]), px + cell / 2, py + cell / 2);
+            }
+          }
+        }
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'alphabetic';
+        hud(ctx, w, [`Очки ${state.score}`, `Мин ${bombs}`]);
+        if (state.over) overText(ctx, w, h, state.won ? 'Поле чистое' : 'Взрыв', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function bricks(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let state = null;
+    let width = w;
+
+    const build = (level) => {
+      const rows = Math.min(7, 3 + level);
+      const cols = 7;
+      const out = [];
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          out.push({ x, y, life: y < 1 && level > 1 ? 2 : 1 });
+        }
+      }
+      return out;
+    };
+
+    const reset = () => {
+      state = { padX: 0.5, ball: { x: 0.5, y: 0.6, vx: 0.36, vy: -0.55 }, bricks: build(1), level: 1, lives: 3, score: 0, over: false };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      resize(size) {
+        width = size.w;
+      },
+      bind(bind, node) {
+        const track = (event) => {
+          if (state.over) return;
+          state.padX = Math.max(0.08, Math.min(0.92, pointerX(node, event) / width));
+        };
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          track(event);
+        });
+        bind('pointermove', track);
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          if (event.key === 'ArrowLeft') state.padX = Math.max(0.08, state.padX - 0.06);
+          if (event.key === 'ArrowRight') state.padX = Math.min(0.92, state.padX + 0.06);
+        }, window);
+      },
+      update(dt, size) {
+        if (state.over) return;
+        const ball = state.ball;
+        const speed = 1 + state.level * 0.09;
+        ball.x += ball.vx * dt * speed;
+        ball.y += ball.vy * dt * speed;
+
+        if (ball.x < 0.02) { ball.x = 0.02; ball.vx *= -1; }
+        if (ball.x > 0.98) { ball.x = 0.98; ball.vx *= -1; }
+        if (ball.y < 0.08) { ball.y = 0.08; ball.vy *= -1; }
+
+        if (ball.y > 0.9 && ball.y < 0.94 && ball.vy > 0) {
+          if (Math.abs(ball.x - state.padX) < 0.12) {
+            ball.vy *= -1;
+            ball.vx += (ball.x - state.padX) * 0.9;
+            ball.vx = Math.max(-0.8, Math.min(0.8, ball.vx));
+            state.score += 5;
+          }
+        }
+        if (ball.y > 1.02) {
+          state.lives -= 1;
+          if (state.lives <= 0) {
+            state.over = true;
+            report(state.score);
+          } else {
+            state.ball = { x: 0.5, y: 0.6, vx: 0.36, vy: -0.55 };
+          }
+        }
+
+        const top = 0.14;
+        const bh = 0.045;
+        const bw = 1 / 7;
+        for (const brick of state.bricks) {
+          if (!brick.life) continue;
+          const bx = brick.x * bw + 0.01;
+          const by = top + brick.y * (bh + 0.008);
+          if (ball.x > bx - 0.02 && ball.x < bx + bw - 0.01 && ball.y > by - 0.015 && ball.y < by + bh + 0.015) {
+            brick.life -= 1;
+            state.score += 25;
+            ball.vy *= -1;
+            break;
+          }
+        }
+        if (state.bricks.every((brick) => !brick.life)) {
+          state.level += 1;
+          state.score += 200;
+          state.bricks = build(state.level);
+          state.ball = { x: 0.5, y: 0.6, vx: 0.36, vy: -0.55 };
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0b1524', '#152238']);
+        const bw = w / 7;
+        const bh = h * 0.045;
+        state.bricks.forEach((brick) => {
+          if (!brick.life) return;
+          ctx.fillStyle = brick.life > 1 ? '#e8c46a' : `hsl(${190 + brick.y * 18} 55% 60%)`;
+          ctx.beginPath();
+          ctx.roundRect(brick.x * bw + w * 0.01, h * 0.14 + brick.y * (bh + h * 0.008), bw - w * 0.02, bh, 5);
+          ctx.fill();
+        });
+
+        ctx.fillStyle = '#8fd7c2';
+        ctx.beginPath();
+        ctx.roundRect(state.padX * w - w * 0.12, h * 0.92, w * 0.24, 10, 5);
+        ctx.fill();
+
+        ctx.fillStyle = '#eef2fb';
+        ctx.beginPath();
+        ctx.arc(state.ball.x * w, state.ball.y * h, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        hud(ctx, w, [`Очки ${state.score}`, `Уровень ${state.level}`, `Жизни ${state.lives}`]);
+        if (state.over) overText(ctx, w, h, 'Мяч потерян', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function flap(canvas, report) {
+  return runner(canvas, () => {
+    let state = null;
+
+    const reset = () => {
+      state = { y: 0.45, v: 0, pipes: [], gap: 0.3, spawn: 0, score: 0, dist: 0, over: false, wing: 0 };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      bind(bind) {
+        const flapUp = (event) => {
+          event.preventDefault?.();
+          if (state.over) return reset();
+          state.v = -0.55;
+          state.wing = 1;
+        };
+        bind('pointerdown', flapUp);
+        bind('keydown', (event) => {
+          if (event.key === ' ' || event.key === 'ArrowUp') flapUp(event);
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.wing = Math.max(0, state.wing - dt * 4);
+        state.v += dt * 1.75;
+        state.y += state.v * dt;
+        state.gap = Math.max(0.19, 0.3 - state.dist * 0.0022);
+
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = 1.45;
+          state.pipes.push({ x: 1.15, top: 0.14 + Math.random() * 0.45, passed: false });
+        }
+        const speed = 0.34 + state.dist * 0.004;
+        state.pipes.forEach((pipe) => { pipe.x -= speed * dt; });
+        state.pipes = state.pipes.filter((pipe) => pipe.x > -0.2);
+
+        for (const pipe of state.pipes) {
+          if (!pipe.passed && pipe.x < 0.2) {
+            pipe.passed = true;
+            state.score += 10;
+          }
+          if (pipe.x < 0.28 && pipe.x > 0.1) {
+            if (state.y < pipe.top || state.y > pipe.top + state.gap) {
+              state.over = true;
+              report(state.score);
+            }
+          }
+        }
+        if (state.y > 0.98 || state.y < 0.01) {
+          state.over = true;
+          report(state.score);
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#16233a', '#2b3c58']);
+        ctx.fillStyle = 'rgba(255,255,255,.06)';
+        for (let i = 0; i < 5; i++) {
+          const cx = ((i * 137 + state.dist * 12) % (w + 160)) - 80;
+          ctx.beginPath();
+          ctx.arc(cx, h * (0.12 + (i % 3) * 0.08), 26 + (i % 3) * 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        state.pipes.forEach((pipe) => {
+          const px = pipe.x * w;
+          const pw = w * 0.16;
+          ctx.fillStyle = '#5f9e7f';
+          ctx.beginPath();
+          ctx.roundRect(px, 0, pw, pipe.top * h, 6);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.roundRect(px, (pipe.top + state.gap) * h, pw, h, 6);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,.2)';
+          ctx.fillRect(px, pipe.top * h - 12, pw, 12);
+          ctx.fillRect(px, (pipe.top + state.gap) * h, pw, 12);
+        });
+
+        const bx = w * 0.2;
+        const by = state.y * h;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(Math.max(-0.5, Math.min(0.9, state.v * 0.8)));
+        ctx.fillStyle = '#e8c46a';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#c98f5c';
+        ctx.beginPath();
+        ctx.ellipse(-3, state.wing > 0.4 ? -6 : 3, 9, 5, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#1b1f28';
+        ctx.beginPath();
+        ctx.arc(7, -3, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        hud(ctx, w, [`Очки ${state.score}`]);
+        if (state.over) overText(ctx, w, h, 'Упали', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function pairs(canvas, report) {
+  return runner(canvas, () => {
+    const cols = 4;
+    const rows = 5;
+    let state = null;
+
+    const reset = () => {
+      const kinds = [];
+      for (let i = 0; i < (cols * rows) / 2; i++) kinds.push(i, i);
+      kinds.sort(() => Math.random() - 0.5);
+      state = {
+        cards: kinds.map((kind) => ({ kind, open: false, done: false })),
+        first: -1,
+        lock: 0,
+        moves: 0,
+        score: 0,
+        over: false
+      };
+    };
+    reset();
+
+    const tints = ['#7fb0ff', '#8fd7a8', '#e8c46a', '#c98fa0', '#a58bff', '#5be6c7', '#f0a06a', '#93a2ae', '#d98fae', '#7fd7e8'];
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          if (state.lock > 0) return;
+          const spot = pointerPos(node, event);
+          const layout = state.layout;
+          if (!layout) return;
+          const x = Math.floor((spot.x - layout.ox) / layout.cw);
+          const y = Math.floor((spot.y - layout.oy) / layout.chh);
+          if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+          const index = y * cols + x;
+          const card = state.cards[index];
+          if (card.done || card.open) return;
+          card.open = true;
+          if (state.first < 0) {
+            state.first = index;
+            return;
+          }
+          state.moves += 1;
+          if (state.cards[state.first].kind === card.kind) {
+            state.cards[state.first].done = true;
+            card.done = true;
+            state.first = -1;
+            state.score += 100;
+            if (state.cards.every((row) => row.done)) {
+              state.over = true;
+              state.score += Math.max(0, 600 - state.moves * 20);
+              report(state.score);
+            }
+          } else {
+            state.lock = 0.75;
+          }
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') reset();
+        }, window);
+      },
+      update(dt) {
+        if (state.lock > 0) {
+          state.lock -= dt;
+          if (state.lock <= 0) {
+            state.cards.forEach((card) => { if (!card.done) card.open = false; });
+            state.first = -1;
+          }
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#141726', '#232840']);
+        const cw = Math.min((w - 28) / cols, (h - 130) / rows);
+        const ox = (w - cw * cols) / 2;
+        const oy = 78;
+        state.layout = { ox, oy, cw, chh: cw };
+
+        state.cards.forEach((card, index) => {
+          const x = ox + (index % cols) * cw;
+          const y = oy + Math.floor(index / cols) * cw;
+          const shown = card.open || card.done;
+          ctx.globalAlpha = card.done ? 0.42 : 1;
+          ctx.fillStyle = shown ? tints[card.kind % tints.length] : 'rgba(255,255,255,.1)';
+          ctx.beginPath();
+          ctx.roundRect(x + 4, y + 4, cw - 8, cw - 8, 10);
+          ctx.fill();
+          if (!shown) {
+            ctx.fillStyle = 'rgba(255,255,255,.14)';
+            ctx.beginPath();
+            ctx.arc(x + cw / 2, y + cw / 2, cw * 0.13, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        });
+
+        hud(ctx, w, [`Очки ${state.score}`, `Ходы ${state.moves}`]);
+        if (state.over) overText(ctx, w, h, 'Все пары собраны', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function tower(canvas, report) {
+  return runner(canvas, () => {
+    let state = null;
+
+    const reset = () => {
+      state = {
+        stack: [{ x: 0.5, w: 0.5 }],
+        current: { x: 0.05, w: 0.5, dir: 1 },
+        speed: 0.42,
+        score: 0,
+        height: 0,
+        over: false,
+        chips: []
+      };
+    };
+    reset();
+
+    const place = () => {
+      if (state.over) return;
+      const top = state.stack[state.stack.length - 1];
+      const shift = state.current.x - top.x;
+      const overlap = state.current.w - Math.abs(shift);
+      if (overlap <= 0.02) {
+        state.over = true;
+        report(state.score);
+        return;
+      }
+      const nx = top.x + shift / 2;
+      state.stack.push({ x: nx, w: overlap });
+      state.chips.push({ x: shift > 0 ? nx + overlap / 2 : nx - overlap / 2, y: 0, life: 1 });
+      state.height += 1;
+      state.score += Math.round(overlap * 200) + 20;
+      state.speed = Math.min(1.1, 0.42 + state.height * 0.022);
+      state.current = { x: 0.02, w: overlap, dir: 1 };
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          place();
+        });
+        bind('keydown', (event) => {
+          if (event.key !== ' ') return;
+          if (state.over) return reset();
+          place();
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.current.x += state.current.dir * state.speed * dt;
+        const half = state.current.w / 2;
+        if (state.current.x + half > 1) {
+          state.current.x = 1 - half;
+          state.current.dir = -1;
+        }
+        if (state.current.x - half < 0) {
+          state.current.x = half;
+          state.current.dir = 1;
+        }
+        state.chips.forEach((chip) => { chip.y += dt * 1.4; chip.life -= dt; });
+        state.chips = state.chips.filter((chip) => chip.life > 0);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#101a26', '#1d3040']);
+        const bh = 24;
+        const base = h - 40;
+        const shown = state.stack.slice(-Math.floor((h - 120) / bh));
+        shown.forEach((block, i) => {
+          const y = base - (shown.length - i) * bh;
+          ctx.fillStyle = `hsl(${(state.stack.length - shown.length + i) * 12 % 360} 45% 58%)`;
+          ctx.beginPath();
+          ctx.roundRect((block.x - block.w / 2) * w, y, block.w * w, bh - 3, 4);
+          ctx.fill();
+        });
+
+        const y = base - (shown.length + 1) * bh;
+        ctx.fillStyle = '#8fd7c2';
+        ctx.beginPath();
+        ctx.roundRect((state.current.x - state.current.w / 2) * w, y, state.current.w * w, bh - 3, 4);
+        ctx.fill();
+
+        state.chips.forEach((chip) => {
+          ctx.globalAlpha = Math.max(0, chip.life);
+          ctx.fillStyle = '#c98b8b';
+          ctx.fillRect(chip.x * w - 8, y + chip.y * 120, 16, 10);
+          ctx.globalAlpha = 1;
+        });
+
+        hud(ctx, w, [`Очки ${state.score}`, `Высота ${state.height}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('тап — поставить блок', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.over) overText(ctx, w, h, 'Башня рухнула', `Высота ${state.height}, очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function hoops(canvas, report) {
+  return runner(canvas, () => {
+    let state = null;
+    let aim = null;
+
+    const reset = () => {
+      state = {
+        ball: { x: 0.5, y: 0.82, vx: 0, vy: 0, live: false },
+        ring: { x: 0.5, dir: 1, speed: 0.16 },
+        score: 0,
+        shots: 0,
+        streak: 0,
+        left: 12,
+        over: false,
+        flash: 0
+      };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          if (state.ball.live) return;
+          aim = pointerPos(node, event);
+        });
+        bind('pointerup', (event) => {
+          if (!aim || state.ball.live || state.over) return;
+          const spot = pointerPos(node, event);
+          const dx = (spot.x - aim.x) / 200;
+          const dy = (spot.y - aim.y) / 200;
+          aim = null;
+          if (Math.abs(dy) < 0.05) return;
+          state.ball.vx = dx * 1.4;
+          state.ball.vy = Math.min(-0.5, dy * 1.6);
+          state.ball.live = true;
+          state.shots += 1;
+          state.left -= 1;
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') reset();
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.flash = Math.max(0, state.flash - dt * 2);
+        state.ring.x += state.ring.dir * state.ring.speed * dt;
+        if (state.ring.x > 0.82) state.ring.dir = -1;
+        if (state.ring.x < 0.18) state.ring.dir = 1;
+
+        const ball = state.ball;
+        if (ball.live) {
+          ball.vy += dt * 1.5;
+          ball.x += ball.vx * dt;
+          ball.y += ball.vy * dt;
+          if (ball.x < 0.03 || ball.x > 0.97) ball.vx *= -1;
+
+          const ringY = 0.32;
+          if (ball.vy > 0 && ball.y > ringY - 0.012 && ball.y < ringY + 0.012 && Math.abs(ball.x - state.ring.x) < 0.055) {
+            state.streak += 1;
+            state.score += 100 + state.streak * 25;
+            state.flash = 1;
+            state.left += 1;
+            ball.live = false;
+            ball.x = 0.5;
+            ball.y = 0.82;
+            ball.vx = 0;
+            ball.vy = 0;
+          } else if (ball.y > 1.05) {
+            state.streak = 0;
+            ball.live = false;
+            ball.x = 0.5;
+            ball.y = 0.82;
+            ball.vx = 0;
+            ball.vy = 0;
+            if (state.left <= 0) {
+              state.over = true;
+              report(state.score);
+            }
+          }
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#1a1020', '#33203a']);
+        ctx.fillStyle = 'rgba(255,255,255,.05)';
+        ctx.fillRect(0, h * 0.9, w, h * 0.1);
+
+        const rx = state.ring.x * w;
+        const ry = 0.32 * h;
+        ctx.strokeStyle = '#c9605c';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, w * 0.055, 7, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.14)';
+        ctx.fillRect(rx - w * 0.06, ry - 46, 6, 46);
+        ctx.fillRect(rx - w * 0.09, ry - 62, w * 0.18, 16);
+
+        if (state.flash > 0) {
+          ctx.globalAlpha = state.flash * 0.5;
+          ctx.fillStyle = '#e8c46a';
+          ctx.beginPath();
+          ctx.arc(rx, ry, w * 0.1, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.fillStyle = '#e08a4a';
+        ctx.beginPath();
+        ctx.arc(state.ball.x * w, state.ball.y * h, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,.35)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(state.ball.x * w - 13, state.ball.y * h);
+        ctx.lineTo(state.ball.x * w + 13, state.ball.y * h);
+        ctx.stroke();
+
+        hud(ctx, w, [`Очки ${state.score}`, `Броски ${state.left}`, `Серия ${state.streak}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('потяните вверх и отпустите', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.over) overText(ctx, w, h, 'Броски кончились', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
 export const GAMES = [
+  {
+    id: 'tetris',
+    title: 'Стакан',
+    desc: 'Тетрис: свайп двигает, тап поворачивает',
+    tint: ['#0e1524', '#191f36'],
+    beta: true,
+    mount: tetris
+  },
+  {
+    id: 'p2048',
+    title: '2048',
+    desc: 'Свайпайте и складывайте числа',
+    tint: ['#151221', '#26203a'],
+    beta: true,
+    mount: puzzle2048
+  },
+  {
+    id: 'mines',
+    title: 'Сапёр',
+    desc: 'Открывай клетки, ставь флажки',
+    tint: ['#101a16', '#1b2b24'],
+    beta: true,
+    mount: mines
+  },
+  {
+    id: 'bricks',
+    title: 'Кирпичи',
+    desc: 'Отбивай мяч и ломай стену',
+    tint: ['#0b1524', '#152238'],
+    beta: true,
+    mount: bricks
+  },
+  {
+    id: 'flap',
+    title: 'Полёт',
+    desc: 'Тапай, чтобы не упасть',
+    tint: ['#16233a', '#2b3c58'],
+    beta: true,
+    mount: flap
+  },
+  {
+    id: 'pairs',
+    title: 'Пары',
+    desc: 'Найди все одинаковые карточки',
+    tint: ['#141726', '#232840'],
+    beta: true,
+    mount: pairs
+  },
+  {
+    id: 'tower',
+    title: 'Башня',
+    desc: 'Ставь блоки один на другой',
+    tint: ['#101a26', '#1d3040'],
+    beta: true,
+    mount: tower
+  },
+  {
+    id: 'hoops',
+    title: 'Кольцо',
+    desc: 'Забрасывай мяч в движущееся кольцо',
+    tint: ['#1a1020', '#33203a'],
+    beta: true,
+    mount: hoops
+  },
   {
     id: 'dread',
     title: 'Мрак',

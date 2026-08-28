@@ -1,4 +1,4 @@
-import { api, state } from '../store.js';
+import { api, state, isBeta } from '../store.js';
 import { GAMES } from '../games/index.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
@@ -14,13 +14,14 @@ export async function render(root) {
     <div class="game-grid" data-grid></div>
     <div class="row between" style="margin:22px 2px 10px"><div class="strong small">Таблица лидеров</div>
       <select class="select" data-game style="width:auto;padding:6px 10px;font-size:12px">
-        ${GAMES.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
+        ${GAMES.filter((g) => !g.beta || isBeta()).map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
       </select>
     </div>
     <div class="card" data-board></div>`;
 
   const grid = root.querySelector('[data-grid]');
-  GAMES.forEach((game) => {
+  const shown = GAMES.filter((game) => !game.beta || isBeta());
+  shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
     const card = el(`
       <button class="game-card appear">
