@@ -15,11 +15,14 @@ export function giftArt(gift, size = 44) {
 }
 
 export function giftShelf(gifts) {
-  const shown = (gifts || []).filter((row) => row.pinned).slice(0, 6);
-  if (!shown.length) return '';
+  const all = gifts || [];
+  if (!all.length) return '';
+  const pinned = all.filter((row) => row.pinned);
+  const shown = (pinned.length ? pinned : all).slice(0, 6);
+  const rest = all.length - shown.length;
   return `<div class="gift-shelf">${shown
     .map((gift) => `<span class="gift-slot" title="${esc(gift.title)}${gift.from ? ' от ' + esc(gift.from.displayName) : ''}">${giftArt(gift, 38)}</span>`)
-    .join('')}</div>`;
+    .join('')}${rest > 0 ? `<span class="gift-more">+${rest}</span>` : ''}</div>`;
 }
 
 async function refreshCoins() {

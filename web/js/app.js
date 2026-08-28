@@ -137,10 +137,12 @@ let exitArmed = 0;
 
 window.__spokumBack = () => {
   if (goBackInside()) return true;
-  if (Date.now() - exitArmed < 2200) return false;
+  if (Date.now() - exitArmed < 2200) {
+    exitArmed = 0;
+    return false;
+  }
   exitArmed = Date.now();
-  toast('Ещё раз, чтобы выйти');
-  return true;
+  return false;
 };
 
 async function checkDevice(fresh) {

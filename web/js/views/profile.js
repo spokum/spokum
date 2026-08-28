@@ -61,6 +61,7 @@ export async function render(root) {
         <button class="btn grow" data-safe>${icon('leaf', 17)} Тихие комнаты</button>
         <button class="btn grow" data-journal>${icon('edit', 17)} Дневник</button>
       </div>
+      <div data-my-shelf></div>
       ${isPremium(fresh) ? `<div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-story>${icon('play', 17)} Добавить историю</button>
         ${hasStory(fresh) ? `<button class="btn grow" data-my-story>${icon('eye', 17)} Моя история</button>` : ''}
@@ -139,6 +140,17 @@ export async function render(root) {
     const { openCampfire } = await import('./campfire.js');
     openCampfire();
   });
+  api.gifts?.(fresh.id).then(async ({ gifts }) => {
+    const shelf = body.querySelector('[data-my-shelf]');
+    if (!shelf || !gifts?.length) return;
+    const { giftShelf } = await import('./gifts.js');
+    shelf.innerHTML = giftShelf(gifts);
+    shelf.onclick = async () => {
+      const { openMyGifts } = await import('./gifts.js');
+      openMyGifts(fresh.id, true);
+    };
+  }).catch(() => {});
+
   body.querySelector('[data-letters]')?.addEventListener('click', async () => {
     const { openLetters } = await import('./letters.js');
     openLetters();

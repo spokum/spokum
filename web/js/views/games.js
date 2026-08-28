@@ -74,6 +74,9 @@ function launch(game, done) {
   let best = Number(localStorage.getItem(bestKey(game.id)) || 0);
   bestBox.textContent = `Рекорд ${best}`;
 
+  let paidFor = 0;
+  let busy = false;
+
   const report = async (score) => {
     if (score > best) {
       best = score;
@@ -81,22 +84,25 @@ function launch(game, done) {
       bestBox.textContent = `Рекорд ${best}`;
       toast(`Новый рекорд ${score}`);
     }
-    if (state.user) {
-      try {
-        await api.saveScore(game.id, score);
-      } catch {}
-      if (api.grantCoins && score > 0) {
-        try {
-          const purse = await api.grantCoins(Math.floor(score / 40), `Игра: ${game.title}`);
-          if (purse?.added > 0) {
-            toast(`+${purse.added} монет`);
-            const { setUser } = await import('../store.js');
-            const { user } = await api.me();
-            if (user) setUser(user);
-          }
-        } catch {}
+    if (!state.user || busy) return;
+    busy = true;
+    try {
+      await api.saveScore(game.id, score).catch(() => {});
+      const earned = Math.floor(score / 40) - Math.floor(paidFor / 40);
+      if (api.grantCoins && earned > 0) {
+        paidFor = Math.max(paidFor, score);
+        const purse = await api.grantCoins(earned, `Игра: ${game.title}`);
+        if (purse?.added > 0) {
+          toast(`+${purse.added} монет`);
+          const { setUser } = await import('../store.js');
+          const { user } = await api.me();
+          if (user) setUser(user);
+        }
+      } else if (score > paidFor) {
+        paidFor = score;
       }
-    }
+    } catch {}
+    busy = false;
   };
 
   let handle = null;

@@ -2162,6 +2162,7 @@ declare
   purse integer;
   fresh bigint;
   who text;
+  room bigint;
 begin
   if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
   select * into kind from public.gift_types where id = gift;
@@ -2184,6 +2185,23 @@ begin
     perform public.notify_user(target, 'gift', 'Вам подарок',
       coalesce(who, 'Кто-то') || ' дарит вам: ' || kind.title,
       jsonb_build_object('gift', fresh, 'from', auth.uid()));
+
+    select c.id into room
+      from public.chats c
+      join public.chat_members a on a.chat_id = c.id and a.user_id = auth.uid()
+      join public.chat_members b on b.chat_id = c.id and b.user_id = target
+     where c.kind = 'dm'
+     limit 1;
+
+    if room is null then
+      insert into public.chats (kind, owner_id) values ('dm', auth.uid()) returning id into room;
+      insert into public.chat_members (chat_id, user_id, role) values (room, auth.uid(), 'owner'), (room, target, 'member');
+    end if;
+
+    insert into public.messages (chat_id, author_id, kind, body)
+    values (room, auth.uid(), 'gift',
+      coalesce(who, 'Кто-то') || ' дарит вам ' || kind.title ||
+      case when coalesce(trim(note), '') <> '' then '. ' || left(trim(note), 200) else '' end);
   end if;
 
   return jsonb_build_object('ok', true, 'gift', fresh, 'coins', purse - kind.price);

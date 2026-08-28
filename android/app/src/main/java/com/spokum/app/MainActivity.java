@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
 
   private WebView webView;
   private long lastUpdateCheck = System.currentTimeMillis();
+  private long lastBackPress = 0L;
   private ValueCallback<Uri[]> filePicker;
   private PermissionRequest pendingMicRequest;
   private ActivityResultLauncher<Intent> fileChooser;
@@ -267,14 +268,23 @@ public class MainActivity extends AppCompatActivity {
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
       @Override
       public void handleOnBackPressed() {
+        long now = System.currentTimeMillis();
+        boolean armed = now - lastBackPress < 2200L;
+        lastBackPress = now;
         webView.evaluateJavascript("(function(){try{return window.__spokumBack?window.__spokumBack():false}catch(e){return false}})()", value -> {
           if ("true".equals(value)) {
+            lastBackPress = 0L;
             return;
           }
           if (webView.canGoBack()) {
+            lastBackPress = 0L;
             webView.goBack();
-          } else {
+            return;
+          }
+          if (armed) {
             finish();
+          } else {
+            android.widget.Toast.makeText(MainActivity.this, "Ещё раз, чтобы выйти", android.widget.Toast.LENGTH_SHORT).show();
           }
         });
       }

@@ -1239,6 +1239,29 @@ export const local = {
     state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: -kind.price, reason: 'Подарок ' + kind.title, createdAt: Date.now() });
     const gift = { id: state.gifts.length + 1, typeId, ownerId: target.id, fromId: user.id, note: String(note || '').slice(0, 200), pinned: false, sold: false, createdAt: Date.now() };
     state.gifts.push(gift);
+
+    if (target.id !== user.id) {
+      let room = state.chats.find((c) => c.kind === 'dm'
+        && state.members.some((m) => m.chatId === c.id && m.userId === user.id)
+        && state.members.some((m) => m.chatId === c.id && m.userId === target.id));
+      if (!room) {
+        room = { id: next('chats'), kind: 'dm', title: '', hue: 220, ownerId: user.id, createdAt: Date.now() };
+        state.chats.push(room);
+        state.members.push({ chatId: room.id, userId: user.id, role: 'owner', readAt: 0 });
+        state.members.push({ chatId: room.id, userId: target.id, role: 'member', readAt: 0 });
+      }
+      state.messages.push({
+        id: next('messages'),
+        chatId: room.id,
+        authorId: user.id,
+        kind: 'gift',
+        body: `${user.displayName} дарит вам ${kind.title}${String(note || '').trim() ? '. ' + String(note).trim().slice(0, 200) : ''}`,
+        media: null,
+        duration: 0,
+        createdAt: Date.now(),
+        removed: false
+      });
+    }
     save();
     return { ok: true, gift: gift.id, coins: user.coins };
   },

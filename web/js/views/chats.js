@@ -283,6 +283,9 @@ function bubble(message, chat, lastAuthor) {
   if (message.kind === 'call') {
     return el(`<div class="bubble system">${icon('phone', 12)} ${esc(message.body)}</div>`);
   }
+  if (message.kind === 'gift') {
+    return el(`<div class="bubble gift-note">${icon('gift', 15)}<span>${esc(message.body)}</span></div>`);
+  }
   const showAuthor = chat.kind !== 'dm' && !mine && message.author?.id !== lastAuthor;
   let inner = '';
   if (message.kind === 'sticker') inner = `<img class="sticker" src="${esc(message.media)}" alt="стикер" loading="lazy">`;
