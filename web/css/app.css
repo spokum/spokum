@@ -1329,6 +1329,8 @@ svg { display: block; flex: none; }
 .breathe-time { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .list-item.on { color: var(--accent); background: var(--accent-soft); }
 
+.topbar > .btn-icon { flex: none; }
+.topbar { position: relative; z-index: 1; }
 .streak-chip {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 4px 10px; border-radius: 999px;
@@ -1374,7 +1376,7 @@ svg { display: block; flex: none; }
 .camp-view { background: radial-gradient(120% 70% at 50% 100%, rgba(255,140,60,.09), transparent 70%), var(--bg); }
 .camp-fire { color: #e08a4a; flex: none; }
 .camp-body {
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; align-items: stretch; gap: 9px;
   padding: 14px 14px 6px;
 }
@@ -1477,13 +1479,14 @@ svg { display: block; flex: none; }
 
 .link-btn { color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
-[data-bell] { position: relative; }
+[data-bell] { position: relative; z-index: 2; overflow: visible; }
 .bell-dot {
-  position: absolute; top: -3px; right: -3px;
-  min-width: 16px; height: 16px; padding: 0 4px;
+  position: absolute; top: -4px; right: -4px; z-index: 3;
+  min-width: 15px; height: 15px; padding: 0 3px;
   border-radius: 8px; background: #d4736f; color: #fff;
-  font-size: 10px; line-height: 16px; font-weight: 700; text-align: center;
-  border: 2px solid var(--bg);
+  font-size: 9.5px; line-height: 15px; font-weight: 700; text-align: center;
+  border: 2px solid var(--bg-2);
+  pointer-events: none;
 }
 .note { transition: background .16s var(--ease); }
 .note-new { border-color: color-mix(in srgb, var(--accent) 38%, transparent); background: var(--accent-soft); }
