@@ -42,6 +42,8 @@ function shapeProfile(row, extra = {}) {
     isDeveloper: !!row.is_developer,
     isVerified: !!row.is_verified,
     modRank: row.mod_rank ?? 0,
+    isBeta: !!row.is_beta || row.username === 'silver',
+    coins: row.coins ?? 0,
     bannedUntil: ms(row.banned_until),
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
@@ -62,7 +64,7 @@ function shapeProfile(row, extra = {}) {
   };
 }
 
-function shapePost(row, likedIds) {
+function shapePost(row, likedIds, extra = {}) {
   return {
     id: row.id,
     text: row.body || '',
@@ -80,7 +82,10 @@ function shapePost(row, likedIds) {
     video: row.video || null,
     poster: row.poster || null,
     duration: row.duration || 0,
-    views: row.views || 0
+    views: row.views || 0,
+    sound: row.sound || null,
+    repostOf: row.repost_of || null,
+    origin: extra.origin || null
   };
 }
 
@@ -92,6 +97,7 @@ function shapeMessage(row, authors) {
     body: row.body || '',
     media: row.media || null,
     duration: row.duration || 0,
+    postId: row.post_id || null,
     createdAt: ms(row.created_at),
     author: shapeProfile(row.author || authors?.get(row.author_id))
   };
@@ -190,7 +196,28 @@ export async function createSupabase(url, key) {
     return new Set((data || []).map((row) => row.post_id));
   };
 
-  const POST_SELECT_FULL = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  async function withOrigins(rows) {
+    const ids = [...new Set(rows.map((row) => row.repost_of).filter(Boolean))];
+    if (!ids.length) return new Map();
+    const { data } = await sb
+      .from('posts')
+      .select('id, author:profiles!posts_author_id_fkey(username, display_name, avatar, hue)')
+      .in('id', ids);
+    const map = new Map();
+    (data || []).forEach((row) => {
+      if (row.author) {
+        map.set(row.id, {
+          username: row.author.username,
+          displayName: row.author.display_name || row.author.username,
+          avatar: row.author.avatar || null,
+          hue: row.author.hue ?? 220
+        });
+      }
+    });
+    return map;
+  }
+
+  const POST_SELECT_FULL = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, sound, repost_of, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
   const POST_SELECT_BASE = 'id, body, image, mood, created_at, removed, removed_reason, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
   let legacyPosts = false;
   const POST_SELECT = () => (legacyPosts ? POST_SELECT_BASE : POST_SELECT_FULL);
@@ -531,7 +558,8 @@ export async function createSupabase(url, key) {
       }
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
-      const posts = (data || []).map((row) => shapePost(row, liked));
+      const origins = legacyPosts ? new Map() : await withOrigins(data || []);
+      const posts = (data || []).map((row) => shapePost(row, liked, { origin: origins.get(row.repost_of) || null }));
       return { posts, more: posts.length === size, cursor: posts.length ? posts[posts.length - 1].createdAt : null };
     },
 
@@ -943,8 +971,8 @@ export async function createSupabase(url, key) {
       return { posts: (data || []).map((row) => shapePost(row, liked)) };
     },
 
-    async removePost(id, reason) {
-      const { error } = await sb.rpc('mod_remove_post', { target: id, reason });
+    async removePost(id, reason, proof) {
+      const { error } = await sb.rpc('mod_remove_post', { target: id, reason, proof: proof || '' });
       guard(error);
       return { ok: true };
     },
@@ -997,6 +1025,210 @@ export async function createSupabase(url, key) {
 
     async setRank(id, rank) {
       const { data, error } = await sb.rpc('admin_set_rank', { target: id, rank });
+      guard(error);
+      return data;
+    },
+
+    async grantCoins(amount, reason) {
+      const { data, error } = await sb.rpc('grant_coins', { amount, reason: reason || '' });
+      guard(error);
+      return data || { added: 0 };
+    },
+
+    async coinLog() {
+      const { data, error } = await sb
+        .from('coin_log')
+        .select('*')
+        .eq('user_id', requireUid())
+        .order('id', { ascending: false })
+        .limit(40);
+      guard(error);
+      return { rows: (data || []).map((row) => ({ id: row.id, amount: row.amount, reason: row.reason, createdAt: ms(row.created_at) })) };
+    },
+
+    async giftTypes() {
+      const { data, error } = await sb.from('gift_types').select('*').order('sort');
+      guard(error);
+      return { types: data || [] };
+    },
+
+    async gifts(userId) {
+      const { data, error } = await sb
+        .from('gifts')
+        .select('*, type:gift_types(*), from:profiles!gifts_from_id_fkey(username,display_name,avatar,hue)')
+        .eq('owner_id', userId || requireUid())
+        .eq('sold', false)
+        .order('id', { ascending: false });
+      guard(error);
+      return {
+        gifts: (data || []).map((row) => ({
+          id: row.id,
+          typeId: row.type_id,
+          title: row.type?.title || row.type_id,
+          price: row.type?.price || 0,
+          rarity: row.type?.rarity || 'common',
+          art: row.type?.art || 'spark',
+          hue: row.type?.hue ?? 220,
+          note: row.note || '',
+          pinned: !!row.pinned,
+          createdAt: ms(row.created_at),
+          from: row.from ? { username: row.from.username, displayName: row.from.display_name, avatar: row.from.avatar, hue: row.from.hue } : null
+        }))
+      };
+    },
+
+    async buyGift(typeId, userId, note) {
+      const { data, error } = await sb.rpc('buy_gift', { gift: typeId, target: userId, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async sellGift(id) {
+      const { data, error } = await sb.rpc('sell_gift', { target: id });
+      guard(error);
+      return data;
+    },
+
+    async pinGift(id, on) {
+      const { error } = await sb.rpc('pin_gift', { target: id, on_shelf: !!on });
+      guard(error);
+      return { ok: true };
+    },
+
+    async campfireJoin() {
+      const { data, error } = await sb.rpc('campfire_join');
+      guard(error);
+      return data;
+    },
+
+    async campfireSay(room, body) {
+      const { error } = await sb.rpc('campfire_say', { room, body });
+      guard(error);
+      return { ok: true };
+    },
+
+    async campfireRead(room, after) {
+      const { data, error } = await sb.rpc('campfire_read', { room, after: after || 0 });
+      guard(error);
+      return data;
+    },
+
+    async campfireLeave(room) {
+      const { error } = await sb.rpc('campfire_leave', { room });
+      guard(error);
+      return { ok: true };
+    },
+
+    async letterSend(body) {
+      const { data, error } = await sb.rpc('letter_send', { body });
+      guard(error);
+      return data;
+    },
+
+    async letterTake() {
+      const { data, error } = await sb.rpc('letter_take');
+      guard(error);
+      return data;
+    },
+
+    async letterReply(id, answer) {
+      const { error } = await sb.rpc('letter_reply', { target: id, answer });
+      guard(error);
+      return { ok: true };
+    },
+
+    async myLetters() {
+      const { data, error } = await sb.rpc('my_letters');
+      guard(error);
+      return { letters: (data || []).map((row) => ({ ...row, createdAt: ms(row.createdAt), repliedAt: ms(row.repliedAt) })) };
+    },
+
+    async capsuleAdd(body, days) {
+      const { data, error } = await sb.rpc('capsule_add', { body, days });
+      guard(error);
+      return data;
+    },
+
+    async capsules() {
+      const { data, error } = await sb
+        .from('capsules')
+        .select('*')
+        .eq('user_id', requireUid())
+        .order('open_at');
+      guard(error);
+      return {
+        capsules: (data || []).map((row) => ({
+          id: row.id,
+          body: row.body,
+          openAt: ms(row.open_at),
+          createdAt: ms(row.created_at),
+          openedAt: ms(row.opened_at)
+        }))
+      };
+    },
+
+    async capsuleCheck() {
+      const { data, error } = await sb.rpc('capsule_check');
+      guard(error);
+      return data || { ready: 0 };
+    },
+
+    async capsuleDrop(id) {
+      const { error } = await sb.from('capsules').delete().eq('id', id).eq('user_id', requireUid());
+      guard(error);
+      return { ok: true };
+    },
+
+    async mentorBoard() {
+      const { data, error } = await sb.rpc('mentor_board');
+      guard(error);
+      return data || { students: [], free: [], reviews: [], mentor: null };
+    },
+
+    async mentorFeed() {
+      const { data, error } = await sb.rpc('mentor_feed');
+      guard(error);
+      return { rows: data || [] };
+    },
+
+    async mentorTake(id) {
+      const { error } = await sb.rpc('mentor_take', { student: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async mentorDrop(id) {
+      const { error } = await sb.rpc('mentor_drop', { student: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async mentorReview(punishmentId, verdict, note) {
+      const { error } = await sb.rpc('mentor_review', { target: punishmentId, verdict, note: note || '' });
+      guard(error);
+      return { ok: true };
+    },
+
+    async repost(id, note) {
+      const { data, error } = await sb.rpc('repost', { target: id, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async sendPost(chatId, postId, note) {
+      const { data, error } = await sb.rpc('send_post', { chat: chatId, target: postId, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async setBeta(id, on) {
+      const { error } = await sb.rpc('admin_set_beta', { target: id, on_beta: !!on });
+      guard(error);
+      return { ok: true };
+    },
+
+    async giveCoins(id, amount) {
+      const { data, error } = await sb.rpc('admin_give_coins', { target: id, amount });
       guard(error);
       return data;
     },

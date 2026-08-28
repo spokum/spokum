@@ -26,7 +26,16 @@ function blank() {
     scores: [],
     devices: [],
     deviceUsers: [],
-    deviceBans: []
+    deviceBans: [],
+    coinLog: [],
+    gifts: [],
+    campRooms: [],
+    campSeats: [],
+    campMessages: [],
+    letters: [],
+    capsules: [],
+    mentorships: [],
+    mentorReviews: []
   };
 }
 
@@ -161,6 +170,48 @@ function banState(id) {
   return { blocked: true, until: ban.until, forever: ban.until === null, reason: ban.reason };
 }
 
+export const GIFT_TYPES = [
+  { id: 'leaf', title: 'Листок', price: 40, rarity: 'common', art: 'leaf', hue: 140 },
+  { id: 'cup', title: 'Тёплый чай', price: 60, rarity: 'common', art: 'cup', hue: 30 },
+  { id: 'star', title: 'Звезда', price: 90, rarity: 'common', art: 'star', hue: 45 },
+  { id: 'heart', title: 'Сердце', price: 120, rarity: 'rare', art: 'heart', hue: 350 },
+  { id: 'moon', title: 'Луна', price: 180, rarity: 'rare', art: 'moon', hue: 230 },
+  { id: 'wave', title: 'Волна', price: 220, rarity: 'rare', art: 'wave', hue: 200 },
+  { id: 'flame', title: 'Огонёк', price: 300, rarity: 'epic', art: 'flame', hue: 20 },
+  { id: 'crystal', title: 'Кристалл', price: 450, rarity: 'epic', art: 'crystal', hue: 190 },
+  { id: 'crown', title: 'Корона', price: 700, rarity: 'legend', art: 'crown', hue: 45 },
+  { id: 'comet', title: 'Комета', price: 1200, rarity: 'legend', art: 'comet', hue: 265 }
+];
+
+const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];
+
+function pickAlias() {
+  const one = ALIAS_WORDS[Math.floor(Math.random() * ALIAS_WORDS.length)];
+  const two = ALIAS_WORDS[Math.floor(Math.random() * ALIAS_WORDS.length)];
+  return `${one} ${two}`;
+}
+
+function ensureNewTables() {
+  for (const key of ['coinLog', 'gifts', 'campRooms', 'campSeats', 'campMessages', 'letters', 'capsules', 'mentorships', 'mentorReviews']) {
+    if (!Array.isArray(state[key])) state[key] = [];
+  }
+}
+
+function giftType(id) {
+  return GIFT_TYPES.find((row) => row.id === id);
+}
+
+function sweepCampfire() {
+  const hour = Date.now() - 3600000;
+  state.campMessages = state.campMessages.filter((row) => row.createdAt > hour);
+  const dead = state.campRooms.filter((room) => room.closesAt < Date.now()).map((room) => room.id);
+  if (dead.length) {
+    state.campRooms = state.campRooms.filter((room) => !dead.includes(room.id));
+    state.campSeats = state.campSeats.filter((seat) => !dead.includes(seat.roomId));
+    state.campMessages = state.campMessages.filter((row) => !dead.includes(row.roomId));
+  }
+}
+
 function pub(user) {
   if (!user) return null;
   return {
@@ -176,6 +227,8 @@ function pub(user) {
     isDeveloper: user.isDeveloper,
     isVerified: user.isVerified,
     modRank: user.modRank || 0,
+    isBeta: !!user.isBeta || user.username === 'silver',
+    coins: user.coins || 0,
     bannedUntil: user.bannedUntil,
     mutedUntil: user.mutedUntil,
     createdAt: user.createdAt,
@@ -220,7 +273,10 @@ function shapePost(post, viewerId) {
     video: post.video || null,
     poster: post.poster || null,
     duration: post.duration || 0,
-    views: post.views || 0
+    views: post.views || 0,
+    sound: post.sound || null,
+    repostOf: post.repostOf || null,
+    origin: post.repostOf ? pub(state.users.find((u) => u.id === state.posts.find((p) => p.id === post.repostOf)?.authorId)) : null
   };
 }
 
@@ -230,6 +286,7 @@ function shapeMessage(message) {
     chatId: message.chatId,
     kind: message.kind,
     body: message.body,
+    postId: message.postId || null,
     media: message.media,
     duration: message.duration,
     createdAt: message.createdAt,
@@ -891,14 +948,16 @@ export const local = {
     };
   },
 
-  async removePost(id, reason) {
+  async removePost(id, reason, proof) {
     const user = needMod();
     const post = state.posts.find((p) => p.id === id);
     if (!post) fail('Пост не найден');
     if (!String(reason || '').trim()) fail('Нужна причина');
+    if (!String(proof || '').trim()) fail('Приложите снимок нарушения, без него снять запись нельзя');
     post.removed = true;
     post.removedBy = user.id;
     post.removedReason = reason;
+    post.removedProof = proof;
     post.removedAt = Date.now();
     state.punishments.unshift({
       id: next('punishments'),
@@ -1101,6 +1160,431 @@ export const local = {
     log(admin.id, 'mod.rank', { id, rank });
     save();
     return { ok: true, rank, rankName: RANKS[rank] };
+  },
+
+  async grantCoins(amount, reason) {
+    ensureNewTables();
+    const user = need();
+    const give = Math.min(Math.max(Number(amount) || 0, 0), 40);
+    if (!give) return { added: 0, coins: user.coins || 0 };
+    const day = Date.now() - 86400000;
+    const today = state.coinLog
+      .filter((row) => row.userId === user.id && row.amount > 0 && row.createdAt > day)
+      .reduce((sum, row) => sum + row.amount, 0);
+    const left = Math.max(0, 300 - today);
+    const added = Math.min(give, left);
+    if (!added) return { added: 0, coins: user.coins || 0, limit: true };
+    user.coins = (user.coins || 0) + added;
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: added, reason: reason || '', createdAt: Date.now() });
+    save();
+    return { added, coins: user.coins };
+  },
+
+  async coinLog() {
+    ensureNewTables();
+    const user = need();
+    return { rows: state.coinLog.filter((row) => row.userId === user.id).slice(0, 40) };
+  },
+
+  async giftTypes() {
+    return { types: GIFT_TYPES.map((row, index) => ({ ...row, sort: index })) };
+  },
+
+  async gifts(userId) {
+    ensureNewTables();
+    const id = userId || me()?.id;
+    return {
+      gifts: state.gifts
+        .filter((row) => row.ownerId === id && !row.sold)
+        .map((row) => {
+          const kind = giftType(row.typeId) || {};
+          const from = state.users.find((u) => u.id === row.fromId);
+          return {
+            id: row.id,
+            typeId: row.typeId,
+            title: kind.title || row.typeId,
+            price: kind.price || 0,
+            rarity: kind.rarity || 'common',
+            art: kind.art || 'spark',
+            hue: kind.hue ?? 220,
+            note: row.note || '',
+            pinned: !!row.pinned,
+            createdAt: row.createdAt,
+            from: from ? { username: from.username, displayName: from.displayName, avatar: from.avatar, hue: from.hue } : null
+          };
+        })
+        .sort((a, b) => b.id - a.id)
+    };
+  },
+
+  async buyGift(typeId, userId, note) {
+    ensureNewTables();
+    const user = need();
+    notMuted(user);
+    const kind = giftType(typeId);
+    if (!kind) fail('Подарок не найден');
+    const target = state.users.find((u) => u.id === userId);
+    if (!target) fail('Человек не найден');
+    if ((user.coins || 0) < kind.price) fail(`Не хватает монет: нужно ${kind.price}, у вас ${user.coins || 0}`);
+    user.coins -= kind.price;
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: -kind.price, reason: 'Подарок ' + kind.title, createdAt: Date.now() });
+    const gift = { id: state.gifts.length + 1, typeId, ownerId: target.id, fromId: user.id, note: String(note || '').slice(0, 200), pinned: false, sold: false, createdAt: Date.now() };
+    state.gifts.push(gift);
+    save();
+    return { ok: true, gift: gift.id, coins: user.coins };
+  },
+
+  async sellGift(id) {
+    ensureNewTables();
+    const user = need();
+    const gift = state.gifts.find((row) => row.id === id);
+    if (!gift) fail('Подарок не найден');
+    if (gift.ownerId !== user.id) fail('Это не ваш подарок');
+    if (gift.sold) fail('Подарок уже продан');
+    const kind = giftType(gift.typeId) || { price: 0, title: '' };
+    const paid = Math.max(1, Math.floor((kind.price * 70) / 100));
+    const fee = Math.max(1, Math.floor((kind.price * 15) / 100));
+    gift.sold = true;
+    gift.pinned = false;
+    user.coins = (user.coins || 0) + paid;
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: paid, reason: 'Продажа: ' + kind.title, createdAt: Date.now() });
+    const boss = state.users.find((u) => u.username === 'vanya8');
+    if (boss) boss.coins = (boss.coins || 0) + fee;
+    save();
+    return { ok: true, paid, fee, coins: user.coins };
+  },
+
+  async pinGift(id, on) {
+    ensureNewTables();
+    const user = need();
+    const gift = state.gifts.find((row) => row.id === id && row.ownerId === user.id && !row.sold);
+    if (!gift) fail('Подарок не найден');
+    if (on && state.gifts.filter((row) => row.ownerId === user.id && row.pinned && !row.sold).length >= 6) {
+      fail('На витрине помещается шесть подарков');
+    }
+    gift.pinned = !!on;
+    save();
+    return { ok: true };
+  },
+
+  async campfireJoin() {
+    ensureNewTables();
+    const user = need();
+    notMuted(user);
+    sweepCampfire();
+    const seat = state.campSeats.find((row) => row.userId === user.id && state.campRooms.some((r) => r.id === row.roomId));
+    if (seat) return { room: seat.roomId, alias: seat.alias };
+    let room = state.campRooms.find((r) => state.campSeats.filter((s) => s.roomId === r.id).length < 10);
+    if (!room) {
+      room = { id: state.campRooms.length + 1, title: 'Костёр', createdAt: Date.now(), closesAt: Date.now() + 3600000 };
+      state.campRooms.push(room);
+    }
+    const alias = pickAlias();
+    state.campSeats.push({ roomId: room.id, userId: user.id, alias, joinedAt: Date.now() });
+    save();
+    return { room: room.id, alias };
+  },
+
+  async campfireSay(room, body) {
+    ensureNewTables();
+    const user = need();
+    notMuted(user);
+    if (!String(body || '').trim()) fail('Пустое сообщение');
+    const seat = state.campSeats.find((row) => row.roomId === room && row.userId === user.id);
+    if (!seat) fail('Вы не у этого костра');
+    state.campMessages.push({
+      id: state.campMessages.length + 1,
+      roomId: room,
+      authorId: user.id,
+      alias: seat.alias,
+      body: String(body).slice(0, 600),
+      createdAt: Date.now()
+    });
+    save();
+    return { ok: true };
+  },
+
+  async campfireRead(room, after) {
+    ensureNewTables();
+    const user = need();
+    sweepCampfire();
+    const seat = state.campSeats.find((row) => row.roomId === room && row.userId === user.id);
+    if (!seat) fail('Вы не у этого костра');
+    const home = state.campRooms.find((r) => r.id === room);
+    return {
+      alias: seat.alias,
+      people: state.campSeats.filter((row) => row.roomId === room).length,
+      closesAt: home?.closesAt || Date.now(),
+      messages: state.campMessages
+        .filter((row) => row.roomId === room && row.id > (after || 0))
+        .slice(-80)
+        .map((row) => ({ id: row.id, alias: row.alias, body: row.body, createdAt: row.createdAt, mine: row.alias === seat.alias }))
+    };
+  },
+
+  async campfireLeave(room) {
+    ensureNewTables();
+    const user = need();
+    state.campSeats = state.campSeats.filter((row) => !(row.roomId === room && row.userId === user.id));
+    save();
+    return { ok: true };
+  },
+
+  async letterSend(body) {
+    ensureNewTables();
+    const user = need();
+    notMuted(user);
+    if (String(body || '').trim().length < 10) fail('Напишите хотя бы пару строк');
+    const day = Date.now() - 86400000;
+    if (state.letters.filter((row) => row.authorId === user.id && row.createdAt > day).length >= 3) {
+      fail('Не больше трёх писем в сутки');
+    }
+    const letter = { id: state.letters.length + 1, authorId: user.id, body: String(body).slice(0, 2000), createdAt: Date.now(), toId: null, takenAt: 0, reply: null, repliedAt: 0 };
+    state.letters.push(letter);
+    save();
+    return { ok: true, letter: letter.id };
+  },
+
+  async letterTake() {
+    ensureNewTables();
+    const user = need();
+    const free = state.letters.filter((row) => !row.takenAt && row.authorId !== user.id);
+    if (!free.length) return { empty: true };
+    const letter = free[Math.floor(Math.random() * free.length)];
+    letter.toId = user.id;
+    letter.takenAt = Date.now();
+    save();
+    return { id: letter.id, body: letter.body, createdAt: letter.createdAt };
+  },
+
+  async letterReply(id, answer) {
+    ensureNewTables();
+    const user = need();
+    const letter = state.letters.find((row) => row.id === id);
+    if (!letter || letter.toId !== user.id) fail('Письмо не ваше');
+    if (letter.reply) fail('Ответ уже отправлен');
+    if (!String(answer || '').trim()) fail('Пустой ответ');
+    letter.reply = String(answer).slice(0, 2000);
+    letter.repliedAt = Date.now();
+    save();
+    return { ok: true };
+  },
+
+  async myLetters() {
+    ensureNewTables();
+    const user = need();
+    return { letters: state.letters.filter((row) => row.authorId === user.id).sort((a, b) => b.createdAt - a.createdAt) };
+  },
+
+  async capsuleAdd(body, days) {
+    ensureNewTables();
+    const user = need();
+    if (!String(body || '').trim()) fail('Пустое письмо');
+    if (days < 1 || days > 1825) fail('Срок от одного дня до пяти лет');
+    if (state.capsules.filter((row) => row.userId === user.id && !row.openedAt).length >= 20) {
+      fail('Больше двадцати капсул сразу нельзя');
+    }
+    const capsule = { id: state.capsules.length + 1, userId: user.id, body: String(body).slice(0, 4000), openAt: Date.now() + days * 86400000, createdAt: Date.now(), openedAt: 0 };
+    state.capsules.push(capsule);
+    save();
+    return { ok: true, capsule: capsule.id };
+  },
+
+  async capsules() {
+    ensureNewTables();
+    const user = need();
+    return { capsules: state.capsules.filter((row) => row.userId === user.id).sort((a, b) => a.openAt - b.openAt) };
+  },
+
+  async capsuleCheck() {
+    ensureNewTables();
+    const user = me();
+    if (!user) return { ready: 0 };
+    const ripe = state.capsules.filter((row) => row.userId === user.id && !row.openedAt && row.openAt <= Date.now());
+    ripe.forEach((row) => { row.openedAt = Date.now(); });
+    if (ripe.length) save();
+    return { ready: ripe.length };
+  },
+
+  async capsuleDrop(id) {
+    ensureNewTables();
+    const user = need();
+    state.capsules = state.capsules.filter((row) => !(row.id === id && row.userId === user.id));
+    save();
+    return { ok: true };
+  },
+
+  async mentorBoard() {
+    ensureNewTables();
+    const user = needMod();
+    const shape = (row) => {
+      const p = state.users.find((u) => u.id === row.studentId);
+      if (!p) return null;
+      return {
+        id: p.id,
+        username: p.username,
+        displayName: p.displayName,
+        avatar: p.avatar,
+        hue: p.hue,
+        rank: p.modRank || 0,
+        rankName: RANKS[p.modRank || 0],
+        since: row.createdAt,
+        actions: state.punishments.filter((x) => x.actorId === p.id).length,
+        good: state.mentorReviews.filter((x) => x.studentId === p.id && x.verdict === 'good').length,
+        bad: state.mentorReviews.filter((x) => x.studentId === p.id && x.verdict !== 'good').length
+      };
+    };
+    const mine = state.mentorships.find((row) => row.studentId === user.id && !row.endedAt);
+    const mentorUser = mine && state.users.find((u) => u.id === mine.mentorId);
+    return {
+      students: state.mentorships.filter((row) => row.mentorId === user.id && !row.endedAt).map(shape).filter(Boolean),
+      mentor: mentorUser ? { id: mentorUser.id, displayName: mentorUser.displayName, username: mentorUser.username, rankName: RANKS[mentorUser.modRank || 0], since: mine.createdAt } : null,
+      reviews: state.mentorReviews
+        .filter((row) => row.studentId === user.id)
+        .map((row) => ({ ...row, mentor: state.users.find((u) => u.id === row.mentorId)?.displayName || '' }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 30),
+      free: state.users
+        .filter((u) => u.isModerator && !u.isAdmin && u.id !== user.id && (u.modRank || 0) < 3
+          && !state.mentorships.some((row) => row.studentId === u.id && !row.endedAt))
+        .map((u) => ({ id: u.id, username: u.username, displayName: u.displayName, avatar: u.avatar, hue: u.hue, rankName: RANKS[u.modRank || 0] }))
+    };
+  },
+
+  async mentorFeed() {
+    ensureNewTables();
+    const user = needMod();
+    const students = state.mentorships.filter((row) => row.mentorId === user.id && !row.endedAt).map((row) => row.studentId);
+    return {
+      rows: state.punishments
+        .filter((x) => students.includes(x.actorId))
+        .slice(0, 40)
+        .map((x) => ({
+          id: x.id,
+          kind: x.kind,
+          reason: x.reason,
+          minutes: x.minutes,
+          createdAt: x.createdAt,
+          proof: state.posts.find((p) => p.id === x.postId)?.removedProof || null,
+          student: state.users.find((u) => u.id === x.actorId)?.displayName || '',
+          studentId: x.actorId,
+          target: state.users.find((u) => u.id === x.userId)?.displayName || '',
+          review: state.mentorReviews.find((r) => r.punishmentId === x.id) || null
+        }))
+    };
+  },
+
+  async mentorTake(id) {
+    ensureNewTables();
+    const user = needMod();
+    if (!user.isAdmin && (user.modRank || 0) < 3) fail('Брать учеников может старший модератор и выше');
+    if (id === user.id) fail('Себя брать нельзя');
+    const target = state.users.find((u) => u.id === id);
+    if (!target?.isModerator) fail('Ученик должен быть модератором');
+    if (state.mentorships.some((row) => row.studentId === id && !row.endedAt)) fail('У него уже есть наставник');
+    state.mentorships.push({ id: state.mentorships.length + 1, mentorId: user.id, studentId: id, createdAt: Date.now(), endedAt: 0 });
+    save();
+    return { ok: true };
+  },
+
+  async mentorDrop(id) {
+    ensureNewTables();
+    const user = needMod();
+    state.mentorships.forEach((row) => {
+      if (row.studentId === id && !row.endedAt && (row.mentorId === user.id || user.isAdmin)) row.endedAt = Date.now();
+    });
+    save();
+    return { ok: true };
+  },
+
+  async mentorReview(punishmentId, verdict, note) {
+    ensureNewTables();
+    const user = needMod();
+    if (!['good', 'soft', 'hard', 'wrong'].includes(verdict)) fail('Неизвестная оценка');
+    const act = state.punishments.find((x) => x.id === punishmentId);
+    if (!act) fail('Решение не найдено');
+    const link = state.mentorships.find((row) => row.studentId === act.actorId && !row.endedAt && row.mentorId === user.id);
+    if (!link && !user.isAdmin) fail('Это не ваш ученик');
+    state.mentorReviews.push({
+      id: state.mentorReviews.length + 1,
+      mentorId: user.id,
+      studentId: act.actorId,
+      punishmentId,
+      verdict,
+      note: String(note || '').slice(0, 500),
+      createdAt: Date.now()
+    });
+    save();
+    return { ok: true };
+  },
+
+  async repost(id, note) {
+    const user = need();
+    notMuted(user);
+    let source = state.posts.find((p) => p.id === id && !p.removed);
+    if (!source) fail('Запись не найдена');
+    if (source.repostOf) {
+      source = state.posts.find((p) => p.id === source.repostOf && !p.removed);
+      if (!source) fail('Исходная запись пропала');
+    }
+    if (state.posts.some((p) => p.authorId === user.id && p.repostOf === source.id)) fail('Вы это уже репостнули');
+    const fresh = {
+      ...source,
+      id: next('posts'),
+      authorId: user.id,
+      body: String(note || '').slice(0, 500),
+      createdAt: Date.now(),
+      removed: false,
+      views: 0,
+      repostOf: source.id
+    };
+    state.posts.unshift(fresh);
+    save();
+    return { ok: true, post: fresh.id };
+  },
+
+  async sendPost(chatId, postId, note) {
+    const user = need();
+    notMuted(user);
+    const source = state.posts.find((p) => p.id === postId && !p.removed);
+    if (!source) fail('Запись не найдена');
+    const message = {
+      id: next('messages'),
+      chatId,
+      authorId: user.id,
+      kind: source.video ? 'video' : 'post',
+      body: String(note || '').slice(0, 500),
+      media: source.video || source.poster || source.image || null,
+      duration: source.duration || 0,
+      postId: source.id,
+      createdAt: Date.now(),
+      removed: false
+    };
+    state.messages.push(message);
+    save();
+    return { ok: true, message: message.id };
+  },
+
+  async setBeta(id, on) {
+    const admin = needAdmin();
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Пользователь не найден');
+    target.isBeta = !!on;
+    log(admin.id, 'admin.beta', { id, on });
+    save();
+    return { ok: true };
+  },
+
+  async giveCoins(id, amount) {
+    ensureNewTables();
+    const admin = needAdmin();
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Пользователь не найден');
+    target.coins = Math.max(0, (target.coins || 0) + amount);
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: id, amount, reason: 'От администрации', createdAt: Date.now() });
+    log(admin.id, 'admin.coins', { id, amount });
+    save();
+    return { ok: true, coins: target.coins };
   },
 
   async strikes(userId) {
