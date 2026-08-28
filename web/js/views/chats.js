@@ -290,7 +290,7 @@ function bubble(message, chat, lastAuthor) {
   else if (message.kind === 'voice') {
     const bars = Array.from({ length: 22 }, (_, i) => `<i style="height:${20 + Math.round(Math.sin(i * 1.7 + message.id) * 55 + 55) * 0.6}%"></i>`).join('');
     inner = `<div class="voice"><button class="btn btn-icon btn-ghost" data-play style="width:32px;height:32px">${icon('play', 15)}</button><div class="voice-bars">${bars}</div><span class="tiny">${durationText(message.duration)}</span></div>`;
-  else if (message.kind === 'video') {
+  } else if (message.kind === 'video') {
     inner = `<div class="chat-reel" data-reel><video src="${esc(message.media || '')}" playsinline muted loop preload="metadata"></video><span class="chat-reel-play">${icon('play', 22)}</span></div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
   } else if (message.kind === 'post') {
     inner = `<div class="chat-reel" data-reel>${message.media ? `<img src="${esc(message.media)}" alt="" loading="lazy">` : `<span class="chat-reel-play">${icon('feed', 22)}</span>`}</div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
