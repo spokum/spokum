@@ -14,7 +14,13 @@ const THEMES = [
   ['aurora', 'Аврора', 'linear-gradient(140deg,#101d23,#1d3f42)', '#8fe3c8', true],
   ['sunset', 'Закат', 'linear-gradient(140deg,#211622,#4a2436)', '#e8a9a0', true],
   ['royal', 'Королевская', 'linear-gradient(140deg,#151130,#3a2a6b)', '#d8b45c', true],
-  ['abyss', 'Бездна', 'linear-gradient(140deg,#000000,#0d1418)', '#7fd7e8', true]
+  ['abyss', 'Бездна', 'linear-gradient(140deg,#000000,#0d1418)', '#7fd7e8', true],
+  ['ember', 'Угли', 'linear-gradient(140deg,#211714,#43231a)', '#f0ded2', false],
+  ['mint', 'Мята', 'linear-gradient(140deg,#ffffff,#dcece3)', '#1e2b26', false],
+  ['storm', 'Гроза', 'linear-gradient(140deg,#151d23,#283a45)', '#dde8ef', false],
+  ['ink', 'Чернила', 'linear-gradient(140deg,#05070a,#141c26)', '#e6ebf2', true],
+  ['rose', 'Роза', 'linear-gradient(140deg,#261923,#4a2440)', '#f2dfe8', true],
+  ['gold', 'Золото', 'linear-gradient(140deg,#1f1a10,#4a3c1c)', '#f2e8d2', true]
 ];
 
 const ACCENTS = [

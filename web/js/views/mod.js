@@ -1,7 +1,7 @@
 import { api, state, setUser } from '../store.js';
 import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, badges, toast, openSheet, promptSheet, emptyState } from '../ui.js';
+import { avatar, badges, toast, openSheet, promptSheet, emptyState, pickImage } from '../ui.js';
 import { openProfile } from './profile.js';
 import { pickDuration } from './admin.js';
 import { ruleList, openRules } from './rules.js';
@@ -11,6 +11,7 @@ const TABS = [
   ['queue', 'Публикации'],
   ['reels', 'Видео'],
   ['reports', 'Жалобы'],
+  ['school', 'Наставник'],
   ['strikes', 'Мой статус']
 ];
 
@@ -58,6 +59,7 @@ export async function openMod() {
       if (active === 'queue') await drawQueue(body);
       if (active === 'reels') await drawReels(body);
       if (active === 'reports') await drawReports(body);
+      if (active === 'school') await drawSchool(body);
       if (active === 'strikes') await drawStrikes(body);
     } catch (error) {
       body.innerHTML = emptyState('warn', 'Ошибка', error.message);
@@ -102,8 +104,10 @@ async function drawQueue(body) {
       const picked = await reasonByRule('Снять публикацию');
       if (!picked) return;
       const reason = picked.reason;
+      const proof = await askProof(reason);
+      if (!proof) return;
       try {
-        await api.removePost(post.id, reason);
+        await api.removePost(post.id, reason, proof);
         toast('Пост снят');
         drawQueue(body);
       } catch (error) {
@@ -168,8 +172,10 @@ async function drawReels(body) {
         const picked = await reasonByRule('Снять публикацию');
         if (!picked) return;
         const reason = picked.reason;
+        const proof = await askProof(reason);
+        if (!proof) return;
         try {
-          await api.removePost(post.id, reason);
+          await api.removePost(post.id, reason, proof);
           toast('Снято');
           load(kind);
         } catch (error) {
@@ -248,6 +254,40 @@ async function reasonByRule(title) {
   const reason = await promptSheet({ title, label: 'Причина, её увидят автор и админ', placeholder: 'Опишите подробно', multiline: true, value });
   if (!reason) return null;
   return { reason, rule: rule === 'own' ? null : rule };
+}
+
+function askProof(reason) {
+  return new Promise((done) => {
+    let shot = null;
+    const body = el(`<div class="col" style="gap:11px">
+      <p class="tiny muted" style="margin:0;line-height:1.5">Без снимка нарушения запись снять нельзя. Сделайте скриншот записи и приложите — его увидят админ и ваш наставник.</p>
+      <div class="card" style="padding:11px"><span class="tiny muted">Причина</span><div class="small" style="margin-top:3px">${esc(reason)}</div></div>
+      <button class="proof-drop" data-pick>${icon('image', 26)}<span class="small strong">Приложить снимок</span><span class="tiny">JPG или PNG с экрана</span></button>
+      <img class="proof-shot" data-shot hidden alt="">
+      <button class="btn btn-primary" data-ok disabled>${icon('check', 17)} Снять запись</button>
+    </div>`);
+    const sheet = openSheet('Снимок нарушения', body, { onClose: () => done(null) });
+    const drop = body.querySelector('[data-pick]');
+    const image = body.querySelector('[data-shot]');
+    const ok = body.querySelector('[data-ok]');
+
+    drop.onclick = async () => {
+      const picked = await pickImage(1600);
+      if (!picked) return;
+      shot = picked;
+      image.src = picked;
+      image.hidden = false;
+      drop.classList.add('filled');
+      drop.querySelector('.strong').textContent = 'Снимок приложен, можно заменить';
+      ok.disabled = false;
+    };
+    ok.onclick = () => {
+      if (!shot) return;
+      done(shot);
+      document.body.style.overflow = '';
+      sheet.sheet.parentElement.remove();
+    };
+  });
 }
 
 export function openPunish(user, done) {
@@ -350,6 +390,137 @@ async function drawReports(body) {
       await api.closeReport(report.id, 'rejected');
       toast('Жалоба отклонена');
       drawReports(body);
+    });
+    list.appendChild(card);
+  });
+}
+
+const VERDICTS = [
+  ['good', 'Верно', 'good'],
+  ['soft', 'Мягковато', 'warn'],
+  ['hard', 'Слишком строго', 'warn'],
+  ['wrong', 'Неверно', 'bad']
+];
+
+async function drawSchool(body) {
+  body.innerHTML = '<div class="card" style="height:120px;opacity:.35"></div>';
+  let board;
+  let feed = [];
+  try {
+    board = await api.mentorBoard();
+    const result = await api.mentorFeed();
+    feed = result.rows || [];
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+
+  const canTeach = state.user?.isAdmin || (state.user?.modRank || 0) >= 3;
+  body.innerHTML = `
+    ${board.mentor ? `<div class="card" style="padding:14px;margin-bottom:12px">
+      <div class="strong small">Ваш наставник</div>
+      <div class="small muted" style="margin-top:3px">${esc(board.mentor.displayName)} · ${esc(board.mentor.rankName || '')}</div>
+      <p class="tiny muted" style="margin:9px 0 0;line-height:1.5">Он видит ваши решения и ставит оценки. Это не наказание — так учат.</p>
+    </div>` : ''}
+
+    ${board.reviews?.length ? `<div class="row between" style="margin:4px 2px 8px"><span class="strong small">Оценки моих решений</span></div>
+    <div class="col" style="gap:6px;margin-bottom:14px">${board.reviews
+      .map((r) => {
+        const look = VERDICTS.find((v) => v[0] === r.verdict) || ['', r.verdict, ''];
+        return `<div class="card" style="padding:11px 13px">
+          <div class="row between" style="gap:8px"><span class="pill ${look[2]}">${esc(look[1])}</span><span class="tiny muted">${esc(timeAgo(r.createdAt))}</span></div>
+          ${r.note ? `<div class="small" style="margin-top:6px">${esc(r.note)}</div>` : ''}
+        </div>`;
+      })
+      .join('')}</div>` : ''}
+
+    ${canTeach ? `<div class="row between" style="margin:4px 2px 8px"><span class="strong small">Мои ученики</span><span class="tiny muted">${board.students?.length || 0}</span></div>
+    <div class="col" data-students style="gap:8px;margin-bottom:14px"></div>
+    <div class="row between" style="margin:4px 2px 8px"><span class="strong small">Решения учеников</span></div>
+    <div class="col" data-feed style="gap:8px"></div>` : `<p class="tiny muted" style="margin:10px 2px;line-height:1.5">Брать учеников может старший модератор и выше. Работайте честно — звание придёт.</p>`}`;
+
+  if (!canTeach) return;
+
+  const students = body.querySelector('[data-students]');
+  if (!board.students?.length) {
+    students.innerHTML = '<p class="tiny muted" style="padding:6px 2px">Учеников нет.</p>';
+  }
+  (board.students || []).forEach((student) => {
+    const card = el(`<div class="card" style="padding:12px">
+      <div class="row" style="gap:10px">
+        ${avatar(student, 38)}
+        <div class="grow" style="min-width:0">
+          <div class="strong small truncate">${esc(student.displayName)}</div>
+          <div class="tiny muted">${esc(student.rankName)} · решений ${student.actions} · верных ${student.good} · с замечанием ${student.bad}</div>
+        </div>
+        <button class="btn btn-sm" data-drop>${icon('close', 15)}</button>
+      </div>
+    </div>`);
+    card.querySelector('[data-drop]').onclick = async () => {
+      try {
+        await api.mentorDrop(student.id);
+        toast('Ученик отпущен');
+        drawSchool(body);
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+    students.appendChild(card);
+  });
+
+  if (board.free?.length) {
+    const take = el(`<button class="btn" style="width:100%;margin-top:4px">${icon('plus', 16)} Взять ученика</button>`);
+    take.onclick = () => {
+      const inner = el(`<div class="col" style="gap:6px"></div>`);
+      const sheet = openSheet('Кого берём', inner);
+      board.free.forEach((who) => {
+        const row = el(`<button class="list-item">${avatar(who, 32)}<span class="grow" style="text-align:left"><span class="small strong">${esc(who.displayName)}</span><span class="tiny muted" style="display:block">@${esc(who.username)} · ${esc(who.rankName)}</span></span></button>`);
+        row.onclick = async () => {
+          try {
+            await api.mentorTake(who.id);
+            sheet.close();
+            toast('Ученик взят');
+            drawSchool(body);
+          } catch (error) {
+            toast(error.message, 'err');
+          }
+        };
+        inner.appendChild(row);
+      });
+    };
+    students.appendChild(take);
+  }
+
+  const list = body.querySelector('[data-feed]');
+  if (!feed.length) {
+    list.innerHTML = '<p class="tiny muted" style="padding:6px 2px">Ученики пока ничего не решали.</p>';
+    return;
+  }
+  feed.forEach((row) => {
+    const done = row.review;
+    const card = el(`<div class="card" style="padding:13px">
+      <div class="row between" style="gap:8px">
+        <span class="strong small truncate">${esc(row.student)}</span>
+        <span class="tiny muted">${esc(timeAgo(typeof row.createdAt === 'string' ? Date.parse(row.createdAt) : row.createdAt))}</span>
+      </div>
+      <div class="tiny muted" style="margin-top:3px">${esc(row.kind === 'post_removed' ? 'снял запись' : 'наказал')} · ${esc(row.target || '')}</div>
+      <div class="small" style="margin-top:7px">${esc(row.reason)}</div>
+      ${row.proof ? `<img class="proof-shot" src="${esc(row.proof)}" alt="">` : '<div class="tiny muted" style="margin-top:7px">Снимок не приложен</div>'}
+      ${done
+        ? `<div class="row" style="gap:7px;margin-top:10px"><span class="pill ${(VERDICTS.find((v) => v[0] === done.verdict) || [])[2] || ''}">${esc((VERDICTS.find((v) => v[0] === done.verdict) || ['', done.verdict])[1])}</span>${done.note ? `<span class="tiny muted truncate">${esc(done.note)}</span>` : ''}</div>`
+        : `<div class="verdict-row" style="margin-top:10px">${VERDICTS.map(([id, label, tone]) => `<button class="btn btn-sm" data-verdict="${id}">${esc(label)}</button>`).join('')}</div>`}
+    </div>`);
+    card.querySelectorAll('[data-verdict]').forEach((button) => {
+      button.onclick = async () => {
+        const note = await promptSheet({ title: 'Комментарий ученику', label: 'Что объяснить', placeholder: 'Можно оставить пустым', multiline: true });
+        try {
+          await api.mentorReview(row.id, button.dataset.verdict, note || '');
+          toast('Оценка поставлена');
+          drawSchool(body);
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
     });
     list.appendChild(card);
   });

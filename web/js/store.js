@@ -36,6 +36,11 @@ export async function initBackend() {
   return backend.mode;
 }
 
+export function isBeta(user) {
+  const who = user || state.user;
+  return !!(who && (who.isBeta || who.username === 'silver'));
+}
+
 export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
 
 export function rankName(user) {
@@ -80,7 +85,7 @@ export function isPremium(user) {
   return !!(user && user.premiumUntil && user.premiumUntil > Date.now());
 }
 
-export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss'];
+export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss', 'ink', 'rose', 'gold'];
 export const PREMIUM_ACCENTS = ['gold', 'rose', 'ice'];
 
 export const PREMIUM_PERKS = [

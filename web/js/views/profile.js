@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName, isBeta } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -72,6 +72,13 @@ export async function render(root) {
     <div class="col" style="margin-top:12px;gap:6px">
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
+      ${isBeta(fresh) ? `<div class="beta-band">${icon('spark', 15)}<span>Новое, пока только у вас</span></div>
+      <button class="card list-item" data-campfire>${icon('flame', 20)}<div class="grow"><div class="strong small">Костёр</div><div class="tiny muted">Анонимно, всё исчезает через час</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
+      <div class="divider" style="margin:8px 0"></div>` : ''}
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-contacts>${icon('users', 20)}<div class="grow"><div class="strong small">Контакты</div><div class="tiny muted">Кого ты добавил</div></div>${icon('forward', 16)}</button>
@@ -109,6 +116,26 @@ export async function render(root) {
   body.querySelector('[data-mod]')?.addEventListener('click', async () => {
     const { openMod } = await import('./mod.js');
     openMod();
+  });
+  body.querySelector('[data-campfire]')?.addEventListener('click', async () => {
+    const { openCampfire } = await import('./campfire.js');
+    openCampfire();
+  });
+  body.querySelector('[data-letters]')?.addEventListener('click', async () => {
+    const { openLetters } = await import('./letters.js');
+    openLetters();
+  });
+  body.querySelector('[data-capsule]')?.addEventListener('click', async () => {
+    const { openCapsules } = await import('./capsule.js');
+    openCapsules();
+  });
+  body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
+    const { openMyGifts } = await import('./gifts.js');
+    openMyGifts(state.user.id, true);
+  });
+  body.querySelector('[data-wallet]')?.addEventListener('click', async () => {
+    const { openWallet } = await import('./gifts.js');
+    openWallet();
   });
   body.querySelector('[data-notes]').onclick = async () => {
     const { openNotifications } = await import('./notifications.js');
@@ -640,6 +667,7 @@ export async function openProfile(username) {
         </div>
         <div class="small muted">@${esc(user.username)}</div>
         ${user.isModerator ? `<div style="display:flex;justify-content:center;margin-top:8px"><span class="rank-pill">${icon('shield', 13)}<span>${esc(rankName(user))}</span></span></div>` : ''}
+        <div data-shelf></div>
         ${dayWordChip(user)}
         ${user.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(user.bio)}</p>` : ''}
         <div style="display:flex;justify-content:center;margin-top:12px"><span class="mood-tag" style="${moodStyle(user.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span></div>
@@ -656,6 +684,10 @@ export async function openProfile(username) {
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
         </div>
+        ${isBeta() ? `<div class="row" style="margin-top:8px;gap:8px">
+          <button class="btn grow" data-gift>${icon('gift', 17)} Подарить</button>
+          <button class="btn grow" data-their-gifts>${icon('star', 17)} Подарки</button>
+        </div>` : ''}
         ${state.user?.isModerator || state.user?.isAdmin ? `<div class="col" style="margin-top:8px;gap:8px">
           <button class="btn" data-info style="width:100%">${icon('device', 17)} Информация о человеке</button>
           <button class="btn" data-punish style="width:100%;color:#c98b8b">${icon('warn', 17)} Наказать</button>
@@ -666,6 +698,15 @@ export async function openProfile(username) {
       <div class="row between" style="margin:20px 2px 10px"><div class="strong small">Записи</div></div>
       <div class="chips" data-kinds style="margin-bottom:10px"></div>
       <div class="col" data-posts></div>`;
+
+    if (isBeta()) {
+      try {
+        const { gifts } = await api.gifts(user.id);
+        const { giftShelf } = await import('./gifts.js');
+        const shelf = body.querySelector('[data-shelf]');
+        if (shelf) shelf.innerHTML = giftShelf(gifts);
+      } catch {}
+    }
 
     const list = body.querySelector('[data-posts]');
     const { postCard } = await import('./feed.js');
@@ -679,6 +720,14 @@ export async function openProfile(username) {
         toast(error.message, 'err');
       }
     };
+    body.querySelector('[data-gift]')?.addEventListener('click', async () => {
+      const { openGiftShop } = await import('./gifts.js');
+      openGiftShop(user, () => openProfile(username));
+    });
+    body.querySelector('[data-their-gifts]')?.addEventListener('click', async () => {
+      const { openMyGifts } = await import('./gifts.js');
+      openMyGifts(user.id, false);
+    });
     body.querySelector('[data-info]')?.addEventListener('click', async () => {
       const { openUserInfo } = await import('./userinfo.js');
       openUserInfo(user.id);
