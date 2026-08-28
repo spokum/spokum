@@ -32,6 +32,35 @@ async function refreshCoins() {
   } catch {}
 }
 
+function askNote(kind) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const inner = el(`<div class="col" style="gap:12px;align-items:center">
+      ${giftArt(kind, 62)}
+      <p class="small" style="margin:0;text-align:center">Дарим «${esc(kind.title)}» за ${kind.price}</p>
+      <input class="input" data-note maxlength="200" placeholder="Подпись, если хотите" style="width:100%">
+      <button class="btn btn-primary" data-ok style="width:100%">${icon('gift', 17)} Подарить</button>
+    </div>`);
+    const sheet = openSheet('Подтверждение', inner, {
+      onClose: () => {
+        document.body.style.overflow = 'hidden';
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
+      }
+    });
+    inner.querySelector('[data-ok]').onclick = () => {
+      if (settled) return;
+      settled = true;
+      const value = inner.querySelector('[data-note]').value.trim();
+      sheet.close();
+      document.body.style.overflow = 'hidden';
+      resolve(value);
+    };
+  });
+}
+
 export async function openGiftShop(target, done) {
   const body = el('<div class="col" style="gap:10px"><div class="card" style="height:120px;opacity:.3"></div></div>');
   const sheet = openSheet(target ? `Подарок для ${target.displayName}` : 'Магазин подарков', body);
@@ -64,24 +93,13 @@ export async function openGiftShop(target, done) {
     </button>`);
     card.onclick = async () => {
       if (!target) return toast('Откройте профиль человека, чтобы подарить', 'err');
-      if (purse < kind.price) return toast(`Не хватает ${kind.price - purse} монет`, 'err');
-      const note = await new Promise((resolve) => {
-        const inner = el(`<div class="col" style="gap:10px">
-          ${giftArt(kind, 60)}
-          <p class="small" style="margin:0;text-align:center">Дарим «${esc(kind.title)}» за ${kind.price}</p>
-          <input class="input" data-note maxlength="200" placeholder="Подпись, если хотите">
-          <button class="btn btn-primary" data-ok>${icon('gift', 17)} Подарить</button>
-        </div>`);
-        const inSheet = openSheet('Подтверждение', inner, { onClose: () => resolve(null) });
-        inner.querySelector('[data-ok]').onclick = () => {
-          const value = inner.querySelector('[data-note]').value.trim();
-          inSheet.close();
-          resolve(value === '' ? ' ' : value);
-        };
-      });
+      const have = state.user?.coins || 0;
+      if (have < kind.price) return toast(`Не хватает ${kind.price - have} монет`, 'err');
+
+      const note = await askNote(kind);
       if (note === null) return;
       try {
-        await api.buyGift(kind.id, target.id, note.trim());
+        await api.buyGift(kind.id, target.id, note);
         await refreshCoins();
         sheet.close();
         toast('Подарок отправлен');
