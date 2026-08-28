@@ -1306,6 +1306,30 @@ export async function createSupabase(url, key) {
       return { ok: true };
     },
 
+    async follow(id, on) {
+      const { data, error } = await sb.rpc('follow', { target: id, on_follow: !!on });
+      guard(error);
+      return data;
+    },
+
+    async followState(id) {
+      const { data, error } = await sb.rpc('follow_state', { target: id });
+      guard(error);
+      return data || { following: false, followers: 0 };
+    },
+
+    async thankMod(id, note) {
+      const { data, error } = await sb.rpc('thank_mod', { target: id, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async modThanks(id) {
+      const { data, error } = await sb.rpc('mod_thanks', { target: id });
+      guard(error);
+      return data || { total: 0, week: 0, mine: false };
+    },
+
     async strikes(userId) {
       const id = userId || requireUid();
       const { data, error } = await sb

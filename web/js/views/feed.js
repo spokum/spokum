@@ -246,11 +246,12 @@ function renderComposer(root) {
 
 function renderFilters(root) {
   const host = root.querySelector('[data-filters]');
-  const entries = [['', 'Всё'], ...Object.entries(MOODS).map(([key, m]) => [key, m.label])];
+  const entries = [['', 'Всё'], ...(isBeta() && api.follow ? [['mine', 'Свои']] : []), ...Object.entries(MOODS).map(([key, m]) => [key, m.label])];
   host.innerHTML = entries
     .map(([key, label]) => {
       const active = (state.moodFilter || '') === key;
-      return `<button class="chip" data-filter="${key}" style="${key ? moodStyle(key) : ''}" aria-pressed="${active}">${key ? '<i class="mood-dot"></i>' : ''}${esc(label)}</button>`;
+      const tint = key && key !== 'mine' ? moodStyle(key) : '';
+      return `<button class="chip" data-filter="${key}" style="${tint}" aria-pressed="${active}">${key && key !== 'mine' ? '<i class="mood-dot"></i>' : ''}${esc(label)}</button>`;
     })
     .join('');
   host.querySelectorAll('[data-filter]').forEach((button) => {
@@ -359,18 +360,36 @@ async function load(root, options = {}) {
   if (feedState.busy) return;
   feedState.busy = true;
   try {
+    const onlyMine = state.moodFilter === 'mine';
     const query = { kind: 'feed', limit: 12 };
-    if (state.moodFilter) query.mood = state.moodFilter;
+    if (state.moodFilter && !onlyMine) query.mood = state.moodFilter;
     if (options.append && feedState.cursor) query.before = feedState.cursor;
     const result = await api.listPosts(query);
-    const posts = (result.posts || []).filter((post) => {
+    let posts = (result.posts || []).filter((post) => {
       const own = post.kind || 'text';
       return own !== 'video' && own !== 'album' && !post.video;
     });
+    if (onlyMine && api.followState) {
+      const authors = [...new Set(posts.map((post) => post.author?.id).filter(Boolean))];
+      const known = new Map();
+      for (const id of authors) {
+        if (id === state.user?.id) {
+          known.set(id, true);
+          continue;
+        }
+        try {
+          known.set(id, (await api.followState(id)).following);
+        } catch {
+          known.set(id, false);
+        }
+      }
+      posts = posts.filter((post) => known.get(post.author?.id));
+    }
     feedState.cursor = result.cursor ?? (posts.length ? posts[posts.length - 1].createdAt : null);
     feedState.more = result.more ?? posts.length >= 12;
     feedState.posts = options.append ? [...feedState.posts, ...posts] : posts;
     if (!state.moodFilter && !options.append) cacheFeed(feedState.posts);
+    if (onlyMine && !posts.length && !options.append) list.innerHTML = emptyState('users', 'Пока пусто', 'Подпишитесь на кого-нибудь, и здесь появятся их записи');
     drawPosts(root, feedState.posts, {});
   } catch (error) {
     if (options.append) {

@@ -28,6 +28,8 @@ function blank() {
     deviceUsers: [],
     deviceBans: [],
     coinLog: [],
+    follows: [],
+    thanks: [],
     gifts: [],
     campRooms: [],
     campSeats: [],
@@ -1724,6 +1726,64 @@ export const local = {
     post.pinned = !!on;
     save();
     return { ok: true };
+  },
+
+  async follow(id, on) {
+    const user = need();
+    notMuted(user);
+    if (!Array.isArray(state.follows)) state.follows = [];
+    if (id === user.id) fail('На себя подписаться нельзя');
+    if (on) {
+      if (!state.follows.some((f) => f.followerId === user.id && f.targetId === id)) {
+        state.follows.push({ followerId: user.id, targetId: id, createdAt: Date.now() });
+      }
+    } else {
+      state.follows = state.follows.filter((f) => !(f.followerId === user.id && f.targetId === id));
+    }
+    save();
+    return { following: !!on, followers: state.follows.filter((f) => f.targetId === id).length };
+  },
+
+  async followState(id) {
+    if (!Array.isArray(state.follows)) state.follows = [];
+    const user = me();
+    return {
+      following: !!user && state.follows.some((f) => f.followerId === user.id && f.targetId === id),
+      followers: state.follows.filter((f) => f.targetId === id).length,
+      following_count: state.follows.filter((f) => f.followerId === id).length
+    };
+  },
+
+  async thankMod(id, note) {
+    const user = need();
+    notMuted(user);
+    if (!Array.isArray(state.thanks)) state.thanks = [];
+    const target = state.users.find((u) => u.id === id);
+    if (!target?.isModerator) fail('Это не модератор');
+    if (id === user.id) fail('Себя благодарить нельзя');
+    const week = Date.now() - 7 * 86400000;
+    if (state.thanks.some((t) => t.fromId === user.id && t.modId === id && t.createdAt > week)) {
+      fail('Вы уже благодарили этого модератора на этой неделе');
+    }
+    state.thanks.push({ id: state.thanks.length + 1, fromId: user.id, modId: id, note: String(note || '').slice(0, 200), createdAt: Date.now() });
+    const total = state.thanks.filter((t) => t.modId === id).length;
+    if (total % 5 === 0) {
+      target.premiumUntil = Math.max(target.premiumUntil || 0, Date.now()) + 3 * 86400000;
+      target.premiumReason = 'Благодарности от людей';
+    }
+    save();
+    return { ok: true, total };
+  },
+
+  async modThanks(id) {
+    if (!Array.isArray(state.thanks)) state.thanks = [];
+    const user = me();
+    const week = Date.now() - 7 * 86400000;
+    return {
+      total: state.thanks.filter((t) => t.modId === id).length,
+      week: state.thanks.filter((t) => t.modId === id && t.createdAt > week).length,
+      mine: !!user && state.thanks.some((t) => t.modId === id && t.fromId === user.id && t.createdAt > week)
+    };
   },
 
   async strikes(userId) {

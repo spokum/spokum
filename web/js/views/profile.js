@@ -700,6 +700,10 @@ export async function openProfile(username) {
           <button class="btn btn-primary grow" data-write>${icon('chats', 17)} Написать</button>
           <button class="btn btn-icon" data-report title="Пожаловаться">${icon('flag', 17)}</button>
         </div>
+        ${isBeta() ? `<div class="row" style="margin-top:8px;gap:8px">
+          <button class="btn grow" data-follow>${icon('plus', 17)} Подписаться</button>
+          ${user.isModerator ? `<button class="btn grow" data-thank>${icon('heart', 17)} Спасибо</button>` : ''}
+        </div>` : ''}
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
         </div>
@@ -739,6 +743,44 @@ export async function openProfile(username) {
         toast(error.message, 'err');
       }
     };
+    const followBtn = body.querySelector('[data-follow]');
+    if (followBtn) {
+      const paintFollow = (data) => {
+        followBtn.innerHTML = `${icon(data.following ? 'check' : 'plus', 17)} ${data.following ? 'Вы подписаны' : 'Подписаться'}${data.followers ? ' · ' + data.followers : ''}`;
+        followBtn.classList.toggle('btn-primary', !data.following);
+      };
+      api.followState?.(user.id).then(paintFollow).catch(() => {});
+      followBtn.onclick = async () => {
+        try {
+          const state_ = await api.followState(user.id);
+          paintFollow(await api.follow(user.id, !state_.following));
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    }
+
+    const thankBtn = body.querySelector('[data-thank]');
+    if (thankBtn) {
+      api.modThanks?.(user.id).then((data) => {
+        thankBtn.innerHTML = `${icon('heart', 17)} Спасибо${data.total ? ' · ' + data.total : ''}`;
+        if (data.mine) thankBtn.disabled = true;
+      }).catch(() => {});
+      thankBtn.onclick = async () => {
+        const { promptSheet } = await import('../ui.js');
+        const note = await promptSheet({ title: 'Спасибо модератору', label: 'За что', placeholder: 'Можно оставить пустым', multiline: true, confirm: 'Отправить' });
+        if (note === null) return;
+        try {
+          const result = await api.thankMod(user.id, note || '');
+          thankBtn.innerHTML = `${icon('heart', 17)} Спасибо · ${result.total}`;
+          thankBtn.disabled = true;
+          toast('Модератор это увидит');
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    }
+
     body.querySelector('[data-gift]')?.addEventListener('click', async () => {
       const { openGiftShop } = await import('./gifts.js');
       openGiftShop(user, () => openProfile(username));

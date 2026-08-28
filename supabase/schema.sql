@@ -2953,3 +2953,131 @@ revoke execute on function public.campfire_join() from public, anon, authenticat
 revoke execute on function public.campfire_say(bigint, text) from public, anon, authenticated;
 revoke execute on function public.campfire_read(bigint, bigint) from public, anon, authenticated;
 revoke execute on function public.campfire_leave(bigint) from public, anon, authenticated;
+
+create table if not exists public.follows (
+  follower_id uuid not null references public.profiles on delete cascade,
+  target_id uuid not null references public.profiles on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, target_id)
+);
+create index if not exists follows_target_idx on public.follows (target_id);
+
+alter table public.follows enable row level security;
+drop policy if exists follows_read on public.follows;
+create policy follows_read on public.follows for select using (true);
+drop policy if exists follows_own on public.follows;
+create policy follows_own on public.follows for all using (follower_id = auth.uid()) with check (follower_id = auth.uid());
+
+create or replace function public.follow(target uuid, on_follow boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  who text;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if target = auth.uid() then raise exception 'На себя подписаться нельзя'; end if;
+
+  if on_follow then
+    insert into public.follows (follower_id, target_id) values (auth.uid(), target) on conflict do nothing;
+    select display_name into who from public.profiles where id = auth.uid();
+    perform public.notify_user(target, 'newpost', 'На вас подписались',
+      coalesce(who, 'Кто-то') || ' теперь читает вас', jsonb_build_object('user', auth.uid()));
+  else
+    delete from public.follows where follower_id = auth.uid() and target_id = target;
+  end if;
+
+  return jsonb_build_object(
+    'following', on_follow,
+    'followers', (select count(*) from public.follows where target_id = target)
+  );
+end;
+$$;
+
+create or replace function public.follow_state(target uuid)
+returns jsonb language sql security definer set search_path = public as $$
+  select jsonb_build_object(
+    'following', exists (select 1 from public.follows where follower_id = auth.uid() and target_id = target),
+    'followers', (select count(*) from public.follows where target_id = target),
+    'following_count', (select count(*) from public.follows where follower_id = target)
+  );
+$$;
+
+create or replace function public.my_feed(before timestamptz default null, size integer default 12)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  if auth.uid() is null then return '[]'::jsonb; end if;
+  select coalesce(jsonb_agg(row order by (row->>'created_at') desc), '[]'::jsonb) into result
+  from (
+    select to_jsonb(p) as row
+    from public.posts p
+    where not p.removed
+      and (p.author_id = auth.uid()
+           or p.author_id in (select target_id from public.follows where follower_id = auth.uid()))
+      and (before is null or p.created_at < before)
+    order by p.created_at desc
+    limit least(40, greatest(4, size))
+  ) rows;
+  return result;
+end;
+$$;
+
+create table if not exists public.thanks (
+  id bigint generated always as identity primary key,
+  from_id uuid not null references public.profiles on delete cascade,
+  mod_id uuid not null references public.profiles on delete cascade,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists thanks_mod_idx on public.thanks (mod_id, created_at desc);
+
+alter table public.thanks enable row level security;
+drop policy if exists thanks_read on public.thanks;
+create policy thanks_read on public.thanks for select using (true);
+
+create or replace function public.thank_mod(target uuid, note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  total integer;
+  who text;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if not exists (select 1 from public.profiles where id = target and is_moderator) then
+    raise exception 'Это не модератор';
+  end if;
+  if target = auth.uid() then raise exception 'Себя благодарить нельзя'; end if;
+  if exists (select 1 from public.thanks where from_id = auth.uid() and mod_id = target
+             and created_at > now() - interval '7 days') then
+    raise exception 'Вы уже благодарили этого модератора на этой неделе';
+  end if;
+
+  insert into public.thanks (from_id, mod_id, note) values (auth.uid(), target, left(coalesce(note, ''), 200));
+  select count(*) into total from public.thanks where mod_id = target;
+  select display_name into who from public.profiles where id = auth.uid();
+
+  perform public.notify_user(target, 'modaction', 'Вас поблагодарили',
+    coalesce(nullif(trim(note), ''), 'Спасибо за работу'), jsonb_build_object('from', auth.uid()));
+
+  if total % 5 = 0 then
+    perform set_config('spokum.privileged', 'on', true);
+    update public.profiles
+       set premium_until = greatest(coalesce(premium_until, now()), now()) + interval '3 days',
+           premium_reason = 'Благодарности от людей'
+     where id = target;
+    perform public.notify_user(target, 'premium', 'Премиум за работу',
+      'Пять благодарностей подряд. Три дня премиума ваши', jsonb_build_object('thanks', total));
+  end if;
+
+  return jsonb_build_object('ok', true, 'total', total);
+end;
+$$;
+
+create or replace function public.mod_thanks(target uuid)
+returns jsonb language sql security definer set search_path = public as $$
+  select jsonb_build_object(
+    'total', (select count(*) from public.thanks where mod_id = target),
+    'week', (select count(*) from public.thanks where mod_id = target and created_at > now() - interval '7 days'),
+    'mine', exists (select 1 from public.thanks where mod_id = target and from_id = auth.uid()
+                    and created_at > now() - interval '7 days')
+  );
+$$;
