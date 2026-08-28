@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, isBeta } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
@@ -6,7 +6,24 @@ import { openProfile } from './profile.js';
 import { openStories, publishStory } from './stories.js';
 import { isSaved, toggleSaved, savedList, dropSaved } from '../saved.js';
 
-let draft = { text: '', media: [], mood: 'calm' };
+const DRAFT_KEY = 'spokum.draft.v1';
+
+function readDraft() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    if (saved && typeof saved.text === 'string') return { text: saved.text, media: [], mood: saved.mood || 'calm' };
+  } catch {}
+  return { text: '', media: [], mood: 'calm' };
+}
+
+function saveDraft() {
+  try {
+    if (draft.text.trim()) localStorage.setItem(DRAFT_KEY, JSON.stringify({ text: draft.text, mood: draft.mood }));
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {}
+}
+
+let draft = readDraft();
 
 export async function render(root) {
   root.innerHTML = `
@@ -17,6 +34,7 @@ export async function render(root) {
           <p class="sub">Как ты сегодня на самом деле</p>
         </div>
       </div>
+      <span data-streak></span>
       <div class="spacer"></div>
       <button class="btn btn-icon" data-search-toggle title="Поиск">${icon('search', 18)}</button>
       <button class="btn btn-icon" data-saved title="Сохранённое">${icon('star', 18)}</button>
@@ -50,6 +68,16 @@ export async function render(root) {
   });
 
   root.querySelector('[data-saved]').onclick = () => openSaved(root);
+
+  if (isBeta() && api.touchStreak) {
+    import('./extras.js').then(async ({ refreshStreak }) => {
+      const result = await refreshStreak();
+      const slot = root.querySelector('[data-streak]');
+      if (slot && result?.days) {
+        slot.innerHTML = `<span class="streak-chip" title="Дней подряд">${icon('flame', 13)}${result.days}</span>`;
+      }
+    }).catch(() => {});
+  }
 
   attachPullToRefresh(root);
   renderComposer(root);
@@ -101,6 +129,7 @@ function renderComposer(root) {
         <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="Поделись состоянием. Здесь не осудят"></textarea>
       </div>
       <div data-preview></div>
+      ${draft.text.trim() ? '<div class="tiny muted" style="margin:6px 0 0">Черновик сохранён, можно уйти и вернуться</div>' : ''}
       <div class="chips" data-moods style="margin:12px 0 10px"></div>
       <div data-offer></div>
       <div class="composer-actions">
@@ -117,6 +146,7 @@ function renderComposer(root) {
   area.value = draft.text;
   area.addEventListener('input', () => {
     draft.text = area.value;
+    saveDraft();
     area.style.height = 'auto';
     area.style.height = `${Math.min(220, area.scrollHeight)}px`;
   });
@@ -195,6 +225,7 @@ function renderComposer(root) {
       }
       await api.createPost({ text: draft.text, image, media: [], kind: 'text', mood: draft.mood });
       draft = { text: '', media: [], mood: 'calm' };
+      saveDraft();
       renderComposer(root);
       await load(root);
       toast('Опубликовано');
@@ -451,6 +482,10 @@ export function postMedia(post) {
   return single ? `<div class="post-image"><img src="${esc(single)}" alt="" loading="lazy" decoding="async"></div>` : '';
 }
 
+function tagged(text) {
+  return esc(text).replace(/(^|\s)#([\wа-яё]{2,24})/gi, (all, space, tag) => `${space}<span class="hashtag" data-tag="${tag.toLowerCase()}">#${tag}</span>`);
+}
+
 export function postCard(post, refresh, options = {}) {
   const mood = MOODS[post.mood] || MOODS.calm;
   const card = el(`
@@ -468,11 +503,12 @@ export function postCard(post, refresh, options = {}) {
         <span class="mood-tag" style="${moodStyle(post.mood)}" title="${esc(mood.label)}"><i class="mood-dot"></i><span class="mood-label">${esc(mood.label)}</span></span>
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 18)}</button>
       </div>
-      ${post.text ? `<p class="post-text">${esc(post.text)}</p>` : ''}
+      ${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
       ${postMedia(post)}
       ${post.removed ? `<div class="pill bad" style="margin-top:10px">Скрыт модератором: ${esc(post.removedReason || 'без причины')}</div>` : ''}
       <div class="post-actions">
-        <button class="icon-btn ${post.liked ? 'on' : ''}" data-like>${icon('heart', 17)}<span>${post.likes}</span></button>
+        <span data-reacts></span>
+        <button class="icon-btn ${post.liked ? 'on' : ''}" data-like hidden>${icon('heart', 17)}<span>${post.likes}</span></button>
         <button class="icon-btn" data-comments>${icon('comment', 17)}<span>${post.comments}</span></button>
         <button class="icon-btn ${isSaved(post.id) ? 'on' : ''}" data-save title="Сохранить">${icon('star', 17)}</button>
         ${post.views ? `<span class="icon-btn" style="pointer-events:none">${icon('eye', 17)}<span>${post.views}</span></span>` : ''}
@@ -494,6 +530,10 @@ export function postCard(post, refresh, options = {}) {
   };
 
   card.querySelector('[data-share]').onclick = async () => {
+    if (isBeta()) {
+      const { openShareCard } = await import('./share.js');
+      return openShareCard(post);
+    }
     const text = `${post.author.displayName} (@${post.author.username}): ${post.text || 'запись в СпокУме'}`;
     if (navigator.share) {
       try {
@@ -521,6 +561,15 @@ export function postCard(post, refresh, options = {}) {
     lastTouch = now;
   });
 
+  if (isBeta() && api.react) {
+    import('./extras.js').then(({ reactionRow }) => {
+      const slot = card.querySelector('[data-reacts]');
+      if (slot) slot.replaceWith(reactionRow(post));
+    }).catch(() => {});
+  } else {
+    card.querySelector('[data-like]').hidden = false;
+  }
+
   card.querySelector('[data-like]').onclick = async (event) => {
     if (!state.user) return toast('Войдите, чтобы ставить лайки', 'err');
     const button = event.currentTarget;
@@ -538,6 +587,19 @@ export function postCard(post, refresh, options = {}) {
   card.querySelector('[data-play]')?.addEventListener('click', async () => {
     const { openVideo } = await import('./videos.js');
     openVideo(post, refresh);
+  });
+
+  card.querySelectorAll('.hashtag').forEach((tag) => {
+    tag.onclick = (event) => {
+      event.stopPropagation();
+      const box = document.querySelector('[data-search]');
+      const query = document.querySelector('[data-query]');
+      if (!box || !query) return;
+      box.hidden = false;
+      query.value = '#' + tag.dataset.tag;
+      query.dispatchEvent(new Event('input'));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
   });
 
   card.querySelector('[data-comments]').onclick = () => openComments(post, refresh);

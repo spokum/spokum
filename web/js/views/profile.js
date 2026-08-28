@@ -78,6 +78,10 @@ export async function render(root) {
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Как дела у всех сразу</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>` : ''}
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
@@ -116,6 +120,22 @@ export async function render(root) {
   body.querySelector('[data-mod]')?.addEventListener('click', async () => {
     const { openMod } = await import('./mod.js');
     openMod();
+  });
+  body.querySelector('[data-badges]')?.addEventListener('click', async () => {
+    const { openBadges } = await import('./extras.js');
+    openBadges();
+  });
+  body.querySelector('[data-breathe]')?.addEventListener('click', async () => {
+    const { openBreathe } = await import('./extras.js');
+    openBreathe();
+  });
+  body.querySelector('[data-noise]')?.addEventListener('click', async () => {
+    const { openNoise } = await import('./extras.js');
+    openNoise();
+  });
+  body.querySelector('[data-moodmap]')?.addEventListener('click', async () => {
+    const { openMoodMap } = await import('./extras.js');
+    openMoodMap();
   });
   body.querySelector('[data-campfire]')?.addEventListener('click', async () => {
     const { openCampfire } = await import('./campfire.js');

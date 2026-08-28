@@ -229,6 +229,8 @@ function pub(user) {
     modRank: user.modRank || 0,
     isBeta: !!user.isBeta || user.username === 'silver',
     coins: user.coins || 0,
+    streakDays: user.streakDays || 0,
+    bestStreak: user.bestStreak || 0,
     bannedUntil: user.bannedUntil,
     mutedUntil: user.mutedUntil,
     createdAt: user.createdAt,
@@ -1585,6 +1587,105 @@ export const local = {
     log(admin.id, 'admin.coins', { id, amount });
     save();
     return { ok: true, coins: target.coins };
+  },
+
+  async react(id, kind) {
+    const user = need();
+    notMuted(user);
+    if (!['heart', 'hug', 'same', 'hold', 'calm'].includes(kind)) fail('Неизвестная реакция');
+    const row = state.likes.find((l) => l.postId === id && l.userId === user.id);
+    if (!row) state.likes.push({ postId: id, userId: user.id, kind, createdAt: Date.now() });
+    else if (row.kind === kind) state.likes = state.likes.filter((l) => l !== row);
+    else row.kind = kind;
+    save();
+    const mine = state.likes.find((l) => l.postId === id && l.userId === user.id);
+    return { total: state.likes.filter((l) => l.postId === id).length, mine: mine ? mine.kind : null };
+  },
+
+  async reactions(id) {
+    const out = {};
+    state.likes.filter((l) => l.postId === id).forEach((l) => {
+      const kind = l.kind || 'heart';
+      out[kind] = (out[kind] || 0) + 1;
+    });
+    return out;
+  },
+
+  async touchStreak() {
+    const user = me();
+    if (!user) return { days: 0 };
+    const today = new Date().toISOString().slice(0, 10);
+    if (user.streakDay === today) return { days: user.streakDays || 0, best: user.bestStreak || 0, same: true };
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const fresh = user.streakDay === yesterday ? (user.streakDays || 0) + 1 : 1;
+    user.streakDay = today;
+    user.streakDays = fresh;
+    user.bestStreak = Math.max(user.bestStreak || 0, fresh);
+    save();
+    return { days: fresh, best: user.bestStreak, same: false };
+  },
+
+  async breatheIn(minutes) {
+    const user = me();
+    if (!user) return { together: 0 };
+    if (!Array.isArray(state.breaths)) state.breaths = [];
+    state.breaths = state.breaths.filter((row) => row.at > Date.now() - 600000 && row.userId !== user.id);
+    state.breaths.push({ userId: user.id, at: Date.now(), minutes: minutes || 0 });
+    save();
+    return { together: state.breaths.filter((row) => row.at > Date.now() - 240000).length };
+  },
+
+  async breatheOut() {
+    const user = me();
+    if (user && Array.isArray(state.breaths)) {
+      state.breaths = state.breaths.filter((row) => row.userId !== user.id);
+      save();
+    }
+    return { ok: true };
+  },
+
+  async moodMap() {
+    const rows = {};
+    (state.deviceUsers || []).forEach((link) => {
+      const device = (state.devices || []).find((d) => d.id === link.deviceId);
+      if (!device?.country) return;
+      if (!rows[device.country]) rows[device.country] = new Set();
+      rows[device.country].add(link.userId);
+    });
+    return {
+      rows: Object.entries(rows).map(([country, people]) => {
+        const moods = {};
+        state.posts.filter((p) => people.has(p.authorId) && !p.removed).forEach((p) => {
+          moods[p.mood] = (moods[p.mood] || 0) + 1;
+        });
+        const top = Object.entries(moods).sort((a, b) => b[1] - a[1])[0];
+        return { country, people: people.size, mood: top ? top[0] : null };
+      }).sort((a, b) => b.people - a.people)
+    };
+  },
+
+  async badges() {
+    const user = me();
+    if (!user) return { badges: [] };
+    const posts = state.posts.filter((p) => p.authorId === user.id && !p.removed).length;
+    const gifts = (state.gifts || []).filter((g) => g.ownerId === user.id && !g.sold).length;
+    const letters = (state.letters || []).filter((l) => l.authorId === user.id).length;
+    const camp = (state.campMessages || []).filter((m) => m.authorId === user.id).length;
+    const caps = (state.capsules || []).filter((c) => c.userId === user.id).length;
+    const codes = [];
+    if (posts >= 1) codes.push('first_post');
+    if (posts >= 25) codes.push('writer');
+    if ((user.streakDays || 0) >= 7) codes.push('week');
+    if ((user.bestStreak || 0) >= 30) codes.push('month');
+    if (gifts >= 1) codes.push('gifted');
+    if (gifts >= 10) codes.push('collector');
+    if (letters >= 1) codes.push('letter');
+    if (camp >= 10) codes.push('campfire');
+    if (caps >= 1) codes.push('capsule');
+    if ((state.letters || []).some((l) => l.toId === user.id && l.reply)) codes.push('answered');
+    if (user.isModerator) codes.push('shield');
+    if ((user.coins || 0) >= 1000) codes.push('rich');
+    return { badges: codes.map((code) => ({ code, earnedAt: Date.now() })) };
   },
 
   async strikes(userId) {

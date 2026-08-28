@@ -44,6 +44,8 @@ function shapeProfile(row, extra = {}) {
     modRank: row.mod_rank ?? 0,
     isBeta: !!row.is_beta || row.username === 'silver',
     coins: row.coins ?? 0,
+    streakDays: row.streak_days ?? 0,
+    bestStreak: row.best_streak ?? 0,
     bannedUntil: ms(row.banned_until),
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
@@ -1231,6 +1233,47 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('admin_give_coins', { target: id, amount });
       guard(error);
       return data;
+    },
+
+    async react(id, kind) {
+      const { data, error } = await sb.rpc('react', { target: id, want: kind });
+      guard(error);
+      return data;
+    },
+
+    async reactions(id) {
+      const { data, error } = await sb.rpc('post_reactions', { target: id });
+      guard(error);
+      return data || {};
+    },
+
+    async touchStreak() {
+      const { data, error } = await sb.rpc('touch_streak');
+      guard(error);
+      return data || { days: 0 };
+    },
+
+    async breatheIn(minutes) {
+      const { data, error } = await sb.rpc('breathe_in', { minutes: minutes || 0 });
+      guard(error);
+      return data || { together: 1 };
+    },
+
+    async breatheOut() {
+      await sb.rpc('breathe_out');
+      return { ok: true };
+    },
+
+    async moodMap() {
+      const { data, error } = await sb.rpc('mood_map');
+      guard(error);
+      return { rows: data || [] };
+    },
+
+    async badges() {
+      const { data, error } = await sb.rpc('my_badges');
+      guard(error);
+      return { badges: data || [] };
     },
 
     async strikes(userId) {

@@ -249,6 +249,54 @@ function wordCloud(entries) {
     .join('')}</div>`;
 }
 
+function moodChart(entries) {
+  const days = 30;
+  const scale = { joy: 5, inspired: 5, love: 4, calm: 4, tired: 2, sad: 1, anxiety: 1, anger: 1 };
+  const now = new Date();
+  const points = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(now.getTime() - i * 86400000).toISOString().slice(0, 10);
+    const entry = entries.find((row) => row.day === date);
+    points.push({ date, value: entry ? (scale[entry.mood] ?? 3) : null, mood: entry?.mood });
+  }
+  const filled = points.filter((p) => p.value !== null);
+  if (filled.length < 2) {
+    return '<div class="small muted center" style="padding:16px 0">График появится, когда наберётся несколько записей</div>';
+  }
+
+  const w = 320;
+  const h = 110;
+  const step = w / (days - 1);
+  let path = '';
+  let last = null;
+  points.forEach((point, i) => {
+    if (point.value === null) return;
+    const x = i * step;
+    const y = h - ((point.value - 1) / 4) * (h - 16) - 8;
+    path += (last === null ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+    last = i;
+  });
+
+  const dots = points
+    .map((point, i) => {
+      if (point.value === null) return '';
+      const x = i * step;
+      const y = h - ((point.value - 1) / 4) * (h - 16) - 8;
+      const tint = MOODS[point.mood]?.ink || 'var(--accent)';
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="${tint}"></circle>`;
+    })
+    .join('');
+
+  const good = filled.filter((p) => p.value >= 4).length;
+  return `<div class="card" style="padding:14px">
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:110px;overflow:visible">
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"></path>
+      ${dots}
+    </svg>
+    <div class="tiny muted" style="margin-top:8px;line-height:1.5">Отмечено дней: ${filled.length} из 30. Светлых дней: ${good}. Выше точка — легче было.</div>
+  </div>`;
+}
+
 export async function openJournalHistory() {
   const body = el('<div class="col" data-host><div class="small muted center">Загружаем</div></div>');
   openSheet('Твой дневник', body);
@@ -265,6 +313,12 @@ export async function openJournalHistory() {
             <div class="grow"><div class="small strong">${esc(title)}</div><div class="tiny muted" style="margin-top:2px">${esc(text)}</div></div>
           </div>
         </div>`).join('')}
+    </div>
+    <div class="divider"></div>
+    <div class="small strong">Настроение за месяц</div>
+    ${moodChart(entries)}
+    <div class="row" style="gap:8px;margin-top:10px">
+      <button class="btn btn-sm grow" data-export>${icon('download', 15)} Забрать дневник файлом</button>
     </div>
     <div class="divider"></div>
     <div class="small strong">Облако слов за месяц</div>
@@ -284,4 +338,20 @@ export async function openJournalHistory() {
           </div>`).join('')
         : '<div class="small muted center" style="padding:18px 0">Записей пока нет</div>'}
     </div>`;
+
+  body.querySelector('[data-export]')?.addEventListener('click', () => {
+    const lines = entries
+      .slice()
+      .sort((a, b) => a.day.localeCompare(b.day))
+      .map((entry) => {
+        const label = MOODS[entry.mood]?.label || entry.mood || '';
+        return `${entry.day}\t${label}\t${entry.word || ''}\t${(entry.body || '').replace(/\n/g, ' ')}`;
+      });
+    const text = ['дата\tнастроение\tслово дня\tзапись', ...lines].join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' }));
+    link.download = `spokum-dnevnik-${new Date().toISOString().slice(0, 10)}.txt`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+  });
 }

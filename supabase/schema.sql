@@ -2704,3 +2704,186 @@ revoke execute on function public.admin_give_coins(uuid, integer) from public, a
 grant execute on function public.admin_give_coins(uuid, integer) to authenticated;
 revoke execute on function public.grant_coins(integer, text) from public, anon;
 grant execute on function public.grant_coins(integer, text) to authenticated;
+
+alter table public.likes add column if not exists kind text not null default 'heart';
+alter table public.profiles add column if not exists streak_days integer not null default 0;
+alter table public.profiles add column if not exists streak_day date;
+alter table public.profiles add column if not exists best_streak integer not null default 0;
+
+create table if not exists public.breaths (
+  user_id uuid primary key references public.profiles on delete cascade,
+  started_at timestamptz not null default now(),
+  minutes integer not null default 0
+);
+
+create table if not exists public.badges (
+  user_id uuid not null references public.profiles on delete cascade,
+  code text not null,
+  earned_at timestamptz not null default now(),
+  primary key (user_id, code)
+);
+
+alter table public.breaths enable row level security;
+alter table public.badges enable row level security;
+
+drop policy if exists breaths_read on public.breaths;
+create policy breaths_read on public.breaths for select using (true);
+
+drop policy if exists badges_read on public.badges;
+create policy badges_read on public.badges for select using (true);
+
+drop function if exists public.react(bigint, text);
+
+create or replace function public.react(target bigint, want text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  same boolean;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  if want not in ('heart', 'hug', 'same', 'hold', 'calm') then raise exception 'Неизвестная реакция'; end if;
+
+  select l.kind = want into same from public.likes l where l.post_id = target and l.user_id = auth.uid();
+
+  if same is null then
+    insert into public.likes (post_id, user_id, kind) values (target, auth.uid(), want);
+  elsif same then
+    delete from public.likes where post_id = target and user_id = auth.uid();
+  else
+    update public.likes set kind = want where post_id = target and user_id = auth.uid();
+  end if;
+
+  return jsonb_build_object(
+    'total', (select count(*) from public.likes where post_id = target),
+    'mine', (select l.kind from public.likes l where l.post_id = target and l.user_id = auth.uid())
+  );
+end;
+$$;
+
+create or replace function public.post_reactions(target bigint)
+returns jsonb language sql security definer set search_path = public as $$
+  select coalesce(jsonb_object_agg(kind, n), '{}'::jsonb)
+  from (select kind, count(*) as n from public.likes where post_id = target group by kind) rows;
+$$;
+
+create or replace function public.touch_streak()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  who public.profiles;
+  today date := (now() at time zone 'utc')::date;
+  fresh integer;
+begin
+  if auth.uid() is null then return jsonb_build_object('days', 0); end if;
+  select * into who from public.profiles where id = auth.uid();
+  if who.streak_day = today then
+    return jsonb_build_object('days', who.streak_days, 'best', who.best_streak, 'same', true);
+  end if;
+
+  if who.streak_day = today - 1 then fresh := who.streak_days + 1;
+  else fresh := 1;
+  end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles
+     set streak_days = fresh,
+         streak_day = today,
+         best_streak = greatest(best_streak, fresh)
+   where id = auth.uid();
+
+  if fresh in (7, 30, 100, 365) then
+    perform public.notify_user(auth.uid(), 'premium', 'Полоса ' || fresh::text || ' дней',
+      'Вы заходите каждый день. Так держать', jsonb_build_object('streak', fresh));
+  end if;
+
+  return jsonb_build_object('days', fresh, 'best', greatest(who.best_streak, fresh), 'same', false);
+end;
+$$;
+
+create or replace function public.breathe_in(minutes integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  together integer;
+begin
+  if auth.uid() is null then return jsonb_build_object('together', 0); end if;
+  delete from public.breaths where started_at < now() - interval '10 minutes';
+  insert into public.breaths (user_id, started_at, minutes)
+  values (auth.uid(), now(), coalesce(minutes, 0))
+  on conflict (user_id) do update set started_at = now(), minutes = excluded.minutes;
+  select count(*) into together from public.breaths where started_at > now() - interval '4 minutes';
+  return jsonb_build_object('together', together);
+end;
+$$;
+
+create or replace function public.breathe_out()
+returns void language sql security definer set search_path = public as $$
+  delete from public.breaths where user_id = auth.uid();
+$$;
+
+create or replace function public.mood_map()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  select coalesce(jsonb_agg(row order by (row->>'people')::int desc), '[]'::jsonb) into result
+  from (
+    select jsonb_build_object(
+      'country', d.country,
+      'people', count(distinct du.user_id),
+      'mood', (
+        select p.mood from public.posts p
+        join public.device_users x on x.user_id = p.author_id
+        join public.devices dd on dd.id = x.device_id and dd.country = d.country
+        where p.created_at > now() - interval '3 days' and not p.removed
+        group by p.mood order by count(*) desc limit 1
+      )
+    ) as row
+    from public.devices d
+    join public.device_users du on du.device_id = d.id
+    where d.country <> '' and du.last_seen > now() - interval '14 days'
+    group by d.country
+    having count(distinct du.user_id) > 0
+  ) rows;
+  return result;
+end;
+$$;
+
+create or replace function public.my_badges()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  earned text[] := '{}';
+  posts integer;
+  gifts integer;
+  letters integer;
+  camp integer;
+  caps integer;
+  who public.profiles;
+begin
+  if me is null then return '[]'::jsonb; end if;
+  select * into who from public.profiles where id = me;
+  select count(*) into posts from public.posts where author_id = me and not removed;
+  select count(*) into gifts from public.gifts where owner_id = me and not sold;
+  select count(*) into letters from public.letters where author_id = me;
+  select count(*) into camp from public.campfire_messages where author_id = me;
+  select count(*) into caps from public.capsules where user_id = me;
+
+  if posts >= 1 then earned := array_append(earned, 'first_post'); end if;
+  if posts >= 25 then earned := array_append(earned, 'writer'); end if;
+  if who.streak_days >= 7 then earned := array_append(earned, 'week'); end if;
+  if who.best_streak >= 30 then earned := array_append(earned, 'month'); end if;
+  if gifts >= 1 then earned := array_append(earned, 'gifted'); end if;
+  if gifts >= 10 then earned := array_append(earned, 'collector'); end if;
+  if letters >= 1 then earned := array_append(earned, 'letter'); end if;
+  if camp >= 10 then earned := array_append(earned, 'campfire'); end if;
+  if caps >= 1 then earned := array_append(earned, 'capsule'); end if;
+  if exists (select 1 from public.letters where to_id = me and reply is not null) then earned := array_append(earned, 'answered'); end if;
+  if who.is_moderator then earned := array_append(earned, 'shield'); end if;
+  if who.coins >= 1000 then earned := array_append(earned, 'rich'); end if;
+
+  insert into public.badges (user_id, code)
+  select me, code from unnest(earned) as code
+  on conflict do nothing;
+
+  return coalesce((select jsonb_agg(jsonb_build_object('code', code, 'earnedAt', earned_at) order by earned_at)
+                     from public.badges where user_id = me), '[]'::jsonb);
+end;
+$$;

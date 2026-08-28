@@ -1280,6 +1280,44 @@ svg { display: block; flex: none; }
 .team-head .strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-card .info-grid { text-align: left; }
 
+.react-row { display: flex; align-items: center; gap: 4px; }
+.react-btn {
+  display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: 999px; color: var(--muted);
+  border: 1px solid transparent; background: transparent;
+}
+.react-btn:hover { background: var(--surface-2); }
+.react-btn.on { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-soft); }
+.react-total { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-left: 2px; }
+
+.badge-row { display: flex; align-items: center; gap: 11px; opacity: .45; }
+.badge-row.got { opacity: 1; }
+
+.breathe-view { background: radial-gradient(90% 55% at 50% 42%, var(--accent-soft), transparent 70%), var(--bg); }
+.breathe-stage {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; padding: 20px;
+}
+.breathe-ring {
+  width: 190px; height: 190px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
+  color: var(--accent); font-size: 15px; font-weight: 700;
+  transition: transform 4s cubic-bezier(.4,0,.3,1);
+}
+.breathe-time { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.list-item.on { color: var(--accent); background: var(--accent-soft); }
+
+.streak-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px;
+  background: rgba(224,138,74,.14); color: #e08a4a;
+  font-size: 12px; font-weight: 700;
+}
+.hashtag { color: var(--accent); font-weight: 600; }
+.share-card-wrap { display: grid; place-items: center; }
+.share-card-wrap img { width: 100%; border-radius: 14px; }
 .post-repost {
   display: inline-flex; align-items: center; gap: 5px;
   margin-bottom: 9px; padding: 3px 9px; border-radius: 999px;
