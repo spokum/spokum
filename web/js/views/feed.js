@@ -681,7 +681,11 @@ export function postCard(post, refresh, options = {}) {
     };
   });
 
-  card.querySelector('[data-comments]').onclick = () => openComments(post, refresh);
+  card.querySelector('[data-comments]').onclick = () =>
+    openComments(post, () => {
+      const counter = card.querySelector('[data-comments] span');
+      if (counter) counter.textContent = post.comments;
+    });
   card.querySelector('[data-report]').onclick = () => openReport('post', post.id);
   card.querySelector('[data-menu]').onclick = () => openPostMenu(post, refresh, options);
   return card;
@@ -785,11 +789,12 @@ export async function openComments(post, refresh) {
       <div class="col" data-list style="gap:10px"></div>
       ${state.user ? `<div class="row"><input class="input grow" placeholder="Поддержать словом" maxlength="500"><button class="btn btn-primary btn-icon" data-send>${icon('send', 17)}</button></div>` : '<div class="small muted">Войдите, чтобы отвечать</div>'}
     </div>`);
-  const sheet = openSheet(plural(post.comments, 'ответ', 'ответа', 'ответов'), body, { onClose: refresh });
+  const sheet = openSheet(plural(post.comments, 'ответ', 'ответа', 'ответов'), body, { onClose: () => refresh?.(post) });
   const list = body.querySelector('[data-list]');
 
   const draw = async () => {
     const { comments } = await api.listComments(post.id);
+    post.comments = comments.length;
     list.innerHTML = comments.length
       ? comments
           .map(
