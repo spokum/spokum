@@ -1280,6 +1280,24 @@ svg { display: block; flex: none; }
 .team-head .strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-card .info-grid { text-align: left; }
 
+.reel-repost {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 999px; margin-bottom: 8px;
+  background: rgba(255,255,255,.16); color: #fff;
+  font-size: 11px; font-weight: 700;
+}
+.chat-reel {
+  position: relative; width: 190px; max-width: 100%;
+  border-radius: 12px; overflow: hidden; background: #000;
+  display: grid; place-items: center; min-height: 110px;
+}
+.chat-reel video, .chat-reel img { width: 100%; display: block; }
+.chat-reel-play {
+  position: absolute; display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(0,0,0,.5); color: #fff;
+}
+.chat-reel.playing .chat-reel-play { opacity: 0; }
 .beta-band {
   display: flex; align-items: center; gap: 7px;
   padding: 8px 13px; border-radius: 999px; margin: 4px 0 2px;

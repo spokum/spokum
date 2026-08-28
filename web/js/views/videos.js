@@ -92,6 +92,9 @@ function watch(stage) {
         if (video) {
           if (visible) entry.target.play?.();
           else video.pause();
+        } else if (entry.target.querySelector('[data-tune]')) {
+          if (visible) entry.target.play?.();
+          else entry.target.stop?.();
         }
         if (!visible) continue;
         if (!entry.target.dataset.counted) {
@@ -126,6 +129,7 @@ function slide(post, stage) {
            <button class="reel-play" data-play hidden>${icon('play', 30)}</button>
            <div class="reel-error" data-error hidden>${icon('warn', 22)}<span>Не удалось проиграть это видео</span></div>`
         : albumBody(post)}
+      ${!isVideo && post.sound ? `<audio data-tune loop preload="none" src="${esc(post.sound)}"></audio><button class="shorts-sound" data-album-sound>${icon('mute', 18)}</button>` : ''}
       <div class="shorts-shade"></div>
       <div class="shorts-rail">
         <button class="shorts-act ${post.liked ? 'on' : ''}" data-like>${icon('heart', 26)}<span>${post.likes}</span></button>
@@ -133,6 +137,7 @@ function slide(post, stage) {
         <button class="shorts-act" data-share>${icon('share', 24)}<span>Ещё</span></button>
       </div>
       <div class="shorts-info">
+        ${post.repostOf ? `<div class="reel-repost">${icon('refresh', 13)}<span>Репост${post.origin ? ' · ' + esc(post.origin.displayName) : ''}</span></div>` : ''}
         <button class="row" data-author style="gap:8px;align-items:center">
           ${avatar(post.author, 38)}
           <span class="col" style="gap:2px;align-items:flex-start">
@@ -145,6 +150,37 @@ function slide(post, stage) {
       ${post.removed ? `<div class="reel-removed">${icon('warn', 15)} Снято модератором</div>` : ''}
       <div class="shorts-heart" data-heart>${icon('heart', 88)}</div>
     </div>`);
+
+  const tune = node.querySelector('[data-tune]');
+  if (tune) {
+    const button = node.querySelector('[data-album-sound]');
+    const drawTune = () => {
+      button.innerHTML = icon(tune.paused ? 'mute' : 'volume', 18);
+      button.classList.toggle('on', !tune.paused);
+    };
+    node.play = () => {
+      if (!soundWanted() || !canUnmute()) return drawTune();
+      tune.currentTime = 0;
+      tune.play().then(drawTune).catch(drawTune);
+    };
+    node.stop = () => {
+      tune.pause();
+      drawTune();
+    };
+    button.onclick = (event) => {
+      event.stopPropagation();
+      touched = true;
+      if (tune.paused) {
+        localStorage.setItem(SOUND_KEY, 'on');
+        tune.play().then(drawTune).catch(drawTune);
+      } else {
+        localStorage.setItem(SOUND_KEY, 'off');
+        tune.pause();
+        drawTune();
+      }
+    };
+    drawTune();
+  }
 
   const video = node.querySelector('video');
   if (video) {
@@ -306,6 +342,8 @@ function openReelMenu(post, node, stage) {
   const canModerate = state.user && (state.user.isModerator || state.user.isAdmin);
   const body = el(`
     <div class="col" style="gap:6px">
+      <button class="list-item" data-send style="color:var(--accent)">${icon('forward2', 18)}<span>Отправить в чат</span></button>
+      <button class="list-item" data-repost>${icon('refresh', 18)}<span>Репостнуть к себе</span></button>
       <button class="list-item" data-copy>${icon('share', 18)}<span>Скопировать описание</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Профиль автора</span></button>
       <button class="list-item" data-report>${icon('flag', 18)}<span>Пожаловаться</span></button>
@@ -313,6 +351,23 @@ function openReelMenu(post, node, stage) {
       ${mine || state.user?.isAdmin ? `<button class="list-item" data-delete style="color:#c98b8b">${icon('trash', 18)}<span>Удалить</span></button>` : ''}
     </div>`);
   const sheet = openSheet('', body);
+  body.querySelector('[data-send]').onclick = async () => {
+    sheet.close();
+    const { sendPostToChat } = await import('./chats.js');
+    sendPostToChat(post);
+  };
+  body.querySelector('[data-repost]').onclick = async () => {
+    sheet.close();
+    const { promptSheet } = await import('../ui.js');
+    const note = await promptSheet({ title: 'Репост', label: 'Подпись, если хотите', placeholder: 'Можно оставить пустым', multiline: true, confirm: 'Репостнуть' });
+    if (note === null) return;
+    try {
+      await api.repost(post.id, note || '');
+      toast('Репостнуто, ролик теперь и у вас');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
   body.querySelector('[data-copy]').onclick = () => {
     navigator.clipboard?.writeText(post.text || '');
     toast('Скопировано');
@@ -332,8 +387,11 @@ function openReelMenu(post, node, stage) {
     const { promptSheet } = await import('../ui.js');
     const reason = await promptSheet({ title: 'Причина снятия', label: 'Её увидит админ', placeholder: 'Например: запрещённый контент', multiline: true });
     if (!reason) return;
+    const { askProofShot } = await import('./mod.js');
+    const proof = await askProofShot(reason);
+    if (!proof) return;
     try {
-      await api.removePost(post.id, reason);
+      await api.removePost(post.id, reason, proof);
       node.remove();
       toast('Снято, действие записано');
     } catch (error) {
@@ -404,26 +462,42 @@ async function shootAlbum(done) {
     if (!(await confirmSheet({ title: `Фото: ${shots.length}`, text: 'Добавить ещё одно?', confirm: 'Добавить' }))) break;
   }
   if (!shots.length) return;
+  let tune = null;
   openPublisher({
     preview: `<div class="composer-shots">${shots.map((src) => `<span class="composer-shot"><img src="${esc(src)}" alt=""></span>`).join('')}</div>`,
     title: shots.length > 1 ? `Альбом из ${shots.length} фото` : 'Новое фото',
+    extra: `<button class="btn" data-tune style="width:100%">${icon('mic', 16)} Добавить свой звук</button>`,
+    wire(body) {
+      const button = body.querySelector('[data-tune]');
+      button.onclick = async () => {
+        const { pickAudio } = await import('../ui.js');
+        const picked = await pickAudio(isPremium(state.user) ? 120 : 60);
+        if (!picked) return;
+        tune = picked;
+        button.innerHTML = `${icon('volume', 16)} Звук добавлен: ${esc(picked.name.slice(0, 22))}`;
+        button.classList.add('btn-primary');
+      };
+    },
     async build(upload) {
       const media = [];
       for (const shot of shots) media.push(await upload(shot, 'jpg'));
-      return { kind: 'album', media, image: media[0], video: null, poster: null, duration: 0 };
+      const sound = tune ? await upload(tune.data, 'mp3') : null;
+      return { kind: 'album', media, image: media[0], video: null, poster: null, duration: tune?.duration || 0, sound };
     },
     done
   });
 }
 
-function openPublisher({ preview, title, build, done }) {
+function openPublisher({ preview, title, build, done, extra, wire }) {
   const body = el(`
     <div class="col">
       ${preview}
       <textarea class="textarea" maxlength="600" placeholder="Пара слов об этом"></textarea>
+      ${extra || ''}
       <button class="btn btn-primary" data-publish>${icon('send', 16)} Опубликовать</button>
     </div>`);
   const sheet = openSheet(title, body);
+  wire?.(body);
   const button = body.querySelector('[data-publish]');
   let busy = false;
   button.onclick = async () => {

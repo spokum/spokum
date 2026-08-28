@@ -256,6 +256,10 @@ async function reasonByRule(title) {
   return { reason, rule: rule === 'own' ? null : rule };
 }
 
+export function askProofShot(reason) {
+  return askProof(reason);
+}
+
 function askProof(reason) {
   return new Promise((done) => {
     let shot = null;

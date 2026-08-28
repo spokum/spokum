@@ -153,6 +153,39 @@ export function promptSheet({ title, label, placeholder = '', value = '', multil
   });
 }
 
+export function pickAudio(maxSeconds = 60) {
+  return new Promise((done) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return done(null);
+      if (file.size > 6 * 1024 * 1024) {
+        toast('Звук тяжелее шести мегабайт не влезет', 'err');
+        return done(null);
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const data = String(reader.result || '');
+        const probe = new Audio(data);
+        probe.onloadedmetadata = () => {
+          const seconds = Math.round(probe.duration || 0);
+          if (seconds > maxSeconds) {
+            toast(`Звук длиннее ${maxSeconds} секунд не подойдёт`, 'err');
+            return done(null);
+          }
+          done({ data, duration: seconds, name: file.name });
+        };
+        probe.onerror = () => done({ data, duration: 0, name: file.name });
+      };
+      reader.onerror = () => done(null);
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  });
+}
+
 export function pickImage(maxSide = 1400) {
   return new Promise((done) => {
     const input = document.createElement('input');

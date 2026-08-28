@@ -290,11 +290,37 @@ function bubble(message, chat, lastAuthor) {
   else if (message.kind === 'voice') {
     const bars = Array.from({ length: 22 }, (_, i) => `<i style="height:${20 + Math.round(Math.sin(i * 1.7 + message.id) * 55 + 55) * 0.6}%"></i>`).join('');
     inner = `<div class="voice"><button class="btn btn-icon btn-ghost" data-play style="width:32px;height:32px">${icon('play', 15)}</button><div class="voice-bars">${bars}</div><span class="tiny">${durationText(message.duration)}</span></div>`;
+  else if (message.kind === 'video') {
+    inner = `<div class="chat-reel" data-reel><video src="${esc(message.media || '')}" playsinline muted loop preload="metadata"></video><span class="chat-reel-play">${icon('play', 22)}</span></div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
+  } else if (message.kind === 'post') {
+    inner = `<div class="chat-reel" data-reel>${message.media ? `<img src="${esc(message.media)}" alt="" loading="lazy">` : `<span class="chat-reel-play">${icon('feed', 22)}</span>`}</div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
   } else inner = esc(message.body);
 
   const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
   const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
   const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}</div></div>`);
+
+  const reel = node.querySelector('[data-reel]');
+  if (reel) {
+    const clip = reel.querySelector('video');
+    reel.onclick = () => {
+      if (!clip) {
+        window.__spokum?.openTab?.('videos');
+        return;
+      }
+      if (clip.paused) {
+        clip.muted = false;
+        clip.play().catch(() => {
+          clip.muted = true;
+          clip.play().catch(() => {});
+        });
+        reel.classList.add('playing');
+      } else {
+        clip.pause();
+        reel.classList.remove('playing');
+      }
+    };
+  }
 
   const play = node.querySelector('[data-play]');
   if (play) {
@@ -419,6 +445,31 @@ async function recordVoice(send) {
   body.querySelector('[data-stop]').onclick = () => finish(true);
   body.querySelector('[data-cancel]').onclick = () => finish(false);
   recorder.start();
+}
+
+export async function sendPostToChat(post) {
+  const { chats } = await api.chats();
+  if (!chats.length) return toast('Сначала заведите чат', 'err');
+  const body = el(`<div class="col" style="gap:6px">
+    <p class="tiny muted" style="margin:0 0 4px">Кому отправить</p>
+    <div class="col" data-list style="gap:6px"></div>
+  </div>`);
+  const sheet = openSheet('Отправить в чат', body);
+  const list = body.querySelector('[data-list]');
+  chats.forEach((chat) => {
+    const row = el(`<button class="list-item">${avatar(chat.peer || chat, 34)}<span class="grow" style="text-align:left"><span class="small strong">${esc(chat.title || chat.peer?.displayName || 'Чат')}</span></span>${icon('forward', 15)}</button>`);
+    row.onclick = async () => {
+      try {
+        await api.sendPost(chat.id, post.id, '');
+        sheet.close();
+        toast('Отправлено');
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+    list.appendChild(row);
+  });
+  return sheet;
 }
 
 function openChatMenu(chat, view) {
