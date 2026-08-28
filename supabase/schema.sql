@@ -2887,3 +2887,60 @@ begin
                      from public.badges where user_id = me), '[]'::jsonb);
 end;
 $$;
+
+alter table public.posts add column if not exists poll jsonb;
+alter table public.posts add column if not exists pinned boolean not null default false;
+
+create table if not exists public.poll_votes (
+  post_id bigint not null references public.posts on delete cascade,
+  user_id uuid not null references public.profiles on delete cascade,
+  choice integer not null,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+
+alter table public.poll_votes enable row level security;
+drop policy if exists poll_votes_read on public.poll_votes;
+create policy poll_votes_read on public.poll_votes for select using (true);
+
+create or replace function public.poll_vote(target bigint, choice integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  options jsonb;
+begin
+  if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
+  select poll->'options' into options from public.posts where id = target and not removed;
+  if options is null then raise exception 'Это не опрос'; end if;
+  if choice < 0 or choice >= jsonb_array_length(options) then raise exception 'Такого варианта нет'; end if;
+
+  insert into public.poll_votes (post_id, user_id, choice)
+  values (target, auth.uid(), choice)
+  on conflict (post_id, user_id) do update set choice = excluded.choice, created_at = now();
+
+  return public.poll_result(target);
+end;
+$$;
+
+create or replace function public.poll_result(target bigint)
+returns jsonb language sql security definer set search_path = public as $$
+  select jsonb_build_object(
+    'total', (select count(*) from public.poll_votes where post_id = target),
+    'mine', (select choice from public.poll_votes where post_id = target and user_id = auth.uid()),
+    'counts', coalesce((select jsonb_object_agg(choice::text, n)
+                          from (select choice, count(*) as n from public.poll_votes where post_id = target group by choice) rows), '{}'::jsonb)
+  );
+$$;
+
+create or replace function public.pin_post(target bigint, on_top boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.posts where id = target and author_id = auth.uid()) then
+    raise exception 'Это не ваша запись';
+  end if;
+  update public.posts set pinned = false where author_id = auth.uid() and pinned;
+  if on_top then
+    update public.posts set pinned = true where id = target;
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;

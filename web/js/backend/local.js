@@ -277,6 +277,8 @@ function shapePost(post, viewerId) {
     duration: post.duration || 0,
     views: post.views || 0,
     sound: post.sound || null,
+    poll: post.poll || null,
+    pinned: !!post.pinned,
     repostOf: post.repostOf || null,
     origin: post.repostOf ? pub(state.users.find((u) => u.id === state.posts.find((p) => p.id === post.repostOf)?.authorId)) : null
   };
@@ -707,12 +709,12 @@ export const local = {
     return { ok: true };
   },
 
-  async createPost({ text, image, mood, kind, media, video, poster, duration }) {
+  async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll }) {
     const user = need();
     notMuted(user);
     const body = String(text || '').trim().slice(0, 5000);
     const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
-    if (!body && !image && !album.length && !video) fail('Пустой пост');
+    if (!body && !image && !album.length && !video && !poll) fail('Пустой пост');
     const post = {
       id: next('posts'),
       authorId: user.id,
@@ -720,6 +722,9 @@ export const local = {
       image: image || album[0] || poster || null,
       kind: kind || (video ? 'video' : album.length > 1 ? 'album' : 'text'),
       media: album,
+      sound: sound || null,
+      poll: poll || null,
+      pinned: false,
       video: video || null,
       poster: poster || null,
       duration: Math.max(0, Math.round(Number(duration) || 0)),
@@ -1686,6 +1691,39 @@ export const local = {
     if (user.isModerator) codes.push('shield');
     if ((user.coins || 0) >= 1000) codes.push('rich');
     return { badges: codes.map((code) => ({ code, earnedAt: Date.now() })) };
+  },
+
+  async pollVote(id, choice) {
+    const user = need();
+    notMuted(user);
+    if (!Array.isArray(state.pollVotes)) state.pollVotes = [];
+    const post = state.posts.find((p) => p.id === id && !p.removed);
+    if (!post?.poll?.options) fail('Это не опрос');
+    if (choice < 0 || choice >= post.poll.options.length) fail('Такого варианта нет');
+    const row = state.pollVotes.find((v) => v.postId === id && v.userId === user.id);
+    if (row) row.choice = choice;
+    else state.pollVotes.push({ postId: id, userId: user.id, choice, createdAt: Date.now() });
+    save();
+    return this.pollResult(id);
+  },
+
+  async pollResult(id) {
+    if (!Array.isArray(state.pollVotes)) state.pollVotes = [];
+    const user = me();
+    const rows = state.pollVotes.filter((v) => v.postId === id);
+    const counts = {};
+    rows.forEach((v) => { counts[v.choice] = (counts[v.choice] || 0) + 1; });
+    return { total: rows.length, counts, mine: rows.find((v) => v.userId === user?.id)?.choice ?? null };
+  },
+
+  async pinPost(id, on) {
+    const user = need();
+    const post = state.posts.find((p) => p.id === id && p.authorId === user.id);
+    if (!post) fail('Это не ваша запись');
+    state.posts.forEach((p) => { if (p.authorId === user.id) p.pinned = false; });
+    post.pinned = !!on;
+    save();
+    return { ok: true };
   },
 
   async strikes(userId) {

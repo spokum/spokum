@@ -136,11 +136,14 @@ function renderComposer(root) {
         <div class="composer-tools">
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
           <button class="icon-btn" data-reels>${icon('video', 18)}<span>В Видео</span></button>
+          ${isBeta() ? `<button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>` : ''}
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
       </div>
     </div>`);
+
+  card.querySelector('[data-poll-new]')?.addEventListener('click', () => openPollComposer(root));
 
   const area = card.querySelector('textarea');
   area.value = draft.text;
@@ -482,6 +485,70 @@ export function postMedia(post) {
   return single ? `<div class="post-image"><img src="${esc(single)}" alt="" loading="lazy" decoding="async"></div>` : '';
 }
 
+function openPollComposer(root) {
+  const body = el(`<div class="col" style="gap:9px">
+    <input class="input" data-question maxlength="200" placeholder="Вопрос, например: как вы сегодня?">
+    <input class="input" data-opt maxlength="60" placeholder="Вариант 1">
+    <input class="input" data-opt maxlength="60" placeholder="Вариант 2">
+    <input class="input" data-opt maxlength="60" placeholder="Вариант 3, не обязательно">
+    <input class="input" data-opt maxlength="60" placeholder="Вариант 4, не обязательно">
+    <button class="btn btn-primary" data-send>${icon('send', 17)} Опубликовать опрос</button>
+  </div>`);
+  const sheet = openSheet('Новый опрос', body);
+  body.querySelector('[data-send]').onclick = async () => {
+    const question = body.querySelector('[data-question]').value.trim();
+    const options = [...body.querySelectorAll('[data-opt]')].map((input) => input.value.trim()).filter(Boolean);
+    if (!question) return toast('Нужен вопрос', 'err');
+    if (options.length < 2) return toast('Нужно хотя бы два варианта', 'err');
+    try {
+      await api.createPost({ text: question, mood: draft.mood, kind: 'text', poll: { options } });
+      sheet.close();
+      toast('Опрос опубликован');
+      await load(root);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+}
+
+function pollBlock(post) {
+  if (!post.poll?.options?.length) return '';
+  return `<div class="poll" data-poll>${post.poll.options
+    .map((label, i) => `<button class="poll-row" data-choice="${i}"><span class="poll-fill"></span><span class="poll-label">${esc(label)}</span><span class="poll-share"></span></button>`)
+    .join('')}<div class="tiny muted" data-poll-total style="margin-top:7px">Загружаем</div></div>`;
+}
+
+async function wirePoll(card, post) {
+  const box = card.querySelector('[data-poll]');
+  if (!box) return;
+  const draw = (result) => {
+    const total = result.total || 0;
+    box.querySelectorAll('[data-choice]').forEach((row) => {
+      const n = result.counts?.[row.dataset.choice] || 0;
+      const share = total ? Math.round((n / total) * 100) : 0;
+      row.classList.toggle('on', String(result.mine) === row.dataset.choice);
+      row.querySelector('.poll-fill').style.width = `${share}%`;
+      row.querySelector('.poll-share').textContent = total ? `${share}%` : '';
+    });
+    box.querySelector('[data-poll-total]').textContent = total
+      ? `${total} ${plural(total, 'голос', 'голоса', 'голосов').split(' ')[1]}`
+      : 'Голосов пока нет';
+  };
+  try {
+    draw(await api.pollResult(post.id));
+  } catch {}
+  box.querySelectorAll('[data-choice]').forEach((row) => {
+    row.onclick = async (event) => {
+      event.stopPropagation();
+      try {
+        draw(await api.pollVote(post.id, Number(row.dataset.choice)));
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+}
+
 function tagged(text) {
   return esc(text).replace(/(^|\s)#([\wа-яё]{2,24})/gi, (all, space, tag) => `${space}<span class="hashtag" data-tag="${tag.toLowerCase()}">#${tag}</span>`);
 }
@@ -503,8 +570,10 @@ export function postCard(post, refresh, options = {}) {
         <span class="mood-tag" style="${moodStyle(post.mood)}" title="${esc(mood.label)}"><i class="mood-dot"></i><span class="mood-label">${esc(mood.label)}</span></span>
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 18)}</button>
       </div>
+      ${post.pinned ? `<div class="post-repost">${icon('star', 13)}<span>Закреплено автором</span></div>` : ''}
       ${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
       ${postMedia(post)}
+      ${pollBlock(post)}
       ${post.removed ? `<div class="pill bad" style="margin-top:10px">Скрыт модератором: ${esc(post.removedReason || 'без причины')}</div>` : ''}
       <div class="post-actions">
         <span data-reacts></span>
@@ -589,6 +658,8 @@ export function postCard(post, refresh, options = {}) {
     openVideo(post, refresh);
   });
 
+  if (post.poll && api.pollResult) wirePoll(card, post);
+
   card.querySelectorAll('.hashtag').forEach((tag) => {
     tag.onclick = (event) => {
       event.stopPropagation();
@@ -613,12 +684,29 @@ function openPostMenu(post, refresh, options) {
   const canModerate = state.user && (state.user.isModerator || state.user.isAdmin);
   const body = el(`
     <div class="col" style="gap:6px">
+      ${mine && isBeta() ? `<button class="list-item" data-pin>${icon('star', 18)}<span>${post.pinned ? 'Открепить' : 'Закрепить у себя'}</span></button>` : ''}
+      ${isBeta() ? `<button class="list-item" data-card>${icon('image', 18)}<span>Сохранить картинкой</span></button>` : ''}
       <button class="list-item" data-copy>${icon('share', 18)}<span>Скопировать текст</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Профиль автора</span></button>
       ${canModerate && !mine ? `<button class="list-item" data-remove style="color:#c98b8b">${icon('trash', 18)}<span>Снять с публикации</span></button>` : ''}
       ${mine || (state.user && state.user.isAdmin) ? `<button class="list-item" data-delete style="color:#c98b8b">${icon('trash', 18)}<span>Удалить пост</span></button>` : ''}
     </div>`);
   const sheet = openSheet('', body);
+  body.querySelector('[data-pin]')?.addEventListener('click', async () => {
+    try {
+      await api.pinPost(post.id, !post.pinned);
+      sheet.close();
+      toast(post.pinned ? 'Откреплено' : 'Закреплено');
+      refresh?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  });
+  body.querySelector('[data-card]')?.addEventListener('click', async () => {
+    sheet.close();
+    const { openShareCard } = await import('./share.js');
+    openShareCard(post);
+  });
   body.querySelector('[data-copy]').onclick = () => {
     navigator.clipboard?.writeText(post.text || '');
     toast('Текст скопирован');

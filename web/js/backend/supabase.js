@@ -86,6 +86,8 @@ function shapePost(row, likedIds, extra = {}) {
     duration: row.duration || 0,
     views: row.views || 0,
     sound: row.sound || null,
+    poll: row.poll || null,
+    pinned: !!row.pinned,
     repostOf: row.repost_of || null,
     origin: extra.origin || null
   };
@@ -219,7 +221,7 @@ export async function createSupabase(url, key) {
     return map;
   }
 
-  const POST_SELECT_FULL = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, sound, repost_of, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const POST_SELECT_FULL = 'id, body, image, mood, created_at, removed, removed_reason, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
   const POST_SELECT_BASE = 'id, body, image, mood, created_at, removed, removed_reason, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
   let legacyPosts = false;
   const POST_SELECT = () => (legacyPosts ? POST_SELECT_BASE : POST_SELECT_FULL);
@@ -627,11 +629,11 @@ export async function createSupabase(url, key) {
       return data.publicUrl;
     },
 
-    async createPost({ text, image, mood, kind, media, video, poster, duration }) {
+    async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll }) {
       const id = requireUid();
       const body = String(text || '').trim().slice(0, 5000);
       const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
-      if (!body && !image && !album.length && !video) throw new Error('Пустой пост');
+      if (!body && !image && !album.length && !video && !poll) throw new Error('Пустой пост');
       const payload = {
         author_id: id,
         body,
@@ -641,7 +643,9 @@ export async function createSupabase(url, key) {
         media: album,
         video: video || null,
         poster: poster || null,
-        duration: Math.max(0, Math.round(Number(duration) || 0))
+        duration: Math.max(0, Math.round(Number(duration) || 0)),
+        sound: sound || null,
+        poll: poll || null
       };
       let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
       if (missingColumn(error)) {
@@ -1274,6 +1278,24 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('my_badges');
       guard(error);
       return { badges: data || [] };
+    },
+
+    async pollVote(id, choice) {
+      const { data, error } = await sb.rpc('poll_vote', { target: id, choice });
+      guard(error);
+      return data;
+    },
+
+    async pollResult(id) {
+      const { data, error } = await sb.rpc('poll_result', { target: id });
+      guard(error);
+      return data || { total: 0, counts: {}, mine: null };
+    },
+
+    async pinPost(id, on) {
+      const { error } = await sb.rpc('pin_post', { target: id, on_top: !!on });
+      guard(error);
+      return { ok: true };
     },
 
     async strikes(userId) {

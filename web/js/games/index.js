@@ -3240,7 +3240,412 @@ function hoops(canvas, report) {
   });
 }
 
+function rhythm(canvas, report) {
+  return runner(canvas, () => {
+    let state = null;
+    const lanes = 3;
+
+    const reset = () => {
+      state = { notes: [], spawn: 0, speed: 0.55, score: 0, combo: 0, best: 0, miss: 0, over: false, hits: [] };
+    };
+    reset();
+
+    const strike = (lane) => {
+      if (state.over) return;
+      const zone = 0.84;
+      let closest = null;
+      for (const note of state.notes) {
+        if (note.lane !== lane || note.done) continue;
+        if (Math.abs(note.y - zone) < 0.075 && (!closest || Math.abs(note.y - zone) < Math.abs(closest.y - zone))) closest = note;
+      }
+      if (!closest) {
+        state.combo = 0;
+        return;
+      }
+      closest.done = true;
+      const exact = Math.abs(closest.y - zone) < 0.028;
+      state.combo += 1;
+      state.best = Math.max(state.best, state.combo);
+      state.score += (exact ? 100 : 50) + state.combo * 4;
+      state.hits.push({ lane, life: 1, exact });
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          const spot = pointerPos(node, event);
+          strike(Math.min(lanes - 1, Math.floor((spot.x / node.getBoundingClientRect().width) * lanes)));
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          const map = { a: 0, s: 1, d: 2, ArrowLeft: 0, ArrowDown: 1, ArrowRight: 2 };
+          if (map[event.key] !== undefined) strike(map[event.key]);
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.speed = Math.min(1.4, state.speed + dt * 0.02);
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.28, 0.8 - state.score / 12000);
+          state.notes.push({ lane: Math.floor(Math.random() * lanes), y: -0.05, done: false });
+        }
+        state.notes.forEach((note) => { note.y += state.speed * dt; });
+        for (const note of state.notes) {
+          if (!note.done && note.y > 0.96) {
+            note.done = true;
+            note.missed = true;
+            state.combo = 0;
+            state.miss += 1;
+            if (state.miss >= 12) {
+              state.over = true;
+              report(state.score);
+            }
+          }
+        }
+        state.notes = state.notes.filter((note) => note.y < 1.1);
+        state.hits.forEach((hit) => { hit.life -= dt * 2.4; });
+        state.hits = state.hits.filter((hit) => hit.life > 0);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#120e22', '#241a3c']);
+        const lw = w / lanes;
+        const zoneY = 0.84 * h;
+
+        for (let i = 0; i < lanes; i++) {
+          ctx.fillStyle = i % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.055)';
+          ctx.fillRect(i * lw, 0, lw, h);
+        }
+        ctx.fillStyle = 'rgba(143,215,194,.2)';
+        ctx.fillRect(0, zoneY - 8, w, 16);
+        ctx.strokeStyle = 'rgba(143,215,194,.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, zoneY);
+        ctx.lineTo(w, zoneY);
+        ctx.stroke();
+
+        state.notes.forEach((note) => {
+          if (note.done && !note.missed) return;
+          ctx.fillStyle = note.missed ? 'rgba(201,139,139,.45)' : `hsl(${170 + note.lane * 40} 60% 62%)`;
+          ctx.beginPath();
+          ctx.roundRect(note.lane * lw + lw * 0.16, note.y * h - 12, lw * 0.68, 24, 8);
+          ctx.fill();
+        });
+
+        state.hits.forEach((hit) => {
+          ctx.globalAlpha = hit.life * 0.6;
+          ctx.fillStyle = hit.exact ? '#e8c46a' : '#8fd7c2';
+          ctx.beginPath();
+          ctx.arc(hit.lane * lw + lw / 2, zoneY, 34 * (1.4 - hit.life), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+
+        hud(ctx, w, [`Очки ${state.score}`, `Серия ${state.combo}`, `Промахи ${state.miss} из 12`]);
+        if (state.over) overText(ctx, w, h, 'Сбились с ритма', `Очки ${state.score}, лучшая серия ${state.best}`);
+      }
+    };
+  });
+}
+
+function bubbles(canvas, report) {
+  return runner(canvas, () => {
+    const cols = 8;
+    const rows = 11;
+    const tints = ['#7fb0ff', '#8fd7a8', '#e8c46a', '#c98fa0', '#a58bff'];
+    let state = null;
+
+    const reset = () => {
+      state = {
+        grid: Array.from({ length: rows }, () => Array.from({ length: cols }, () => Math.floor(Math.random() * tints.length))),
+        score: 0,
+        moves: 0,
+        over: false,
+        pop: []
+      };
+    };
+    reset();
+
+    const group = (x, y) => {
+      const tint = state.grid[y][x];
+      if (tint === null) return [];
+      const seen = new Set();
+      const stack = [[x, y]];
+      const out = [];
+      while (stack.length) {
+        const [cx, cy] = stack.pop();
+        const key = `${cx}:${cy}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) continue;
+        if (state.grid[cy][cx] !== tint) continue;
+        out.push([cx, cy]);
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      }
+      return out;
+    };
+
+    const collapse = () => {
+      for (let x = 0; x < cols; x++) {
+        const column = [];
+        for (let y = rows - 1; y >= 0; y--) if (state.grid[y][x] !== null) column.push(state.grid[y][x]);
+        for (let y = rows - 1; y >= 0; y--) state.grid[y][x] = column[rows - 1 - y] ?? null;
+      }
+      let write = 0;
+      for (let x = 0; x < cols; x++) {
+        if (state.grid.some((row) => row[x] !== null)) {
+          if (write !== x) for (let y = 0; y < rows; y++) {
+            state.grid[y][write] = state.grid[y][x];
+            state.grid[y][x] = null;
+          }
+          write += 1;
+        }
+      }
+    };
+
+    const anyLeft = () => {
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        if (state.grid[y][x] !== null && group(x, y).length >= 2) return true;
+      }
+      return false;
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          const spot = pointerPos(node, event);
+          const box = state.layout;
+          if (!box) return;
+          const x = Math.floor((spot.x - box.ox) / box.cell);
+          const y = Math.floor((spot.y - box.oy) / box.cell);
+          if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+          const found = group(x, y);
+          if (found.length < 2) return;
+          found.forEach(([bx, by]) => {
+            state.pop.push({ x: bx, y: by, tint: state.grid[by][bx], life: 1 });
+            state.grid[by][bx] = null;
+          });
+          state.score += found.length * found.length * 5;
+          state.moves += 1;
+          collapse();
+          if (!anyLeft()) {
+            state.over = true;
+            const left = state.grid.flat().filter((v) => v !== null).length;
+            if (left < 10) state.score += 500;
+            report(state.score);
+          }
+        });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') reset();
+        }, window);
+      },
+      update(dt) {
+        state.pop.forEach((row) => { row.life -= dt * 2.6; });
+        state.pop = state.pop.filter((row) => row.life > 0);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0f1a20', '#1a2c34']);
+        const cell = Math.min((w - 24) / cols, (h - 130) / rows);
+        const ox = (w - cell * cols) / 2;
+        const oy = 76;
+        state.layout = { ox, oy, cell };
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const tint = state.grid[y][x];
+            if (tint === null) continue;
+            ctx.fillStyle = tints[tint];
+            ctx.beginPath();
+            ctx.arc(ox + x * cell + cell / 2, oy + y * cell + cell / 2, cell * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,.25)';
+            ctx.beginPath();
+            ctx.arc(ox + x * cell + cell * 0.38, oy + y * cell + cell * 0.36, cell * 0.11, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        state.pop.forEach((row) => {
+          ctx.globalAlpha = row.life * 0.7;
+          ctx.fillStyle = tints[row.tint] || '#fff';
+          ctx.beginPath();
+          ctx.arc(ox + row.x * cell + cell / 2, oy + row.y * cell + cell / 2, cell * 0.42 * (2 - row.life), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+
+        hud(ctx, w, [`Очки ${state.score}`, `Ходы ${state.moves}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('лопайте группы от двух шариков', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.over) overText(ctx, w, h, 'Ходов не осталось', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
+function jumper(canvas, report) {
+  return runner(canvas, () => {
+    let state = null;
+    let tilt = 0;
+
+    const reset = () => {
+      const plates = [{ x: 0.5, y: 0.9, kind: 'solid' }];
+      for (let i = 1; i < 14; i++) {
+        plates.push({ x: 0.12 + Math.random() * 0.76, y: 0.9 - i * 0.075, kind: Math.random() < 0.14 ? 'weak' : 'solid' });
+      }
+      state = { x: 0.5, y: 0.86, vy: -0.62, plates, height: 0, score: 0, over: false, springs: [] };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        const aim = (event) => {
+          if (state.over) return;
+          const rect = node.getBoundingClientRect();
+          const point = event.touches?.[0] || event;
+          tilt = ((point.clientX - rect.left) / rect.width - 0.5) * 2;
+        };
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          aim(event);
+        });
+        bind('pointermove', aim);
+        bind('pointerup', () => { tilt = 0; });
+        bind('keydown', (event) => {
+          if (state.over && event.key === ' ') return reset();
+          if (event.key === 'ArrowLeft') tilt = -1;
+          if (event.key === 'ArrowRight') tilt = 1;
+        }, window);
+        bind('keyup', () => { tilt = 0; }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.vy += dt * 1.5;
+        state.y += state.vy * dt;
+        state.x += tilt * dt * 0.75;
+        if (state.x < 0) state.x = 1;
+        if (state.x > 1) state.x = 0;
+
+        if (state.y < 0.42) {
+          const lift = 0.42 - state.y;
+          state.y = 0.42;
+          state.height += lift;
+          state.score = Math.floor(state.height * 900);
+          state.plates.forEach((plate) => { plate.y += lift; });
+          state.springs.forEach((spring) => { spring.y += lift; });
+          state.plates = state.plates.filter((plate) => plate.y < 1.1);
+          while (state.plates.length < 14) {
+            const top = Math.min(...state.plates.map((plate) => plate.y));
+            state.plates.push({ x: 0.12 + Math.random() * 0.76, y: top - 0.06 - Math.random() * 0.045, kind: Math.random() < 0.16 ? 'weak' : 'solid' });
+          }
+        }
+
+        if (state.vy > 0) {
+          for (const plate of state.plates) {
+            if (plate.gone) continue;
+            if (Math.abs(state.x - plate.x) < 0.1 && Math.abs(state.y + 0.02 - plate.y) < 0.022) {
+              state.vy = -0.66;
+              state.springs.push({ x: plate.x, y: plate.y, life: 1 });
+              if (plate.kind === 'weak') plate.gone = true;
+              break;
+            }
+          }
+        }
+        state.plates = state.plates.filter((plate) => !plate.gone);
+        state.springs.forEach((spring) => { spring.life -= dt * 3; });
+        state.springs = state.springs.filter((spring) => spring.life > 0);
+
+        if (state.y > 1.08) {
+          state.over = true;
+          report(state.score);
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0e1a24', '#1b3040']);
+        ctx.fillStyle = 'rgba(255,255,255,.05)';
+        for (let i = 0; i < 6; i++) {
+          ctx.beginPath();
+          ctx.arc(((i * 91) % w), ((i * 137 + state.height * 220) % h), 20 + (i % 3) * 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        state.plates.forEach((plate) => {
+          ctx.fillStyle = plate.kind === 'weak' ? '#c98b8b' : '#8fd7a8';
+          ctx.beginPath();
+          ctx.roundRect(plate.x * w - w * 0.09, plate.y * h, w * 0.18, 10, 5);
+          ctx.fill();
+        });
+        state.springs.forEach((spring) => {
+          ctx.globalAlpha = spring.life * 0.5;
+          ctx.strokeStyle = '#8fd7c2';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(spring.x * w, spring.y * h, 26 * (1.4 - spring.life), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        });
+
+        ctx.fillStyle = '#e8c46a';
+        ctx.beginPath();
+        ctx.arc(state.x * w, state.y * h, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#1b1f28';
+        ctx.beginPath();
+        ctx.arc(state.x * w - 4, state.y * h - 3, 2.2, 0, Math.PI * 2);
+        ctx.arc(state.x * w + 4, state.y * h - 3, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        hud(ctx, w, [`Очки ${state.score}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('держите палец слева или справа', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.over) overText(ctx, w, h, 'Упали вниз', `Очки ${state.score}`);
+      }
+    };
+  });
+}
+
 export const GAMES = [
+  {
+    id: 'rhythm',
+    title: 'Ритм',
+    desc: 'Попадай по нотам в такт',
+    tint: ['#120e22', '#241a3c'],
+    beta: true,
+    mount: rhythm
+  },
+  {
+    id: 'bubbles',
+    title: 'Шарики',
+    desc: 'Лопай группы одного цвета',
+    tint: ['#0f1a20', '#1a2c34'],
+    beta: true,
+    mount: bubbles
+  },
+  {
+    id: 'jumper',
+    title: 'Прыжок',
+    desc: 'Прыгай вверх по платформам',
+    tint: ['#0e1a24', '#1b3040'],
+    beta: true,
+    mount: jumper
+  },
   {
     id: 'tetris',
     title: 'Стакан',

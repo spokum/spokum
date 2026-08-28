@@ -1280,6 +1280,20 @@ svg { display: block; flex: none; }
 .team-head .strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-card .info-grid { text-align: left; }
 
+.poll { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.poll-row {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 10px 13px; border-radius: 12px; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--text); font-size: 13.5px; text-align: left;
+}
+.poll-row.on { border-color: var(--accent); }
+.poll-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: var(--accent-soft); transition: width .4s var(--ease);
+}
+.poll-label { position: relative; flex: 1; min-width: 0; }
+.poll-share { position: relative; font-size: 12px; font-weight: 700; color: var(--muted); }
 .react-row { display: flex; align-items: center; gap: 4px; }
 .react-btn {
   display: grid; place-items: center; width: 32px; height: 32px;
