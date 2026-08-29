@@ -109,7 +109,10 @@ function goBackInside() {
     openTab('feed');
     return true;
   }
-  return false;
+  const host = shell?.querySelector('[data-view]');
+  if (host && host.scrollTop > 0) host.scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return true;
 }
 
 function watchSwipes() {
@@ -133,16 +136,9 @@ function watchSwipes() {
   }, { passive: true });
 }
 
-let exitArmed = 0;
-
 window.__spokumBack = () => {
-  if (goBackInside()) return true;
-  if (Date.now() - exitArmed < 2200) {
-    exitArmed = 0;
-    return false;
-  }
-  exitArmed = Date.now();
-  return false;
+  goBackInside();
+  return true;
 };
 
 async function checkDevice(fresh) {

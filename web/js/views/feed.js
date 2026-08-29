@@ -759,8 +759,11 @@ function openPostMenu(post, refresh, options) {
     const { promptSheet } = await import('../ui.js');
     const reason = await promptSheet({ title: 'Причина снятия', label: 'Что нарушает пост', placeholder: 'Например: агрессия в адрес пользователя', multiline: true });
     if (!reason) return;
+    const { askProofShot } = await import('./mod.js');
+    const proof = await askProofShot(reason);
+    if (!proof) return;
     try {
-      await api.removePost(post.id, reason);
+      await api.removePost(post.id, reason, proof);
       toast('Пост снят, действие записано');
       refresh?.();
       options.onModerate?.();
