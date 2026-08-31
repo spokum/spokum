@@ -1,4 +1,4 @@
-import { api, state } from '../store.js';
+import { api, state, isPremium, isBeta } from '../store.js';
 import { GAMES } from '../games/index.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
@@ -14,25 +14,37 @@ export async function render(root) {
     <div class="game-grid" data-grid></div>
     <div class="row between" style="margin:22px 2px 10px"><div class="strong small">Таблица лидеров</div>
       <select class="select" data-game style="width:auto;padding:6px 10px;font-size:12px">
-        ${GAMES.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
+        ${GAMES.filter((g) => isBeta(state.user) || !g.fresh).map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
       </select>
     </div>
     <div class="card" data-board></div>`;
 
   const grid = root.querySelector('[data-grid]');
-  const shown = GAMES;
+  const paid = isPremium(state.user);
+  const beta = isBeta(state.user);
+  const shown = GAMES.filter((game) => beta || !game.fresh).sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
   shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
+    const locked = !!game.premium && !paid;
     const card = el(`
-      <button class="game-card appear">
+      <button class="game-card appear${locked ? ' locked' : ''}">
         <div class="art" style="background:linear-gradient(150deg,${game.tint[0]},${game.tint[1]})"></div>
         <div class="art" style="background:radial-gradient(60% 60% at 80% 15%, rgba(255,255,255,.16), transparent 70%)"></div>
-        <div style="position:relative;margin-bottom:auto;color:#eef2fb;opacity:.9">${icon('play', 22)}</div>
+        <div class="row" style="position:relative;margin-bottom:auto;color:#eef2fb;opacity:.9">
+          ${icon(locked ? 'lock' : 'play', 22)}
+          <div class="spacer"></div>
+          ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>Премиум</span></span>` : ''}
+        </div>
         <div class="label" style="color:#eef2fb">${esc(game.title)}</div>
         <div class="desc">${esc(game.desc)}</div>
         ${best ? `<div class="desc" style="color:var(--accent)">Рекорд ${best}</div>` : ''}
       </button>`);
-    card.onclick = () => launch(game, () => render(root));
+    card.onclick = async () => {
+      if (!locked) return launch(game, () => render(root));
+      toast('Игра открыта по подписке СпокУм Премиум', 'err');
+      const { openBilling } = await import('./settings.js');
+      openBilling?.();
+    };
     grid.appendChild(card);
   });
 

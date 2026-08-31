@@ -3621,7 +3621,761 @@ function jumper(canvas, report) {
   });
 }
 
+function sky(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    const FOV = 1.05;
+    let S;
+    let pillars = [];
+    let rings = [];
+    let sparks = [];
+    let aim = { x: 0, y: 0 };
+    let ahead = 0;
+
+    const reset = () => {
+      S = { x: 0, y: 0, z: 0, roll: 0, speed: 24, score: 0, rings: 0, over: false, shake: 0 };
+      pillars = [];
+      rings = [];
+      sparks = [];
+      aim = { x: 0, y: 0 };
+      ahead = 30;
+      grow();
+    };
+
+    const grow = () => {
+      while (ahead < S.z + 260) {
+        const lane = (Math.random() - 0.5) * 30;
+        const count = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i++) {
+          const x = lane + (Math.random() - 0.5) * 26;
+          const tall = Math.random() < 0.5;
+          pillars.push({
+            x,
+            z: ahead + Math.random() * 5,
+            hw: 1.4 + Math.random() * 1.6,
+            y0: tall ? -12 : 2 + Math.random() * 4,
+            y1: tall ? -2 + Math.random() * 5 : 12,
+            hue: 190 + Math.random() * 80
+          });
+        }
+        if (Math.random() < 0.55) {
+          rings.push({ x: (Math.random() - 0.5) * 22, y: (Math.random() - 0.5) * 10, z: ahead + 4, r: 2.4, taken: false });
+        }
+        ahead += 11 + Math.random() * 6;
+      }
+      pillars = pillars.filter((p) => p.z > S.z - 12);
+      rings = rings.filter((r) => r.z > S.z - 6);
+    };
+
+    const project = (px, py, pz) => {
+      const rz = pz - S.z;
+      if (rz < 0.7) return null;
+      const rx = px - S.x;
+      const ry = py - S.y;
+      const c = Math.cos(S.roll);
+      const s = Math.sin(S.roll);
+      const ax = rx * c - ry * s;
+      const ay = rx * s + ry * c;
+      const scale = (height * FOV) / rz;
+      return { x: width / 2 + ax * scale, y: height / 2 - ay * scale, d: rz };
+    };
+
+    const fog = (d) => Math.max(0, Math.min(1, 1 - d / 170));
+
+    const face = (ctx, points, hue, light, d) => {
+      if (points.some((p) => !p)) return;
+      const near = fog(d);
+      if (near <= 0.02) return;
+      const sat = 12 + 34 * near;
+      const lum = 11 + (light - 11) * near;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+      ctx.closePath();
+      ctx.fillStyle = `hsl(${hue}, ${sat}%, ${lum}%)`;
+      ctx.fill();
+      ctx.strokeStyle = `hsla(${hue}, ${sat + 18}%, ${Math.min(78, lum + 16)}%, ${0.5 + near * 0.4})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    };
+
+    reset();
+
+    return {
+      score: () => Math.floor(S.score),
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const steer = (event) => {
+          event.preventDefault();
+          const point = pointerPos(node, event);
+          aim.x = (point.x / width - 0.5) * 32;
+          aim.y = (0.5 - point.y / height) * 17;
+        };
+        bind('pointermove', steer);
+        bind('touchmove', steer);
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          node.setPointerCapture?.(event.pointerId);
+          if (S.over) {
+            reset();
+            return;
+          }
+          steer(event);
+        });
+        bind('touchstart', (event) => {
+          event.preventDefault();
+          if (S.over) {
+            reset();
+            return;
+          }
+          steer(event);
+        });
+      },
+      update(dt) {
+        if (S.over) return;
+        S.speed = Math.min(52, S.speed + dt * 0.9);
+        S.z += S.speed * dt;
+        S.score += S.speed * dt * 0.6;
+        const nx = S.x + (aim.x - S.x) * Math.min(1, dt * 5.5);
+        S.roll = Math.max(-0.5, Math.min(0.5, (nx - S.x) * 3.4));
+        S.x = nx;
+        S.y += (aim.y - S.y) * Math.min(1, dt * 5);
+        if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 2);
+        grow();
+
+        for (const ring of rings) {
+          if (ring.taken || Math.abs(ring.z - S.z) > 1.6) continue;
+          if (Math.hypot(ring.x - S.x, ring.y - S.y) < ring.r) {
+            ring.taken = true;
+            S.rings += 1;
+            S.score += 80;
+            S.shake = 0.4;
+            for (let i = 0; i < 14; i++) {
+              sparks.push({ x: ring.x, y: ring.y, z: ring.z, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 0.7 });
+            }
+          }
+        }
+
+        for (const p of pillars) {
+          if (Math.abs(p.z - S.z) > p.hw + 0.6) continue;
+          if (Math.abs(p.x - S.x) > p.hw + 0.8) continue;
+          if (S.y < p.y0 - 0.7 || S.y > p.y1 + 0.7) continue;
+          S.over = true;
+          report?.(Math.floor(S.score));
+        }
+        if (Math.abs(S.y) > 13) {
+          S.over = true;
+          report?.(Math.floor(S.score));
+        }
+
+        sparks = sparks.filter((s) => {
+          s.life -= dt;
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+          return s.life > 0;
+        });
+      },
+      draw(ctx) {
+        backdrop(ctx, width, height, ['#050a18', '#0d1c33']);
+        ctx.save();
+        if (S.shake > 0) ctx.translate((Math.random() - 0.5) * S.shake * 8, (Math.random() - 0.5) * S.shake * 8);
+
+        const horizon = height / 2 + S.y * (height * FOV) / 60;
+        const glow = ctx.createRadialGradient(width / 2, horizon, 4, width / 2, horizon, height * 0.8);
+        glow.addColorStop(0, 'rgba(120,180,255,.30)');
+        glow.addColorStop(1, 'rgba(120,180,255,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+
+        const step = 10;
+        const first = Math.ceil(S.z / step) * step;
+        for (let i = 0; i < 18; i++) {
+          const z = first + i * step;
+          const a = project(-45, -13, z);
+          const b = project(45, -13, z);
+          if (!a || !b) continue;
+          ctx.strokeStyle = `rgba(120,190,255,${fog(z - S.z) * 0.22})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+
+        const solids = [];
+        pillars.forEach((p) => solids.push({ z: p.z, kind: 'pillar', item: p }));
+        rings.forEach((r) => {
+          if (!r.taken) solids.push({ z: r.z, kind: 'ring', item: r });
+        });
+        solids.sort((a, b) => b.z - a.z);
+
+        for (const solid of solids) {
+          const d = solid.z - S.z;
+          if (d < 0.8 || d > 175) continue;
+          if (solid.kind === 'ring') {
+            if (d < 2.4) continue;
+            const r = solid.item;
+            const points = [];
+            for (let i = 0; i < 20; i++) {
+              const angle = (i / 20) * Math.PI * 2;
+              points.push(project(r.x + Math.cos(angle) * r.r, r.y + Math.sin(angle) * r.r, r.z));
+            }
+            if (points.some((p) => !p)) continue;
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            points.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.strokeStyle = `rgba(126,231,196,${fog(d)})`;
+            ctx.lineWidth = Math.max(1.5, Math.min(14, 90 / d));
+            ctx.stroke();
+            continue;
+          }
+          const p = solid.item;
+          const near = p.z - p.hw;
+          const far = p.z + p.hw;
+          const left = p.x - p.hw;
+          const right = p.x + p.hw;
+          const side = S.x < p.x
+            ? [project(left, p.y0, near), project(left, p.y1, near), project(left, p.y1, far), project(left, p.y0, far)]
+            : [project(right, p.y0, near), project(right, p.y1, near), project(right, p.y1, far), project(right, p.y0, far)];
+          face(ctx, side, p.hue, 22, d);
+          const front = [project(left, p.y0, near), project(left, p.y1, near), project(right, p.y1, near), project(right, p.y0, near)];
+          face(ctx, front, p.hue, 34, d);
+          if (p.y1 < S.y) {
+            face(ctx, [project(left, p.y1, near), project(left, p.y1, far), project(right, p.y1, far), project(right, p.y1, near)], p.hue, 46, d);
+          } else if (p.y0 > S.y) {
+            face(ctx, [project(left, p.y0, near), project(left, p.y0, far), project(right, p.y0, far), project(right, p.y0, near)], p.hue, 16, d);
+          }
+        }
+
+        sparks.forEach((s) => {
+          const point = project(s.x, s.y, s.z);
+          if (!point) return;
+          ctx.fillStyle = `rgba(126,231,196,${Math.max(0, s.life)})`;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, Math.max(1, 40 / (s.z - S.z + 1)), 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.save();
+        ctx.translate(width / 2, height - 58);
+        ctx.rotate(-S.roll);
+        ctx.fillStyle = 'rgba(238,242,251,.92)';
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(16, 10);
+        ctx.lineTo(0, 3);
+        ctx.lineTo(-16, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.restore();
+
+        hud(ctx, width, [`Очки ${Math.floor(S.score)}`, `Кольца ${S.rings}`, `Скорость ${Math.round(S.speed * 10)}`]);
+        if (S.over) overText(ctx, width, height, 'Разбились', 'Коснитесь, чтобы взлететь снова');
+      }
+    };
+  });
+}
+
+function roll(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let S;
+    let tilt = { x: 0, y: 0 };
+
+    const build = (level) => {
+      const walls = [];
+      const holes = [];
+      const pad = 14;
+      walls.push({ x: 0, y: 0, w: width, h: pad });
+      walls.push({ x: 0, y: height - pad, w: width, h: pad });
+      walls.push({ x: 0, y: 0, w: pad, h: height });
+      walls.push({ x: width - pad, y: 0, w: pad, h: height });
+      const rows = Math.min(5, 2 + level);
+      for (let i = 0; i < rows; i++) {
+        const y = pad + ((i + 1) * (height - pad * 2)) / (rows + 1);
+        const gap = 70 + Math.random() * 40;
+        const at = pad + Math.random() * (width - pad * 2 - gap);
+        walls.push({ x: pad, y: y - 7, w: at - pad, h: 14 });
+        walls.push({ x: at + gap, y: y - 7, w: width - pad - at - gap, h: 14 });
+      }
+      const count = Math.min(7, 1 + level);
+      for (let i = 0; i < count; i++) {
+        holes.push({
+          x: pad + 30 + Math.random() * (width - pad * 2 - 60),
+          y: height * 0.25 + Math.random() * (height * 0.55),
+          r: 15
+        });
+      }
+      return { walls, holes };
+    };
+
+    const start = (level, score, lives) => {
+      const built = build(level);
+      S = {
+        level,
+        score,
+        lives,
+        x: width / 2,
+        y: height - 40,
+        vx: 0,
+        vy: 0,
+        r: 10,
+        walls: built.walls,
+        holes: built.holes,
+        goal: { x: width / 2, y: 34, r: 17 },
+        over: false,
+        flash: 0
+      };
+    };
+
+    start(1, 0, 3);
+
+    const hit = (rect) => S.x + S.r > rect.x && S.x - S.r < rect.x + rect.w && S.y + S.r > rect.y && S.y - S.r < rect.y + rect.h;
+
+    return {
+      score: () => S.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+        start(S.level, S.score, S.lives);
+      },
+      bind(bind, node) {
+        const move = (event) => {
+          event.preventDefault();
+          const point = pointerPos(node, event);
+          tilt.x = Math.max(-1, Math.min(1, (point.x - width / 2) / (width / 2)));
+          tilt.y = Math.max(-1, Math.min(1, (point.y - height / 2) / (height / 2)));
+        };
+        bind('pointermove', move);
+        bind('touchmove', move);
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          node.setPointerCapture?.(event.pointerId);
+          if (S.over) {
+            start(1, 0, 3);
+            return;
+          }
+          move(event);
+        });
+        bind('touchstart', (event) => {
+          event.preventDefault();
+          if (S.over) {
+            start(1, 0, 3);
+            return;
+          }
+          move(event);
+        });
+        bind('pointerup', () => {
+          tilt.x = 0;
+          tilt.y = 0;
+        });
+      },
+      update(dt) {
+        if (S.over) return;
+        if (S.flash > 0) S.flash = Math.max(0, S.flash - dt * 2);
+        S.vx += tilt.x * 900 * dt;
+        S.vy += tilt.y * 900 * dt;
+        S.vx *= 0.985;
+        S.vy *= 0.985;
+
+        const stepX = S.vx * dt;
+        S.x += stepX;
+        for (const wall of S.walls) {
+          if (!hit(wall)) continue;
+          S.x -= stepX;
+          S.vx = -S.vx * 0.4;
+          break;
+        }
+        const stepY = S.vy * dt;
+        S.y += stepY;
+        for (const wall of S.walls) {
+          if (!hit(wall)) continue;
+          S.y -= stepY;
+          S.vy = -S.vy * 0.4;
+          break;
+        }
+
+        for (const hole of S.holes) {
+          if (Math.hypot(hole.x - S.x, hole.y - S.y) > hole.r * 0.75) continue;
+          S.lives -= 1;
+          S.flash = 1;
+          if (S.lives <= 0) {
+            S.over = true;
+            report?.(S.score);
+          } else {
+            S.x = width / 2;
+            S.y = height - 40;
+            S.vx = 0;
+            S.vy = 0;
+          }
+          break;
+        }
+
+        if (!S.over && Math.hypot(S.goal.x - S.x, S.goal.y - S.y) < S.goal.r) {
+          const level = S.level + 1;
+          const score = S.score + 120 + S.level * 40;
+          start(level, score, S.lives);
+        }
+      },
+      draw(ctx) {
+        backdrop(ctx, width, height, ['#0d1420', '#16202f']);
+        S.walls.forEach((wall) => {
+          ctx.fillStyle = 'rgba(126,231,196,.16)';
+          ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+          ctx.strokeStyle = 'rgba(126,231,196,.35)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(wall.x + 0.5, wall.y + 0.5, wall.w - 1, wall.h - 1);
+        });
+        S.holes.forEach((hole) => {
+          const shade = ctx.createRadialGradient(hole.x, hole.y, 2, hole.x, hole.y, hole.r);
+          shade.addColorStop(0, '#04060c');
+          shade.addColorStop(1, 'rgba(4,6,12,.25)');
+          ctx.fillStyle = shade;
+          ctx.beginPath();
+          ctx.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.strokeStyle = 'rgba(126,231,196,.85)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(S.goal.x, S.goal.y, S.goal.r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const ball = ctx.createRadialGradient(S.x - 3, S.y - 4, 1, S.x, S.y, S.r);
+        ball.addColorStop(0, '#ffffff');
+        ball.addColorStop(1, '#8fb6ff');
+        ctx.fillStyle = ball;
+        ctx.beginPath();
+        ctx.arc(S.x, S.y, S.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (S.flash > 0) {
+          ctx.fillStyle = `rgba(220,110,120,${S.flash * 0.3})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+        hud(ctx, width, [`Уровень ${S.level}`, `Очки ${S.score}`, `Жизни ${S.lives}`]);
+        if (S.over) overText(ctx, width, height, 'Шарик упал', 'Коснитесь, чтобы начать заново');
+      }
+    };
+  });
+}
+
+function flasks(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    const HUES = [162, 200, 268, 32, 340, 96, 12, 220];
+    let S;
+
+    const deal = (level) => {
+      const colors = Math.min(7, 3 + Math.floor(level / 2));
+      const cells = [];
+      for (let c = 0; c < colors; c++) for (let i = 0; i < 4; i++) cells.push(c);
+      for (let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
+      }
+      const tubes = [];
+      for (let c = 0; c < colors; c++) tubes.push(cells.slice(c * 4, c * 4 + 4));
+      tubes.push([], []);
+      return tubes;
+    };
+
+    const start = (level, score) => {
+      S = { level, score, tubes: deal(level), picked: -1, moves: 0, won: 0, over: false };
+    };
+
+    start(1, 0);
+
+    const layout = () => {
+      const count = S.tubes.length;
+      const perRow = count > 5 ? Math.ceil(count / 2) : count;
+      const rows = count > 5 ? 2 : 1;
+      const tubeW = Math.min(62, (width - 24) / perRow - 12);
+      const tubeH = Math.min(230, (height - 170) / rows - 24);
+      const block = rows * tubeH + (rows - 1) * 30;
+      const top = Math.max(110, (height - block) / 2);
+      const boxes = [];
+      for (let i = 0; i < count; i++) {
+        const row = Math.floor(i / perRow);
+        const col = i % perRow;
+        const inRow = Math.min(perRow, count - row * perRow);
+        const total = inRow * (tubeW + 12) - 12;
+        const x = (width - total) / 2 + col * (tubeW + 12);
+        const y = top + row * (tubeH + 30);
+        boxes.push({ x, y, w: tubeW, h: tubeH });
+      }
+      return boxes;
+    };
+
+    const topRun = (tube) => {
+      if (!tube.length) return 0;
+      const color = tube[tube.length - 1];
+      let n = 0;
+      for (let i = tube.length - 1; i >= 0 && tube[i] === color; i--) n++;
+      return n;
+    };
+
+    const solved = () => S.tubes.every((tube) => !tube.length || (tube.length === 4 && tube.every((c) => c === tube[0])));
+
+    return {
+      score: () => S.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const tap = (event) => {
+          event.preventDefault();
+          if (S.over) {
+            start(1, 0);
+            return;
+          }
+          const point = pointerPos(node, event);
+          const boxes = layout();
+          const index = boxes.findIndex((box) => point.x > box.x - 6 && point.x < box.x + box.w + 6 && point.y > box.y - 10 && point.y < box.y + box.h + 10);
+          if (index < 0) return;
+          if (S.picked < 0) {
+            if (S.tubes[index].length) S.picked = index;
+            return;
+          }
+          if (S.picked === index) {
+            S.picked = -1;
+            return;
+          }
+          const from = S.tubes[S.picked];
+          const to = S.tubes[index];
+          const color = from[from.length - 1];
+          if (to.length && to[to.length - 1] !== color) {
+            S.picked = index;
+            return;
+          }
+          let move = Math.min(topRun(from), 4 - to.length);
+          if (move <= 0) {
+            S.picked = index;
+            return;
+          }
+          while (move-- > 0) to.push(from.pop());
+          S.moves += 1;
+          S.picked = -1;
+          if (solved()) {
+            S.score += 150 + S.level * 30;
+            S.won += 1;
+            report?.(S.score);
+            start(S.level + 1, S.score);
+          }
+        };
+        bind('pointerdown', tap);
+        bind('touchstart', tap);
+      },
+      update() {},
+      draw(ctx) {
+        backdrop(ctx, width, height, ['#0d1020', '#1b1533']);
+        const boxes = layout();
+        boxes.forEach((box, i) => {
+          const tube = S.tubes[i];
+          const lifted = S.picked === i ? 8 : 0;
+          ctx.save();
+          ctx.translate(0, -lifted);
+          ctx.strokeStyle = S.picked === i ? 'rgba(126,231,196,.9)' : 'rgba(238,242,251,.35)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(box.x, box.y, box.w, box.h, [6, 6, box.w / 2, box.w / 2]);
+          ctx.stroke();
+          const cell = (box.h - 10) / 4;
+          tube.forEach((color, level) => {
+            const y = box.y + box.h - 5 - (level + 1) * cell;
+            ctx.fillStyle = `hsl(${HUES[color % HUES.length]}, 62%, 58%)`;
+            ctx.beginPath();
+            ctx.roundRect(box.x + 4, y, box.w - 8, cell - 2, level === 0 ? [3, 3, box.w / 2 - 4, box.w / 2 - 4] : 3);
+            ctx.fill();
+          });
+          ctx.restore();
+        });
+        hud(ctx, width, [`Уровень ${S.level}`, `Очки ${S.score}`, `Ходы ${S.moves}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.55)';
+        ctx.font = '500 13px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Сливайте цвета в одноцветные колбы', width / 2, height - 18);
+        ctx.textAlign = 'start';
+      }
+    };
+  });
+}
+
+function trace(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let S;
+
+    const start = (level, score) => {
+      const cols = Math.min(6, 3 + Math.floor(level / 2));
+      const rows = Math.min(7, 3 + Math.floor((level + 1) / 2));
+      S = { level, score, cols, rows, path: [], drawing: false, over: false, blocked: [] };
+    };
+
+    start(1, 0);
+
+    const geom = () => {
+      const pad = 26;
+      const size = Math.min((width - pad * 2) / S.cols, (height - 150) / S.rows);
+      const gx = (width - size * S.cols) / 2;
+      const gy = 96;
+      return { size, gx, gy };
+    };
+
+    const cellAt = (point) => {
+      const { size, gx, gy } = geom();
+      const col = Math.floor((point.x - gx) / size);
+      const row = Math.floor((point.y - gy) / size);
+      if (col < 0 || row < 0 || col >= S.cols || row >= S.rows) return -1;
+      const index = row * S.cols + col;
+      return S.blocked.includes(index) ? -1 : index;
+    };
+
+    const near = (a, b) => {
+      const ax = a % S.cols;
+      const ay = Math.floor(a / S.cols);
+      const bx = b % S.cols;
+      const by = Math.floor(b / S.cols);
+      return Math.abs(ax - bx) + Math.abs(ay - by) === 1;
+    };
+
+    return {
+      score: () => S.score,
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const down = (event) => {
+          event.preventDefault();
+          node.setPointerCapture?.(event.pointerId);
+          if (S.over) {
+            start(1, 0);
+            return;
+          }
+          const cell = cellAt(pointerPos(node, event));
+          if (cell < 0) return;
+          S.path = [cell];
+          S.drawing = true;
+        };
+        const move = (event) => {
+          if (!S.drawing) return;
+          event.preventDefault();
+          const cell = cellAt(pointerPos(node, event));
+          if (cell < 0) return;
+          const last = S.path[S.path.length - 1];
+          if (cell === last) return;
+          if (S.path.length > 1 && cell === S.path[S.path.length - 2]) {
+            S.path.pop();
+            return;
+          }
+          if (S.path.includes(cell) || !near(last, cell)) return;
+          S.path.push(cell);
+          const need = S.cols * S.rows - S.blocked.length;
+          if (S.path.length === need) {
+            S.score += 90 + S.level * 25;
+            S.drawing = false;
+            report?.(S.score);
+            start(S.level + 1, S.score);
+          }
+        };
+        const up = (event) => {
+          event.preventDefault();
+          S.drawing = false;
+        };
+        bind('pointerdown', down);
+        bind('touchstart', down);
+        bind('pointermove', move);
+        bind('touchmove', move);
+        bind('pointerup', up);
+        bind('touchend', up);
+      },
+      update() {},
+      draw(ctx) {
+        backdrop(ctx, width, height, ['#0a1620', '#123040']);
+        const { size, gx, gy } = geom();
+        const center = (index) => ({
+          x: gx + (index % S.cols) * size + size / 2,
+          y: gy + Math.floor(index / S.cols) * size + size / 2
+        });
+        for (let i = 0; i < S.cols * S.rows; i++) {
+          const point = center(i);
+          const off = S.blocked.includes(i);
+          ctx.fillStyle = off ? 'rgba(238,242,251,.06)' : 'rgba(238,242,251,.13)';
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, off ? size * 0.18 : size * 0.24, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (S.path.length) {
+          ctx.strokeStyle = 'rgba(126,231,196,.9)';
+          ctx.lineWidth = Math.max(6, size * 0.22);
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          S.path.forEach((index, i) => {
+            const point = center(index);
+            if (i === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+          });
+          ctx.stroke();
+        }
+        const need = S.cols * S.rows - S.blocked.length;
+        hud(ctx, width, [`Уровень ${S.level}`, `Очки ${S.score}`, `Точек ${S.path.length} из ${need}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.55)';
+        ctx.font = '500 13px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Одна линия через все точки, не отрывая палец', width / 2, height - 18);
+        ctx.textAlign = 'start';
+      }
+    };
+  });
+}
+
 export const GAMES = [
+  {
+    id: 'sky',
+    fresh: true,
+    title: 'Небесный каньон',
+    desc: 'Полный 3D полёт сквозь скалы и кольца',
+    tint: ['#050a18', '#12294a'],
+    premium: true,
+    mount: sky
+  },
+  {
+    id: 'roll',
+    fresh: true,
+    title: 'Шарик',
+    desc: 'Ведите шар к выходу мимо провалов',
+    tint: ['#0d1420', '#1b2a3c'],
+    premium: true,
+    mount: roll
+  },
+  {
+    id: 'flasks',
+    fresh: true,
+    title: 'Колбочки',
+    desc: 'Разлейте цвета по своим колбам',
+    tint: ['#0d1020', '#241a3c'],
+    mount: flasks
+  },
+  {
+    id: 'trace',
+    fresh: true,
+    title: 'Одной линией',
+    desc: 'Пройдите все точки, не отрывая палец',
+    tint: ['#0a1620', '#14384a'],
+    mount: trace
+  },
   {
     id: 'rhythm',
     title: 'Ритм',

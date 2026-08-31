@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, isBeta } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
@@ -99,7 +99,7 @@ function eventLeft(endsAt) {
 
 async function loadEvent(root) {
   const host = root.querySelector('[data-event]');
-  if (!host || !api.eventState || !state.user) return;
+  if (!host || !api.eventState || !state.user || !isBeta(state.user)) return;
   let info = null;
   try {
     info = await api.eventState();
@@ -880,6 +880,7 @@ export async function openComments(post, refresh) {
     }
     list.innerHTML = '';
     const mod = state.user && (state.user.isModerator || state.user.isAdmin);
+    const menus = isBeta(state.user);
     comments.forEach((c) => {
       const mine = state.user && c.author?.id === state.user.id;
       const host = state.user && post.author?.id === state.user.id;
@@ -890,7 +891,7 @@ export async function openComments(post, refresh) {
             ? `<div class="tiny" style="margin-top:3px;color:#c98b8b">Снят модератором${c.removedReason ? ': ' + esc(c.removedReason) : ''}</div>`
             : `<div class="small" style="margin-top:2px;line-height:1.45;word-break:break-word">${esc(c.text)}</div>`}
         </div>
-        ${c.removed ? '' : `<button class="btn btn-icon btn-ghost" data-comment-menu style="width:30px;height:30px;flex:none">${icon('more', 15)}</button>`}
+        ${c.removed || !menus ? '' : `<button class="btn btn-icon btn-ghost" data-comment-menu style="width:30px;height:30px;flex:none">${icon('more', 15)}</button>`}
       </div>`);
 
       row.querySelector('[data-comment-menu]')?.addEventListener('click', () => {

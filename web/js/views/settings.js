@@ -281,7 +281,7 @@ function premiumCard() {
 
 const BOT_NAME = 'spokum_bot';
 
-async function openBilling() {
+export async function openBilling() {
   if (!state.user) return toast('Сначала войдите', 'err');
   if (!api.linkCode) return toast('Оплата появится, когда база будет обновлена', 'err');
   const body = el(`<div class="col">

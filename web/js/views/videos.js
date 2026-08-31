@@ -1,4 +1,4 @@
-import { api, state, isOffline, isPremium } from '../store.js';
+import { api, state, isOffline, isPremium, isBeta } from '../store.js';
 import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage } from '../ui.js';
@@ -55,7 +55,7 @@ export async function render(root) {
 }
 
 async function recommended() {
-  if (!feed.smart || !api.reelIds) return null;
+  if (!feed.smart || !api.reelIds || !isBeta(state.user)) return null;
   try {
     const answer = await api.reelIds(6, feed.seen.slice(-90));
     const ids = (answer && answer.ids) || [];
