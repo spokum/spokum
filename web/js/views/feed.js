@@ -91,10 +91,12 @@ export async function render(root) {
 function eventLeft(endsAt) {
   const gap = Number(endsAt) - Date.now();
   if (gap <= 0) return 'событие закончилось';
+  const days = Math.floor(gap / 86400000);
   const hours = Math.floor(gap / 3600000);
   const minutes = Math.floor((gap % 3600000) / 60000);
-  if (hours >= 1) return `осталось ${plural(hours, 'час', 'часа', 'часов')}`;
-  return `осталось ${plural(minutes, 'минута', 'минуты', 'минут')}`;
+  if (days >= 1) return `ещё ${plural(days, 'день', 'дня', 'дней')}`;
+  if (hours >= 1) return `ещё ${plural(hours, 'час', 'часа', 'часов')}`;
+  return `ещё ${plural(minutes, 'минута', 'минуты', 'минут')}`;
 }
 
 async function loadEvent(root) {

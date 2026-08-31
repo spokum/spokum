@@ -1827,7 +1827,7 @@ export const local = {
   },
 
   async eventState() {
-    const ends = Date.parse('2026-09-01T00:00:00+03:00');
+    const ends = Date.parse('2026-09-02T00:00:00+03:00');
     if (Date.now() >= ends) return { active: false, id: 'summer26' };
     const user = me();
     if (!Array.isArray(state.eventClaims)) state.eventClaims = [];
@@ -1835,7 +1835,7 @@ export const local = {
       active: true,
       id: 'summer26',
       title: 'Последний день лета',
-      text: 'Лето уходит. Заберите розочку на память, она останется у вас навсегда',
+      text: 'Лето уходит. Заберите розочку на память, она останется у вас навсегда. Ивент идёт до конца первого сентября',
       endsAt: ends,
       claimed: !!user && state.eventClaims.some((row) => row.eventId === 'summer26' && row.userId === user.id)
     };
@@ -1845,7 +1845,7 @@ export const local = {
     ensureNewTables();
     if (!Array.isArray(state.eventClaims)) state.eventClaims = [];
     const user = need();
-    const ends = Date.parse('2026-09-01T00:00:00+03:00');
+    const ends = Date.parse('2026-09-02T00:00:00+03:00');
     if (Date.now() >= ends) fail('Событие закончилось');
     if (state.eventClaims.some((row) => row.eventId === 'summer26' && row.userId === user.id)) fail('Розочка уже ваша');
     state.eventClaims.push({ eventId: 'summer26', userId: user.id, claimedAt: Date.now() });

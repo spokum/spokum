@@ -3123,7 +3123,7 @@ on conflict (id) do update set title = excluded.title, price = excluded.price,
 create or replace function public.event_state()
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
-  ends_at timestamptz := timestamptz '2026-09-01 00:00:00+03';
+  ends_at timestamptz := timestamptz '2026-09-02 00:00:00+03';
   taken boolean;
 begin
   if now() >= ends_at then
@@ -3134,7 +3134,7 @@ begin
     'active', true,
     'id', 'summer26',
     'title', 'Последний день лета',
-    'text', 'Лето уходит. Заберите розочку на память, она останется у вас навсегда',
+    'text', 'Лето уходит. Заберите розочку на память, она останется у вас навсегда. Ивент идёт до конца первого сентября',
     'endsAt', ends_at,
     'claimed', coalesce(taken, false)
   );
@@ -3144,7 +3144,7 @@ $$;
 create or replace function public.event_claim()
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
-  ends_at timestamptz := timestamptz '2026-09-01 00:00:00+03';
+  ends_at timestamptz := timestamptz '2026-09-02 00:00:00+03';
   fresh bigint;
 begin
   if auth.uid() is null then raise exception 'Нужен вход'; end if;
