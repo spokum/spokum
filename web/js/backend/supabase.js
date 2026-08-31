@@ -551,11 +551,14 @@ export async function createSupabase(url, key) {
       };
     },
 
-    async listPosts({ mood, kind, before, limit, includeRemoved } = {}) {
+    async listPosts({ mood, kind, before, limit, includeRemoved, ids } = {}) {
       const size = Math.min(40, Math.max(4, Number(limit) || 12));
+      const picked = Array.isArray(ids) ? ids.filter((value) => value !== null && value !== undefined) : null;
+      if (picked && !picked.length) return { posts: [], more: false, cursor: null };
       const build = () => {
         let request = sb.from('posts').select(POST_SELECT());
         if (!includeRemoved) request = request.eq('removed', false);
+        if (picked) return request.in('id', picked).limit(picked.length);
         request = request.order('created_at', { ascending: false }).limit(size);
         if (mood) request = request.eq('mood', mood);
         if (!legacyPosts && kind === 'reels') request = request.in('kind', ['video', 'album']);
@@ -574,6 +577,11 @@ export async function createSupabase(url, key) {
       const liked = await likedSet((data || []).map((row) => row.id));
       const origins = postTier === 0 ? await withOrigins(data || []) : new Map();
       const posts = (data || []).map((row) => shapePost(row, liked, { origin: origins.get(row.repost_of) || null }));
+      if (picked) {
+        const order = new Map(picked.map((value, index) => [String(value), index]));
+        posts.sort((a, b) => (order.get(String(a.id)) ?? 0) - (order.get(String(b.id)) ?? 0));
+        return { posts, more: false, cursor: null };
+      }
       return { posts, more: posts.length === size, cursor: posts.length ? posts[posts.length - 1].createdAt : null };
     },
 
@@ -694,18 +702,20 @@ export async function createSupabase(url, key) {
     },
 
     async listComments(id) {
-      const { data, error } = await sb
-        .from('comments')
-        .select('id, body, created_at, author:profiles!comments_author_id_fkey(*)')
-        .eq('post_id', id)
-        .order('id', { ascending: true })
-        .limit(200);
+      const grab = (columns) =>
+        sb.from('comments').select(columns).eq('post_id', id).order('id', { ascending: true }).limit(200);
+      let { data, error } = await grab('id, body, created_at, removed, removed_reason, author:profiles!comments_author_id_fkey(*)');
+      if (missingColumn(error)) {
+        ({ data, error } = await grab('id, body, created_at, author:profiles!comments_author_id_fkey(*)'));
+      }
       guard(error);
       return {
         comments: (data || []).map((row) => ({
           id: row.id,
           text: row.body,
           createdAt: ms(row.created_at),
+          removed: !!row.removed,
+          removedReason: row.removed_reason || '',
           author: shapeProfile(row.author)
         }))
       };
@@ -1328,6 +1338,30 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('mod_thanks', { target: id });
       guard(error);
       return data || { total: 0, week: 0, mine: false };
+    },
+
+    async eventState() {
+      const { data, error } = await sb.rpc('event_state');
+      guard(error);
+      return data || { active: false };
+    },
+
+    async eventClaim() {
+      const { data, error } = await sb.rpc('event_claim');
+      guard(error);
+      return data;
+    },
+
+    async deleteComment(id, reason) {
+      const { data, error } = await sb.rpc('delete_comment', { target: id, reason: reason || null });
+      guard(error);
+      return data;
+    },
+
+    async reelIds(size, seen) {
+      const { data, error } = await sb.rpc('feed_reels', { size: size || 12, seen: seen || [] });
+      guard(error);
+      return { ids: data || [] };
     },
 
     async strikes(userId) {

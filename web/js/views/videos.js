@@ -4,7 +4,7 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage } from '../ui.js';
 import { openProfile } from './profile.js';
 
-let feed = { items: [], cursor: null, more: true, busy: false };
+let feed = { items: [], cursor: null, more: true, busy: false, seen: [], smart: true };
 
 const SOUND_KEY = 'spokum.sound';
 
@@ -47,24 +47,47 @@ export async function render(root) {
     return;
   }
 
-  feed = { items: [], cursor: null, more: true, busy: false };
+  feed = { items: [], cursor: null, more: true, busy: false, seen: [], smart: true };
   await more(stage);
   if (!feed.items.length) {
     stage.innerHTML = emptyState('video', 'Пока пусто', 'Выложите первое видео или несколько фото');
   }
 }
 
+async function recommended() {
+  if (!feed.smart || !api.reelIds) return null;
+  try {
+    const answer = await api.reelIds(6, feed.seen.slice(-90));
+    const ids = (answer && answer.ids) || [];
+    if (!ids.length) return { posts: [], more: false };
+    const result = await api.listPosts({ ids });
+    const posts = (result.posts || []).filter((post) => post.kind === 'video' || post.kind === 'album' || !!post.video);
+    feed.seen = feed.seen.concat(ids);
+    return { posts, more: ids.length >= 6 };
+  } catch (error) {
+    feed.smart = false;
+    return null;
+  }
+}
+
+async function chronological() {
+  const query = { kind: 'reels', limit: 6 };
+  if (feed.cursor) query.before = feed.cursor;
+  const result = await api.listPosts(query);
+  const all = result.posts || [];
+  const posts = all.filter((post) => post.kind === 'video' || post.kind === 'album' || !!post.video);
+  feed.cursor = result.cursor ?? (all.length ? all[all.length - 1].createdAt : null);
+  return { posts, more: result.more ?? all.length >= 6 };
+}
+
 async function more(stage) {
   if (feed.busy || !feed.more) return;
   feed.busy = true;
   try {
-    const query = { kind: 'reels', limit: 6 };
-    if (feed.cursor) query.before = feed.cursor;
-    const result = await api.listPosts(query);
-    const all = result.posts || [];
-    const posts = all.filter((post) => post.kind === 'video' || post.kind === 'album' || !!post.video);
-    feed.cursor = result.cursor ?? (all.length ? all[all.length - 1].createdAt : null);
-    feed.more = result.more ?? all.length >= 6;
+    const batch = (await recommended()) || (await chronological());
+    const known = new Set(feed.items.map((post) => String(post.id)));
+    const posts = batch.posts.filter((post) => !known.has(String(post.id)));
+    feed.more = batch.more;
     if (!feed.items.length && posts.length) stage.innerHTML = '';
     posts.forEach((post) => {
       feed.items.push(post);

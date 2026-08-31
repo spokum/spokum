@@ -1514,3 +1514,48 @@ svg { display: block; flex: none; }
 .note-icon.good { background: rgba(135,183,163,.16); color: #7fb3a0; }
 .note-icon.warn { background: rgba(198,176,131,.16); color: #c6b083; }
 .note-icon.bad { background: rgba(201,139,139,.16); color: #c98b8b; }
+
+.event-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-color: rgba(255, 138, 176, .34);
+  background: linear-gradient(135deg, rgba(255, 138, 176, .12), rgba(255, 203, 107, .08));
+}
+
+.event-rose {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #ff8ab0;
+  background: rgba(255, 138, 176, .16);
+}
+
+.event-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.event-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: #ff8ab0;
+  border-color: rgba(255, 138, 176, .35);
+  background: rgba(255, 138, 176, .12);
+}
+
+.comment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.comment-row .grow {
+  min-width: 0;
+}

@@ -364,7 +364,7 @@ async function drawReports(body) {
   body.innerHTML = '<div class="col" data-list></div>';
   const list = body.querySelector('[data-list]');
   reports.forEach((report) => {
-    const kindLabel = { post: 'на пост', user: 'на пользователя', message: 'на сообщение' }[report.targetKind] || '';
+    const kindLabel = { post: 'на пост', user: 'на пользователя', message: 'на сообщение', comment: 'на комментарий' }[report.targetKind] || '';
     const card = el(`
       <div class="card appear" style="padding:14px">
         <div class="row">
@@ -380,11 +380,25 @@ async function drawReports(body) {
         ${report.target ? `<div class="row" style="margin-top:10px">${avatar(report.target, 40)}<div class="grow"><div class="row" style="gap:6px"><span class="small strong">${esc(report.target.displayName)}</span>${badges(report.target)}</div><div class="tiny muted">@${esc(report.target.username)}</div></div></div>` : ''}
         <div class="row" style="margin-top:12px;gap:8px">
           ${report.target ? `<button class="btn btn-sm grow" data-punish>${icon('warn', 15)} Наказать</button>` : ''}
+          ${report.targetKind === 'comment' && report.status === 'open' ? `<button class="btn btn-sm grow" data-cut>${icon('trash', 15)} Снять комментарий</button>` : ''}
           ${report.status === 'open' ? `<button class="btn btn-sm grow" data-close>${icon('check', 15)} Закрыть</button>
           <button class="btn btn-sm grow" data-reject>${icon('close', 15)} Отклонить</button>` : ''}
         </div>
       </div>`);
     card.querySelector('[data-punish]')?.addEventListener('click', () => openPunish(report.target, () => drawReports(body)));
+    card.querySelector('[data-cut]')?.addEventListener('click', async () => {
+      const { promptSheet } = await import('../ui.js');
+      const reason = await promptSheet({ title: 'Причина снятия', label: 'Её увидят автор и админ', placeholder: 'Например: оскорбление', multiline: true });
+      if (!reason) return;
+      try {
+        await api.deleteComment(Number(report.targetId), reason);
+        await api.closeReport(report.id, 'closed');
+        toast('Комментарий снят');
+        drawReports(body);
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    });
     card.querySelector('[data-close]')?.addEventListener('click', async () => {
       await api.closeReport(report.id, 'closed');
       toast('Жалоба закрыта');

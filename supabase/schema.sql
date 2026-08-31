@@ -3099,3 +3099,138 @@ returns jsonb language sql security definer set search_path = public as $$
                     and created_at > now() - interval '7 days')
   );
 $$;
+
+alter table public.comments add column if not exists removed boolean not null default false;
+alter table public.comments add column if not exists removed_by uuid references public.profiles on delete set null;
+alter table public.comments add column if not exists removed_reason text not null default '';
+
+create table if not exists public.event_claims (
+  event_id text not null,
+  user_id uuid not null references public.profiles on delete cascade,
+  claimed_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+
+alter table public.event_claims enable row level security;
+drop policy if exists event_claims_own on public.event_claims;
+create policy event_claims_own on public.event_claims for select using (user_id = auth.uid());
+
+insert into public.gift_types (id, title, price, rarity, art, hue, sort) values
+  ('rose', 'Розочка лета', 0, 'legend', 'rose', 340, 0)
+on conflict (id) do update set title = excluded.title, price = excluded.price,
+  rarity = excluded.rarity, art = excluded.art, hue = excluded.hue, sort = excluded.sort;
+
+create or replace function public.event_state()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  ends_at timestamptz := timestamptz '2026-09-01 00:00:00+03';
+  taken boolean;
+begin
+  if now() >= ends_at then
+    return jsonb_build_object('active', false, 'id', 'summer26');
+  end if;
+  select exists (select 1 from public.event_claims where event_id = 'summer26' and user_id = auth.uid()) into taken;
+  return jsonb_build_object(
+    'active', true,
+    'id', 'summer26',
+    'title', 'Последний день лета',
+    'text', 'Лето уходит. Заберите розочку на память, она останется у вас навсегда',
+    'endsAt', ends_at,
+    'claimed', coalesce(taken, false)
+  );
+end;
+$$;
+
+create or replace function public.event_claim()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  ends_at timestamptz := timestamptz '2026-09-01 00:00:00+03';
+  fresh bigint;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  if now() >= ends_at then raise exception 'Событие закончилось'; end if;
+  if exists (select 1 from public.event_claims where event_id = 'summer26' and user_id = auth.uid()) then
+    raise exception 'Розочка уже ваша';
+  end if;
+
+  insert into public.event_claims (event_id, user_id) values ('summer26', auth.uid());
+  insert into public.gifts (type_id, owner_id, from_id, note, pinned)
+  values ('rose', auth.uid(), null, 'В память о лете 2026', true)
+  returning id into fresh;
+
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set coins = coins + 100 where id = auth.uid();
+  insert into public.coin_log (user_id, amount, reason) values (auth.uid(), 100, 'Подарок к концу лета');
+
+  perform public.notify_user(auth.uid(), 'gift', 'Розочка ваша',
+    'Спасибо, что были здесь этим летом. Сто монет тоже ваши', jsonb_build_object('gift', fresh));
+
+  return jsonb_build_object('ok', true, 'gift', fresh);
+end;
+$$;
+
+create or replace function public.delete_comment(target bigint, reason text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  row public.comments;
+  post_author uuid;
+  who text;
+begin
+  select * into row from public.comments where id = target;
+  if row.id is null then raise exception 'Комментарий не найден'; end if;
+  select author_id into post_author from public.posts where id = row.post_id;
+
+  if row.author_id = auth.uid() or post_author = auth.uid() then
+    delete from public.comments where id = target;
+    return jsonb_build_object('ok', true, 'mode', 'deleted');
+  end if;
+
+  if not public.viewer_is_moderator() then raise exception 'Это не ваш комментарий'; end if;
+  if coalesce(trim(reason), '') = '' then raise exception 'Нужна причина'; end if;
+
+  update public.comments
+     set removed = true, removed_by = auth.uid(), removed_reason = reason
+   where id = target;
+
+  insert into public.punishments (actor_id, user_id, kind, reason, post_id)
+  values (auth.uid(), row.author_id, 'comment_removed', reason, row.post_id);
+
+  perform public.notify_user(row.author_id, 'removed', 'Ваш комментарий снят', reason,
+    jsonb_build_object('post', row.post_id));
+
+  select display_name into who from public.profiles where id = auth.uid();
+  perform public.notify_admins('modaction', 'Модератор снял комментарий',
+    coalesce(who, 'Модератор') || ': ' || reason,
+    jsonb_build_object('comment', target), auth.uid());
+
+  perform public.log_action('comment.remove', jsonb_build_object('comment', target, 'reason', reason));
+  return jsonb_build_object('ok', true, 'mode', 'removed');
+end;
+$$;
+
+create or replace function public.feed_reels(size integer default 12, seen bigint[] default '{}')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+  want integer := least(30, greatest(4, coalesce(size, 12)));
+begin
+  select coalesce(jsonb_agg(id order by rank), '[]'::jsonb) into result
+  from (
+    select p.id,
+      row_number() over (
+        partition by p.author_id
+        order by (p.created_at > now() - interval '3 days') desc, random()
+      ) * 100
+      + case when p.author_id = auth.uid() then 40 else 0 end
+      - least(30, p.views / 10)
+      + (random() * 12)::int as rank
+    from public.posts p
+    where not p.removed
+      and (p.kind in ('video', 'album') or p.video is not null)
+      and not (p.id = any(coalesce(seen, '{}')))
+    order by rank
+    limit want
+  ) rows;
+  return result;
+end;
+$$;

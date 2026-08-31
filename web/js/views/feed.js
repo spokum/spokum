@@ -44,6 +44,7 @@ export async function render(root) {
       <input class="input" data-query placeholder="Поиск по записям и авторам">
     </div>
     ${api.mode === 'local' ? `<div class="card" style="border-color:rgba(255,203,107,.3);background:rgba(255,203,107,.07)"><div class="row" style="align-items:flex-start;gap:10px">${icon('warn', 18)}<div class="grow"><div class="strong small">Автономный режим</div><div class="tiny muted" style="margin-top:3px;line-height:1.5">База не подключена, поэтому аккаунт и записи живут только в этом браузере. Впишите ключи Supabase в файл config.js, и сеть станет общей для всех.</div></div></div></div>` : ''}
+    <div data-event></div>
     <div data-announce></div>
     <div data-composer></div>
     <div class="chips" data-filters style="margin:14px 0 12px"></div>
@@ -83,7 +84,63 @@ export async function render(root) {
   renderComposer(root);
   renderFilters(root);
   loadAnnouncements(root);
+  loadEvent(root);
   await load(root);
+}
+
+function eventLeft(endsAt) {
+  const gap = Number(endsAt) - Date.now();
+  if (gap <= 0) return 'событие закончилось';
+  const hours = Math.floor(gap / 3600000);
+  const minutes = Math.floor((gap % 3600000) / 60000);
+  if (hours >= 1) return `осталось ${plural(hours, 'час', 'часа', 'часов')}`;
+  return `осталось ${plural(minutes, 'минута', 'минуты', 'минут')}`;
+}
+
+async function loadEvent(root) {
+  const host = root.querySelector('[data-event]');
+  if (!host || !api.eventState || !state.user) return;
+  let info = null;
+  try {
+    info = await api.eventState();
+  } catch {
+    host.innerHTML = '';
+    return;
+  }
+  if (!info || !info.active) {
+    host.innerHTML = '';
+    return;
+  }
+  const draw = () => {
+    host.innerHTML = `<div class="card event-card">
+      <div class="event-top">
+        <div class="event-rose">${icon('rose', 26)}</div>
+        <div class="grow" style="min-width:0">
+          <div class="strong small">${esc(info.title || 'Последний день лета')}</div>
+          <div class="tiny muted" style="margin-top:4px;line-height:1.5">${esc(info.text || '')}</div>
+          <div class="tiny muted" style="margin-top:6px">${esc(eventLeft(info.endsAt))}</div>
+        </div>
+      </div>
+      ${info.claimed
+        ? `<span class="pill event-done">${icon('check', 14)}<span>Розочка уже ваша</span></span>`
+        : '<button class="btn btn-primary" data-claim style="width:100%">Забрать розочку</button>'}
+    </div>`;
+    host.querySelector('[data-claim]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await api.eventClaim();
+        info.claimed = true;
+        import('../app.js').then(({ refreshUser }) => refreshUser?.()).catch(() => {});
+        toast('Розочка на память и 100 монет ваши');
+        draw();
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message || 'Не получилось');
+      }
+    });
+  };
+  draw();
 }
 
 async function loadAnnouncements(root) {
@@ -817,15 +874,72 @@ export async function openComments(post, refresh) {
   const draw = async () => {
     const { comments } = await api.listComments(post.id);
     post.comments = comments.length;
-    list.innerHTML = comments.length
-      ? comments
-          .map(
-            (c) => `<div class="row" style="align-items:flex-start">${avatar(c.author, 40)}
-              <div class="grow"><div class="row" style="gap:6px"><span class="strong small">${esc(c.author.displayName)}</span>${badges(c.author)}<span class="tiny muted">${timeAgo(c.createdAt)}</span></div>
-              <div class="small" style="margin-top:2px;line-height:1.45">${esc(c.text)}</div></div></div>`
-          )
-          .join('')
-      : '<div class="small muted center" style="padding:16px 0">Пока никто не ответил</div>';
+    if (!comments.length) {
+      list.innerHTML = '<div class="small muted center" style="padding:16px 0">Пока никто не ответил</div>';
+      return;
+    }
+    list.innerHTML = '';
+    const mod = state.user && (state.user.isModerator || state.user.isAdmin);
+    comments.forEach((c) => {
+      const mine = state.user && c.author?.id === state.user.id;
+      const host = state.user && post.author?.id === state.user.id;
+      const row = el(`<div class="row" style="align-items:flex-start">${avatar(c.author, 40)}
+        <div class="grow" style="min-width:0">
+          <div class="row" style="gap:6px"><span class="strong small truncate">${esc(c.author.displayName)}</span>${badges(c.author)}<span class="tiny muted">${esc(timeAgo(c.createdAt))}</span></div>
+          ${c.removed
+            ? `<div class="tiny" style="margin-top:3px;color:#c98b8b">Снят модератором${c.removedReason ? ': ' + esc(c.removedReason) : ''}</div>`
+            : `<div class="small" style="margin-top:2px;line-height:1.45;word-break:break-word">${esc(c.text)}</div>`}
+        </div>
+        ${c.removed ? '' : `<button class="btn btn-icon btn-ghost" data-comment-menu style="width:30px;height:30px;flex:none">${icon('more', 15)}</button>`}
+      </div>`);
+
+      row.querySelector('[data-comment-menu]')?.addEventListener('click', () => {
+        const menu = el(`<div class="col" style="gap:6px">
+          ${mine || host ? `<button class="list-item" data-drop style="color:#c98b8b">${icon('trash', 18)}<span>Удалить</span></button>` : ''}
+          ${mod && !mine ? `<button class="list-item" data-take style="color:#c6b083">${icon('shield', 18)}<span>Снять с причиной</span></button>` : ''}
+          ${!mine ? `<button class="list-item" data-flag>${icon('flag', 18)}<span>Пожаловаться</span></button>` : ''}
+          <button class="list-item" data-copy>${icon('share', 18)}<span>Скопировать текст</span></button>
+        </div>`);
+        const inner = openSheet('', menu);
+        menu.querySelector('[data-copy]').onclick = () => {
+          navigator.clipboard?.writeText(c.text || '');
+          inner.close();
+          toast('Скопировано');
+        };
+        menu.querySelector('[data-drop]')?.addEventListener('click', async () => {
+          inner.close();
+          const ok = await confirmSheet({ title: 'Удалить комментарий', text: 'Он пропадёт навсегда.', confirm: 'Удалить', danger: true });
+          if (!ok) return;
+          try {
+            await api.deleteComment(c.id);
+            post.comments = Math.max(0, (post.comments || 1) - 1);
+            await draw();
+            refresh?.(post);
+          } catch (error) {
+            toast(error.message, 'err');
+          }
+        });
+        menu.querySelector('[data-take]')?.addEventListener('click', async () => {
+          inner.close();
+          const { promptSheet } = await import('../ui.js');
+          const reason = await promptSheet({ title: 'Причина снятия', label: 'Её увидят автор и админ', placeholder: 'Например: оскорбление', multiline: true });
+          if (!reason) return;
+          try {
+            await api.deleteComment(c.id, reason);
+            await draw();
+            toast('Комментарий снят');
+          } catch (error) {
+            toast(error.message, 'err');
+          }
+        });
+        menu.querySelector('[data-flag]')?.addEventListener('click', () => {
+          inner.close();
+          openReport('comment', c.id);
+        });
+      });
+
+      list.appendChild(row);
+    });
   };
   await draw();
 

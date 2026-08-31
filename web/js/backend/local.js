@@ -28,6 +28,7 @@ function blank() {
     deviceUsers: [],
     deviceBans: [],
     coinLog: [],
+    eventClaims: [],
     follows: [],
     thanks: [],
     gifts: [],
@@ -606,9 +607,18 @@ export const local = {
     };
   },
 
-  async listPosts({ mood, kind, before, limit, includeRemoved } = {}) {
+  async listPosts({ mood, kind, before, limit, includeRemoved, ids } = {}) {
     const viewer = me();
     const size = Math.min(40, Math.max(4, Number(limit) || 12));
+    const picked = Array.isArray(ids) ? ids.filter((value) => value !== null && value !== undefined) : null;
+    if (picked) {
+      const order = new Map(picked.map((value, index) => [String(value), index]));
+      const rows = state.posts
+        .filter((p) => (includeRemoved || !p.removed) && order.has(String(p.id)))
+        .sort((a, b) => order.get(String(a.id)) - order.get(String(b.id)))
+        .map((p) => shapePost(p, viewer?.id));
+      return { posts: rows, more: false, cursor: null };
+    }
     const all = state.posts
       .filter((p) => (includeRemoved || !p.removed) && (!mood || p.mood === mood))
       .filter((p) => {
@@ -769,7 +779,14 @@ export const local = {
     return {
       comments: state.comments
         .filter((c) => c.postId === id)
-        .map((c) => ({ id: c.id, text: c.text, createdAt: c.createdAt, author: pub(state.users.find((u) => u.id === c.authorId)) }))
+        .map((c) => ({
+          id: c.id,
+          text: c.text,
+          createdAt: c.createdAt,
+          removed: !!c.removed,
+          removedReason: c.removedReason || '',
+          author: pub(state.users.find((u) => u.id === c.authorId))
+        }))
     };
   },
 
@@ -1807,6 +1824,92 @@ export const local = {
       week: state.thanks.filter((t) => t.modId === id && t.createdAt > week).length,
       mine: !!user && state.thanks.some((t) => t.modId === id && t.fromId === user.id && t.createdAt > week)
     };
+  },
+
+  async eventState() {
+    const ends = Date.parse('2026-09-01T00:00:00+03:00');
+    if (Date.now() >= ends) return { active: false, id: 'summer26' };
+    const user = me();
+    if (!Array.isArray(state.eventClaims)) state.eventClaims = [];
+    return {
+      active: true,
+      id: 'summer26',
+      title: 'Последний день лета',
+      text: 'Лето уходит. Заберите розочку на память, она останется у вас навсегда',
+      endsAt: ends,
+      claimed: !!user && state.eventClaims.some((row) => row.eventId === 'summer26' && row.userId === user.id)
+    };
+  },
+
+  async eventClaim() {
+    ensureNewTables();
+    if (!Array.isArray(state.eventClaims)) state.eventClaims = [];
+    const user = need();
+    const ends = Date.parse('2026-09-01T00:00:00+03:00');
+    if (Date.now() >= ends) fail('Событие закончилось');
+    if (state.eventClaims.some((row) => row.eventId === 'summer26' && row.userId === user.id)) fail('Розочка уже ваша');
+    state.eventClaims.push({ eventId: 'summer26', userId: user.id, claimedAt: Date.now() });
+    const gift = { id: state.gifts.length + 1, typeId: 'rose', ownerId: user.id, fromId: null, note: 'В память о лете 2026', pinned: true, sold: false, createdAt: Date.now() };
+    state.gifts.push(gift);
+    user.coins = (user.coins || 0) + 100;
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: 100, reason: 'Подарок к концу лета', createdAt: Date.now() });
+    save();
+    return { ok: true, gift: gift.id };
+  },
+
+  async deleteComment(id, reason) {
+    const user = need();
+    const row = state.comments.find((c) => c.id === id);
+    if (!row) fail('Комментарий не найден');
+    const post = state.posts.find((p) => p.id === row.postId);
+    if (row.authorId === user.id || post?.authorId === user.id) {
+      state.comments = state.comments.filter((c) => c.id !== id);
+      save();
+      return { ok: true, mode: 'deleted' };
+    }
+    if (!user.isModerator && !user.isAdmin) fail('Это не ваш комментарий');
+    if (!String(reason || '').trim()) fail('Нужна причина');
+    row.removed = true;
+    row.removedBy = user.id;
+    row.removedReason = reason;
+    state.punishments.unshift({
+      id: next('punishments'),
+      actorId: user.id,
+      userId: row.authorId,
+      kind: 'comment_removed',
+      minutes: 0,
+      reason,
+      postId: row.postId,
+      createdAt: Date.now(),
+      reverted: false
+    });
+    save();
+    return { ok: true, mode: 'removed' };
+  },
+
+  async reelIds(size, seen) {
+    const skip = new Set(seen || []);
+    const rows = state.posts.filter((p) => !p.removed && (p.kind === 'video' || p.kind === 'album' || p.video) && !skip.has(p.id));
+    const byAuthor = new Map();
+    rows.forEach((p) => {
+      const list = byAuthor.get(p.authorId) || [];
+      list.push(p);
+      byAuthor.set(p.authorId, list);
+    });
+    byAuthor.forEach((list) => list.sort(() => Math.random() - 0.5));
+    const out = [];
+    let more = true;
+    while (more && out.length < (size || 12)) {
+      more = false;
+      for (const list of byAuthor.values()) {
+        const item = list.shift();
+        if (!item) continue;
+        out.push(item.id);
+        more = true;
+        if (out.length >= (size || 12)) break;
+      }
+    }
+    return { ids: out };
   },
 
   async strikes(userId) {
