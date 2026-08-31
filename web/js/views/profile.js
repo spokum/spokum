@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, isBeta, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -134,7 +134,6 @@ export async function render(root) {
   const { postCard } = await import('./feed.js');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
-  if (!isBeta(fresh)) body.querySelector('[data-recap]')?.remove();
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap());
 
   const edit = () => openEditor(() => render(root));

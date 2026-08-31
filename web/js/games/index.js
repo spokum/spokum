@@ -4344,7 +4344,6 @@ function trace(canvas, report) {
 export const GAMES = [
   {
     id: 'sky',
-    fresh: true,
     title: 'Небесный каньон',
     desc: 'Полный 3D полёт сквозь скалы и кольца',
     tint: ['#050a18', '#12294a'],
@@ -4353,7 +4352,6 @@ export const GAMES = [
   },
   {
     id: 'roll',
-    fresh: true,
     title: 'Шарик',
     desc: 'Ведите шар к выходу мимо провалов',
     tint: ['#0d1420', '#1b2a3c'],
@@ -4362,7 +4360,6 @@ export const GAMES = [
   },
   {
     id: 'flasks',
-    fresh: true,
     title: 'Колбочки',
     desc: 'Разлейте цвета по своим колбам',
     tint: ['#0d1020', '#241a3c'],
@@ -4370,7 +4367,6 @@ export const GAMES = [
   },
   {
     id: 'trace',
-    fresh: true,
     title: 'Одной линией',
     desc: 'Пройдите все точки, не отрывая палец',
     tint: ['#0a1620', '#14384a'],

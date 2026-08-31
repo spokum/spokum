@@ -1,4 +1,4 @@
-import { api, state, isOffline, isPremium, isBeta } from '../store.js';
+import { api, state, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage } from '../ui.js';
@@ -75,7 +75,7 @@ export async function render(root) {
 }
 
 async function recommended() {
-  if (!feed.smart || !api.reelIds || !isBeta(state.user)) return null;
+  if (!feed.smart || !api.reelIds) return null;
   try {
     const answer = await api.reelIds(6, feed.seen.slice(-90));
     const ids = (answer && answer.ids) || [];
@@ -389,7 +389,7 @@ function openReelMenu(post, node, stage) {
       <button class="list-item" data-repost>${icon('refresh', 18)}<span>Репостнуть к себе</span></button>
       <button class="list-item" data-copy>${icon('share', 18)}<span>Скопировать описание</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Профиль автора</span></button>
-      ${!mine && isBeta(state.user) ? `<button class="list-item" data-less>${icon('eye', 18)}<span>Меньше видео от этого автора</span></button>` : ''}
+      ${!mine ? `<button class="list-item" data-less>${icon('eye', 18)}<span>Меньше видео от этого автора</span></button>` : ''}
       <button class="list-item" data-report>${icon('flag', 18)}<span>Пожаловаться</span></button>
       ${canModerate && !mine && !post.removed ? `<button class="list-item" data-take style="color:#c6b083">${icon('shield', 18)}<span>Снять с публикации</span></button>` : ''}
       ${mine || state.user?.isAdmin ? `<button class="list-item" data-delete style="color:#c98b8b">${icon('trash', 18)}<span>Удалить</span></button>` : ''}
