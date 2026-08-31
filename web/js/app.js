@@ -96,7 +96,12 @@ function topOverlay() {
   return layers.length ? layers[layers.length - 1] : null;
 }
 
+let backAt = 0;
+
 function goBackInside() {
+  const now = Date.now();
+  if (now - backAt < 400) return true;
+  backAt = now;
   const layer = topOverlay();
   if (layer) {
     const close = layer.querySelector('[data-back]');
@@ -141,6 +146,38 @@ window.__spokumBack = () => {
   return true;
 };
 
+let leaveHint = 0;
+
+function guardHistory() {
+  try {
+    history.replaceState({ spokum: 'root' }, '');
+    history.pushState({ spokum: 'guard' }, '');
+  } catch {
+    return;
+  }
+  window.addEventListener('popstate', () => {
+    const recent = Date.now() - backAt < 400;
+    const deep = recent || !!topOverlay() || (state.user && state.tab && state.tab !== 'feed');
+    goBackInside();
+    if (deep) {
+      leaveHint = 0;
+      try {
+        history.pushState({ spokum: 'guard' }, '');
+      } catch {}
+      return;
+    }
+    if (window.SpokumHost || Date.now() - leaveHint > 2500) {
+      leaveHint = Date.now();
+      import('./ui.js').then(({ toast }) => toast('Ещё раз назад, чтобы выйти')).catch(() => {});
+      try {
+        history.pushState({ spokum: 'guard' }, '');
+      } catch {}
+      return;
+    }
+    leaveHint = 0;
+  });
+}
+
 async function checkDevice(fresh) {
   if (!api.touchDevice) return false;
   try {
@@ -176,6 +213,7 @@ async function boot() {
   registerWorker();
   watchNetwork();
   watchSwipes();
+  guardHistory();
   import('./views/settings.js').then((module) => {
     module.applyNight?.();
     setInterval(() => module.applyNight?.(), 300000);
@@ -218,7 +256,10 @@ function start() {
   connectSocket();
   askJournal();
   import('./call.js').then((module) => module.initCalls()).catch(() => {});
-  import('./views/notifications.js').then((module) => module.refreshBell()).catch(() => {});
+  import('./views/notifications.js').then((module) => {
+    module.refreshBell();
+    setTimeout(() => module.offerNotifications?.(), 4000);
+  }).catch(() => {});
   import('./accounts.js').then((module) => module.rememberCurrent()).catch(() => {});
   handOverSession();
 }

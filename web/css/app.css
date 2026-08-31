@@ -470,7 +470,6 @@ svg { display: block; flex: none; }
 .tiny { font-size: 12px; }
 .small { font-size: 13px; }
 .strong { font-weight: 650; }
-.center { text-align: center; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .btn {
@@ -1584,3 +1583,16 @@ svg { display: block; flex: none; }
   border-color: rgba(255, 138, 176, .3);
   background: linear-gradient(135deg, rgba(255, 138, 176, .1), rgba(255, 203, 107, .07));
 }
+
+.push-ask {
+  width: 62px;
+  height: 62px;
+  margin: 2px auto 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.center { text-align: center; }

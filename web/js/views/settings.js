@@ -191,15 +191,23 @@ export async function render(root) {
       pushState.textContent = 'Запрещены — включите в настройках браузера';
       return;
     }
-    pushState.textContent = inApp ? 'Выключены в настройках телефона' : 'Нажмите, чтобы включить';
+    pushState.textContent = 'Нажмите, чтобы включить';
   };
   paintPush();
 
   root.querySelector('[data-push]').onclick = async () => {
-    const { askSystemPermission } = await import('./notifications.js');
-    if (window.SpokumHost) {
-      toast('Разрешение спрашивает сам телефон. Если отказали — включите СпокУм в настройках уведомлений', 'err');
-      paintPush();
+    const { askSystemPermission, systemAllowed, canAskAgain } = await import('./notifications.js');
+    if (systemAllowed()) {
+      toast('Уведомления уже включены');
+      return;
+    }
+    if (!canAskAgain()) {
+      if (window.SpokumHost?.notifySettings) {
+        window.SpokumHost.notifySettings();
+        paintPush();
+        return;
+      }
+      toast('Разрешение закрыто в настройках браузера, включите его там', 'err');
       return;
     }
     const ok = await askSystemPermission();

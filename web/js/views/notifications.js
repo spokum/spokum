@@ -39,13 +39,78 @@ export function systemNotify(item) {
   } catch {}
 }
 
+const ASK_KEY = 'spokum.push.ask.v1';
+
+function askedAt() {
+  return Number(localStorage.getItem(ASK_KEY) || 0);
+}
+
+function rememberAsk() {
+  localStorage.setItem(ASK_KEY, String(Date.now()));
+}
+
 export async function askSystemPermission() {
-  if (window.SpokumHost?.canNotify) return window.SpokumHost.canNotify();
+  if (window.SpokumHost?.askNotify) {
+    const answer = new Promise((resolve) => {
+      let done = false;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        window.__spokumNotifyAnswer = null;
+        resolve(value);
+      };
+      window.__spokumNotifyAnswer = (granted) => finish(!!granted);
+      setTimeout(() => finish(systemAllowed()), 40000);
+    });
+    try {
+      window.SpokumHost.askNotify();
+    } catch {
+      return systemAllowed();
+    }
+    return answer;
+  }
+  if (window.SpokumHost?.canNotify) return systemAllowed();
   if (!('Notification' in window)) return false;
   if (Notification.permission === 'granted') return true;
   if (Notification.permission === 'denied') return false;
   const result = await Notification.requestPermission();
   return result === 'granted';
+}
+
+export function canAskAgain() {
+  if (systemAllowed()) return false;
+  if (window.SpokumHost) return true;
+  if (!('Notification' in window)) return false;
+  return Notification.permission !== 'denied';
+}
+
+export async function offerNotifications(force) {
+  if (!state.user) return;
+  if (systemAllowed() || !canAskAgain()) return;
+  const waited = Date.now() - askedAt();
+  if (!force && askedAt() && waited < 3 * 86400000) return;
+  const busy = document.querySelector('.sheet-backdrop, .chat-view, .game-stage, .story-view, .lightbox');
+  if (!force && (busy || state.tab !== 'feed')) {
+    setTimeout(() => offerNotifications(), 20000);
+    return;
+  }
+  rememberAsk();
+  const body = el(`<div class="col">
+    <div class="push-ask">${icon('bell', 26)}</div>
+    <div class="strong center">Включить уведомления?</div>
+    <p class="small muted center" style="margin:0;line-height:1.55">Сообщения, звонки, подарки и ответы модераторов будут приходить, даже когда СпокУм закрыт. Без них вы узнаете обо всём только зайдя в приложение.</p>
+    <button class="btn btn-primary" data-yes>${icon('bell', 17)} Разрешить</button>
+    <button class="btn btn-ghost" data-later>Позже</button>
+  </div>`);
+  const sheet = openSheet('Уведомления', body);
+  body.querySelector('[data-later]').onclick = () => sheet.close();
+  body.querySelector('[data-yes]').onclick = async () => {
+    const button = body.querySelector('[data-yes]');
+    button.disabled = true;
+    const ok = await askSystemPermission();
+    sheet.close();
+    toast(ok ? 'Уведомления включены' : 'Разрешение не выдано, включить можно в настройках', ok ? '' : 'err');
+  };
 }
 
 export function systemAllowed() {

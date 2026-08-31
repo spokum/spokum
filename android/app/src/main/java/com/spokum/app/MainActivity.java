@@ -245,6 +245,33 @@ public class MainActivity extends AppCompatActivity {
       }
 
       @JavascriptInterface
+      public void askNotify() {
+        runOnUiThread(() -> {
+          if (androidx.core.app.NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled()) {
+            return;
+          }
+          boolean missing = Build.VERSION.SDK_INT >= 33
+              && ContextCompat.checkSelfPermission(MainActivity.this, "android.permission.POST_NOTIFICATIONS")
+                 != PackageManager.PERMISSION_GRANTED;
+          android.content.SharedPreferences prefs = getSharedPreferences("spokum", MODE_PRIVATE);
+          boolean first = !prefs.getBoolean("notify_asked", false);
+          boolean rationale = missing
+              && ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, "android.permission.POST_NOTIFICATIONS");
+          if (missing && (first || rationale)) {
+            prefs.edit().putBoolean("notify_asked", true).apply();
+            ActivityCompat.requestPermissions(MainActivity.this, new String[] { "android.permission.POST_NOTIFICATIONS" }, 77);
+            return;
+          }
+          openNotifySettings();
+        });
+      }
+
+      @JavascriptInterface
+      public void notifySettings() {
+        runOnUiThread(() -> openNotifySettings());
+      }
+
+      @JavascriptInterface
       public String deviceId() {
         String id = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
         if (id == null || id.isEmpty() || "9774d56d682e549c".equals(id)) {
@@ -291,17 +318,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     NotifyWorker.ensureChannel(this);
-    askNotificationPermission();
     checkForUpdate(false);
   }
 
-  private void askNotificationPermission() {
-    if (Build.VERSION.SDK_INT < 33) {
-      return;
-    }
-    if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS")
-        != PackageManager.PERMISSION_GRANTED) {
-      ActivityCompat.requestPermissions(this, new String[] { "android.permission.POST_NOTIFICATIONS" }, 77);
+  private void openNotifySettings() {
+    try {
+      android.content.Intent intent = new android.content.Intent("android.settings.APP_NOTIFICATION_SETTINGS");
+      intent.putExtra("android.provider.extra.APP_PACKAGE", getPackageName());
+      intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+      startActivity(intent);
+    } catch (Exception error) {
+      try {
+        android.content.Intent fallback = new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        fallback.setData(android.net.Uri.parse("package:" + getPackageName()));
+        fallback.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(fallback);
+      } catch (Exception ignored) {
+      }
     }
   }
 
@@ -479,6 +512,10 @@ public class MainActivity extends AppCompatActivity {
   public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
     super.onRequestPermissionsResult(code, permissions, results);
     if (code == 77) {
+      boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+      if (webView != null) {
+        webView.evaluateJavascript("window.__spokumNotifyAnswer&&window.__spokumNotifyAnswer(" + granted + ")", null);
+      }
       return;
     }
     if (code != 42 || pendingMicRequest == null) {
