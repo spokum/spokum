@@ -1887,6 +1887,23 @@ export const local = {
     return { ok: true, mode: 'removed' };
   },
 
+  async summerRecap() {
+    const user = need();
+    const from = Date.parse('2026-06-01T00:00:00+03:00');
+    const mine = state.posts.filter((p) => p.authorId === user.id && !p.removed && p.createdAt >= from);
+    const ids = new Set(mine.map((p) => p.id));
+    return {
+      posts: mine.length,
+      likes: (state.likes || []).filter((l) => ids.has(l.postId) && (l.createdAt ?? from) >= from).length,
+      answers: (state.comments || []).filter((c) => c.authorId === user.id && !c.removed && c.createdAt >= from).length,
+      friends: (state.follows || []).filter((f) => f.followerId === user.id).length,
+      gifts: (state.gifts || []).filter((g) => g.ownerId === user.id && !g.sold).length,
+      streak: user.bestStreak || 0,
+      coins: user.coins || 0,
+      rose: (state.eventClaims || []).some((row) => row.eventId === 'summer26' && row.userId === user.id)
+    };
+  },
+
   async reelIds(size, seen) {
     const skip = new Set(seen || []);
     const rows = state.posts.filter((p) => !p.removed && (p.kind === 'video' || p.kind === 'album' || p.video) && !skip.has(p.id));

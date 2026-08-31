@@ -7,6 +7,26 @@ import { openProfile } from './profile.js';
 let feed = { items: [], cursor: null, more: true, busy: false, seen: [], smart: true };
 
 const SOUND_KEY = 'spokum.sound';
+const LESS_KEY = 'spokum.less.v1';
+
+function lessList() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LESS_KEY));
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function lessAdd(id) {
+  const list = lessList().filter((value) => value !== id);
+  list.push(id);
+  localStorage.setItem(LESS_KEY, JSON.stringify(list.slice(-30)));
+}
+
+function wanted(post) {
+  return !lessList().includes(String(post.author?.id));
+}
 
 function soundWanted() {
   return localStorage.getItem(SOUND_KEY) !== 'off';
@@ -61,7 +81,7 @@ async function recommended() {
     const ids = (answer && answer.ids) || [];
     if (!ids.length) return { posts: [], more: false };
     const result = await api.listPosts({ ids });
-    const posts = (result.posts || []).filter((post) => post.kind === 'video' || post.kind === 'album' || !!post.video);
+    const posts = (result.posts || []).filter((post) => (post.kind === 'video' || post.kind === 'album' || !!post.video) && wanted(post));
     feed.seen = feed.seen.concat(ids);
     return { posts, more: ids.length >= 6 };
   } catch (error) {
@@ -75,7 +95,7 @@ async function chronological() {
   if (feed.cursor) query.before = feed.cursor;
   const result = await api.listPosts(query);
   const all = result.posts || [];
-  const posts = all.filter((post) => post.kind === 'video' || post.kind === 'album' || !!post.video);
+  const posts = all.filter((post) => (post.kind === 'video' || post.kind === 'album' || !!post.video) && wanted(post));
   feed.cursor = result.cursor ?? (all.length ? all[all.length - 1].createdAt : null);
   return { posts, more: result.more ?? all.length >= 6 };
 }
@@ -369,6 +389,7 @@ function openReelMenu(post, node, stage) {
       <button class="list-item" data-repost>${icon('refresh', 18)}<span>Репостнуть к себе</span></button>
       <button class="list-item" data-copy>${icon('share', 18)}<span>Скопировать описание</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Профиль автора</span></button>
+      ${!mine && isBeta(state.user) ? `<button class="list-item" data-less>${icon('eye', 18)}<span>Меньше видео от этого автора</span></button>` : ''}
       <button class="list-item" data-report>${icon('flag', 18)}<span>Пожаловаться</span></button>
       ${canModerate && !mine && !post.removed ? `<button class="list-item" data-take style="color:#c6b083">${icon('shield', 18)}<span>Снять с публикации</span></button>` : ''}
       ${mine || state.user?.isAdmin ? `<button class="list-item" data-delete style="color:#c98b8b">${icon('trash', 18)}<span>Удалить</span></button>` : ''}
@@ -396,6 +417,13 @@ function openReelMenu(post, node, stage) {
     toast('Скопировано');
     sheet.close();
   };
+  body.querySelector('[data-less]')?.addEventListener('click', () => {
+    lessAdd(String(post.author.id));
+    sheet.close();
+    node.remove();
+    feed.items = feed.items.filter((item) => String(item.author?.id) !== String(post.author.id));
+    toast('Такие ролики будем показывать реже');
+  });
   body.querySelector('[data-open]').onclick = () => {
     sheet.close();
     openProfile(post.author.username);

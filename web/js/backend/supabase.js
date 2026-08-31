@@ -1358,6 +1358,12 @@ export async function createSupabase(url, key) {
       return data;
     },
 
+    async summerRecap() {
+      const { data, error } = await sb.rpc('summer_recap');
+      guard(error);
+      return data || {};
+    },
+
     async reelIds(size, seen) {
       const { data, error } = await sb.rpc('feed_reels', { size: size || 12, seen: seen || [] });
       guard(error);

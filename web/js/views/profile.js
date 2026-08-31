@@ -1,8 +1,44 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, isBeta, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
+
+
+async function openRecap() {
+  const body = el('<div class="col"><div class="card" style="height:150px;opacity:.35"></div></div>');
+  const sheet = openSheet('Итоги лета', body);
+  let data;
+  try {
+    data = await api.summerRecap();
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+  const rows = [
+    ['feed', 'Записей за лето', data.posts || 0],
+    ['heart', 'Лайков собрано', data.likes || 0],
+    ['comment', 'Ответов написано', data.answers || 0],
+    ['users', 'Подписок', data.friends || 0],
+    ['gift', 'Подарков на полке', data.gifts || 0],
+    ['flame', 'Лучшая полоса дней', data.streak || 0],
+    ['coin', 'Монет в кошельке', data.coins || 0]
+  ];
+  body.innerHTML = `<div class="col">
+    <div class="card recap-head">
+      <div class="event-rose">${icon('rose', 26)}</div>
+      <div class="grow"><div class="strong">Лето 2026</div>
+      <div class="tiny muted" style="margin-top:3px">${data.rose ? 'Розочка лета осталась у вас на память' : 'Розочку лета вы не забрали'}</div></div>
+    </div>
+    <div class="card">
+      ${rows.map(([glyph, label, value]) => `<div class="row between" style="padding:7px 0">
+        <span class="row" style="gap:9px"><span class="muted">${icon(glyph, 17)}</span><span class="small">${esc(label)}</span></span>
+        <span class="strong">${value}</span></div>`).join('')}
+    </div>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Итоги считаются с первого июня. Осень начнём с чистой полосы.</p>
+  </div>`;
+  void sheet;
+}
 
 function dayWordChip(user) {
   if (!user?.shareWord || !user.dayWord) return '';
@@ -77,6 +113,7 @@ export async function render(root) {
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-recap>${icon('rose', 20)}<div class="grow"><div class="strong small">Итоги лета</div><div class="tiny muted">Каким было ваше лето в СпокУме</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
@@ -96,6 +133,9 @@ export async function render(root) {
   const list = body.querySelector('[data-posts]');
   const { postCard } = await import('./feed.js');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
+
+  if (!isBeta(fresh)) body.querySelector('[data-recap]')?.remove();
+  body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap());
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;

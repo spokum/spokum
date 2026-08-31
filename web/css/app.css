@@ -1576,3 +1576,11 @@ svg { display: block; flex: none; }
   background: rgba(216, 180, 92, .18);
   border: 1px solid rgba(216, 180, 92, .35);
 }
+
+.recap-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-color: rgba(255, 138, 176, .3);
+  background: linear-gradient(135deg, rgba(255, 138, 176, .1), rgba(255, 203, 107, .07));
+}

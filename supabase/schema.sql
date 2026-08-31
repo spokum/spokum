@@ -3234,3 +3234,23 @@ begin
   return result;
 end;
 $$;
+
+create or replace function public.summer_recap()
+returns jsonb language sql security definer stable set search_path = public as $$
+  select jsonb_build_object(
+    'posts', (select count(*) from public.posts
+       where author_id = auth.uid() and not removed and created_at >= timestamptz '2026-06-01 00:00:00+03'),
+    'likes', (select count(*) from public.likes l
+       join public.posts p on p.id = l.post_id
+       where p.author_id = auth.uid() and l.created_at >= timestamptz '2026-06-01 00:00:00+03'),
+    'answers', (select count(*) from public.comments
+       where author_id = auth.uid() and not removed and created_at >= timestamptz '2026-06-01 00:00:00+03'),
+    'friends', (select count(*) from public.follows where follower_id = auth.uid()),
+    'gifts', (select count(*) from public.gifts where owner_id = auth.uid() and not sold),
+    'streak', (select coalesce(best_streak, 0) from public.profiles where id = auth.uid()),
+    'coins', (select coalesce(coins, 0) from public.profiles where id = auth.uid()),
+    'rose', (select exists (select 1 from public.event_claims where user_id = auth.uid() and event_id = 'summer26'))
+  );
+$$;
+
+grant execute on function public.summer_recap() to authenticated;
