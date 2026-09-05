@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="calm" data-accent="mint">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#101318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="СпокУм">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<meta name="description" content="СпокУм — соцсеть про спокойствие и настроение: лента, чаты, игры и личное пространство">
+<title>СпокУм</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="logo.jpg" type="image/jpeg">
+<link rel="apple-touch-icon" href="logo.jpg">
+<link rel="preload" href="fonts/inter-cyrillic-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-cyrillic-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app"></div>
+<script>
+  (function () {
+    var root = document.documentElement;
+    try {
+      root.dataset.theme = localStorage.getItem('spokum.theme') || 'calm';
+      root.dataset.accent = localStorage.getItem('spokum.accent') || 'mint';
+    } catch (error) {
+      root.dataset.theme = 'calm';
+    }
+  })();
+</script>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
