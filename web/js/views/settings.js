@@ -132,7 +132,8 @@ export async function render(root) {
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('lock', 18)}<span class="strong small">Безопасность</span></div>
       <button class="list-item" data-password>${icon('key', 18)}<div class="grow"><div class="small strong">Сменить пароль</div><div class="tiny muted">Другие сессии закроются</div></div>${icon('forward', 15)}</button>
-      ${isBeta(state.user) ? `<button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>` : ''}
+      ${isBeta(state.user) ? `<button class="list-item" data-pin>${icon('lock', 18)}<div class="grow"><div class="small strong">Код на вход</div><div class="tiny muted" data-pin-state>Спрашивать код при запуске</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>` : ''}
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
     </div>
 
@@ -259,6 +260,13 @@ export async function render(root) {
   root.querySelector('[data-mutewords]')?.addEventListener('click', () => openMuteWords(() => render(root)));
   root.querySelector('[data-mine]')?.addEventListener('click', () => openMyTheme(() => render(root)));
   root.querySelector('[data-codes]')?.addEventListener('click', () => openCodes(() => render(root)));
+  if (root.querySelector('[data-pin]')) {
+    import('../pin.js').then(({ pinOn }) => {
+      const slot = root.querySelector('[data-pin-state]');
+      if (slot) slot.textContent = pinOn() ? 'Код включён' : 'Спрашивать код при запуске';
+    }).catch(() => {});
+    root.querySelector('[data-pin]').onclick = () => openPin(() => render(root));
+  }
 
   root.querySelector('[data-rules]').onclick = async () => {
     const { openRules } = await import('./rules.js');
@@ -440,6 +448,53 @@ function openMyTheme(done) {
     done?.();
   };
   paint();
+}
+
+
+async function openPin(done) {
+  const { pinOn, pinSet, pinOff, pinCheck } = await import('../pin.js');
+  const on = pinOn();
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Код спрашивается при запуске приложения. Он живёт на этом устройстве и не связан с паролем от аккаунта.</p>
+    ${on
+      ? `<button class="btn btn-danger" data-off>${icon('lock', 17)} Убрать код</button>
+         <div class="divider"></div>
+         <div class="tiny muted">Сменить код</div>`
+      : ''}
+    ${on ? '<input class="input" type="password" inputmode="numeric" data-old placeholder="Текущий код">' : ''}
+    <input class="input" type="password" inputmode="numeric" data-code placeholder="Новый код, от четырёх до шести цифр" maxlength="6">
+    <input class="input" type="password" inputmode="numeric" data-again placeholder="Ещё раз" maxlength="6">
+    <button class="btn btn-primary" data-save>${icon('check', 17)} ${on ? 'Сменить код' : 'Включить код'}</button>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Если код забудется, на экране ввода есть кнопка Выйти: вы выйдете из аккаунта и войдёте заново по паролю.</p>
+  </div>`);
+  const sheet = openSheet('Код на вход', body);
+
+  body.querySelector('[data-off]')?.addEventListener('click', async () => {
+    const current = body.querySelector('[data-old]')?.value || '';
+    if (!(await pinCheck(current))) return toast('Текущий код не подходит', 'err');
+    pinOff();
+    sheet.close();
+    toast('Код убран');
+    done?.();
+  });
+
+  body.querySelector('[data-save]').onclick = async () => {
+    if (on) {
+      const current = body.querySelector('[data-old]').value;
+      if (!(await pinCheck(current))) return toast('Текущий код не подходит', 'err');
+    }
+    const code = body.querySelector('[data-code]').value.trim();
+    const again = body.querySelector('[data-again]').value.trim();
+    if (code !== again) return toast('Коды не совпали', 'err');
+    try {
+      await pinSet(code);
+      sheet.close();
+      toast('Код включён');
+      done?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 }
 
 async function openCodes(done) {

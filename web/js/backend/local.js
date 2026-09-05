@@ -31,6 +31,9 @@ function blank() {
     eventClaims: [],
     recoveryCodes: [],
     appeals: [],
+    invites: [],
+    inviteUses: [],
+    messageReactions: [],
     follows: [],
     thanks: [],
     gifts: [],
@@ -1910,6 +1913,93 @@ export const local = {
     });
     save();
     return { ok: true, mode: 'removed' };
+  },
+
+  async inviteMine() {
+    const user = need();
+    state.invites = state.invites || [];
+    let row = state.invites.find((item) => item.ownerId === user.id);
+    if (!row) {
+      row = { code: uid().replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 8), ownerId: user.id, createdAt: Date.now() };
+      state.invites.push(row);
+      save();
+    }
+    state.inviteUses = state.inviteUses || [];
+    return {
+      code: row.code,
+      used: state.inviteUses.filter((item) => item.ownerId === user.id).length,
+      taken: state.inviteUses.some((item) => item.guestId === user.id)
+    };
+  },
+
+  async inviteUse(code) {
+    const user = need();
+    state.invites = state.invites || [];
+    state.inviteUses = state.inviteUses || [];
+    const clean = String(code || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if (user.createdAt < Date.now() - 7 * 86400000) fail('Код можно ввести только в первую неделю');
+    if (state.inviteUses.some((item) => item.guestId === user.id)) fail('Вы уже вводили код');
+    const row = state.invites.find((item) => item.code === clean);
+    if (!row) fail('Такого кода нет');
+    if (row.ownerId === user.id) fail('Свой код не считается');
+    const host = state.users.find((item) => item.id === row.ownerId);
+    state.inviteUses.push({ code: clean, ownerId: row.ownerId, guestId: user.id, createdAt: Date.now() });
+    user.coins = (user.coins || 0) + 150;
+    if (host) host.coins = (host.coins || 0) + 250;
+    state.coinLog = state.coinLog || [];
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: 150, reason: 'Пришёл по приглашению', createdAt: Date.now() });
+    if (host) note_(host.id, 'gift', 'К вам пришёл друг', 'Кто-то зашёл по вашему приглашению, вам двести пятьдесят монет', { coins: 250 });
+    save();
+    return { ok: true, coins: 150 };
+  },
+
+  async moodTwins() {
+    const user = need();
+    const from = Date.now() - 14 * 86400000;
+    const mine = state.posts.filter((p) => p.authorId === user.id && !p.removed && p.createdAt > from);
+    const count = {};
+    mine.forEach((p) => {
+      count[p.mood] = (count[p.mood] || 0) + 1;
+    });
+    const mood = Object.keys(count).sort((a, b) => count[b] - count[a])[0] || user.mood || 'calm';
+    const others = {};
+    state.posts
+      .filter((p) => p.authorId !== user.id && !p.removed && p.createdAt > from && p.mood === mood)
+      .forEach((p) => {
+        others[p.authorId] = (others[p.authorId] || 0) + 1;
+      });
+    const following = new Set((state.follows || []).filter((f) => f.followerId === user.id).map((f) => String(f.targetId)));
+    const people = Object.keys(others)
+      .filter((id) => !following.has(String(id)))
+      .sort((a, b) => others[b] - others[a])
+      .slice(0, 8)
+      .map((id) => {
+        const who = state.users.find((item) => String(item.id) === String(id));
+        return who ? { ...pub(who), posts: others[id] } : null;
+      })
+      .filter(Boolean);
+    return { mood, people };
+  },
+
+  async messageReact(id, glyph) {
+    const user = need();
+    state.messageReactions = state.messageReactions || [];
+    state.messageReactions = state.messageReactions.filter((row) => !(row.messageId === id && row.userId === user.id));
+    if (glyph) state.messageReactions.push({ messageId: id, userId: user.id, glyph });
+    save();
+    return { ok: true, glyph: glyph || null };
+  },
+
+  async chatReactions(chatId) {
+    need();
+    const ids = new Set(state.messages.filter((m) => m.chatId === chatId).map((m) => m.id));
+    const out = {};
+    (state.messageReactions || []).forEach((row) => {
+      if (!ids.has(row.messageId)) return;
+      out[row.messageId] = out[row.messageId] || [];
+      out[row.messageId].push({ glyph: row.glyph, user: row.userId });
+    });
+    return { reactions: out };
   },
 
   async seasonState() {

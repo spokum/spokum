@@ -220,19 +220,17 @@ async function loadSeason(root) {
   }
   if (!info || info.season !== 'autumn' || !isBeta(state.user)) return;
   if (localStorage.getItem(SEASON_HIDE) === info.season) return;
+  const share = info.total ? Math.round((info.collected / info.total) * 100) : 0;
   host.innerHTML = `<div class="card season-card">
     <div class="season-top">
-      <div class="season-leaf">${icon('leaf', 22)}</div>
-      <div class="grow" style="min-width:0">
-        <div class="strong small">${esc(info.title || 'Сезон')}</div>
-        <div class="tiny muted" style="margin-top:3px;line-height:1.45">${esc(info.text || '')}</div>
-      </div>
+      <div class="season-leaf">${icon('leaf', 20)}</div>
+      <div class="grow strong">${esc(info.title || 'Сезон')}</div>
       <button class="btn btn-icon btn-ghost season-close" data-hide-season>${icon('close', 15)}</button>
     </div>
-    <div class="row between" style="margin-top:10px;gap:10px">
-      <span class="tiny muted">Собрано ${info.collected} из ${info.total}</span>
-      <button class="btn btn-sm" data-open-season>${icon('gift', 15)} Подарки сезона</button>
-    </div>
+    <div class="season-text">${esc(info.text || '')}</div>
+    <div class="season-bar"><i style="width:${share}%"></i></div>
+    <div class="tiny muted" style="margin-top:6px">Собрано ${info.collected} из ${info.total}</div>
+    <button class="btn btn-primary season-go" data-open-season>${icon('gift', 17)} Смотреть подарки сезона</button>
   </div>`;
   host.querySelector('[data-hide-season]').onclick = () => {
     localStorage.setItem(SEASON_HIDE, info.season);

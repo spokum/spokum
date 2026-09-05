@@ -230,11 +230,22 @@ async function boot() {
     setUser(null);
   }
   if (await checkDevice(false)) return;
-  if (!state.user) renderAuth(root, start);
-  else {
-    start();
-    announcePremium(state.user);
+  if (!state.user) {
+    renderAuth(root, start);
+    return;
   }
+  const { pinOn, askPin } = await import('./pin.js');
+  if (pinOn()) {
+    const ok = await askPin(root);
+    if (!ok) {
+      await api.logout().catch(() => {});
+      setUser(null);
+      renderAuth(root, start);
+      return;
+    }
+  }
+  start();
+  announcePremium(state.user);
 }
 
 async function handOverSession() {

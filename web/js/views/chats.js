@@ -1,4 +1,4 @@
-import { api, state, isOffline, isPremium } from '../store.js';
+import { api, state, isOffline, isPremium, isBeta } from '../store.js';
 import { el, esc, timeAgo, clockTime, durationText, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet } from '../ui.js';
@@ -203,6 +203,13 @@ export async function openChat(chatId) {
 
   const draw = async () => {
     const { messages } = await api.messages(chatId);
+    let reactions = {};
+    if (api.chatReactions && isBeta(state.user)) {
+      try {
+        const answer = await api.chatReactions(chatId);
+        reactions = answer.reactions || {};
+      } catch {}
+    }
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 120;
     body.innerHTML = '';
     if (!messages.length) {
@@ -210,7 +217,9 @@ export async function openChat(chatId) {
     }
     let lastAuthor = null;
     for (const message of messages) {
-      body.appendChild(bubble(message, chat, lastAuthor));
+      const node = bubble(message, chat, lastAuthor);
+      wireReact(node, message, reactions[message.id] || [], draw);
+      body.appendChild(node);
       lastAuthor = message.author?.id;
     }
     if (atBottom || true) body.scrollTop = body.scrollHeight;
@@ -278,6 +287,64 @@ export async function openChat(chatId) {
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
+
+
+const REACTS = [
+  ['heart', 'heart'],
+  ['smile', 'smile'],
+  ['sad', 'moon'],
+  ['fire', 'flame'],
+  ['ok', 'check'],
+  ['wave', 'wave']
+];
+
+function wireReact(node, message, rows, done) {
+  if (!api.messageReact || !isBeta(state.user) || message.kind === 'system' || message.kind === 'call') return;
+  if (rows.length) {
+    const seen = {};
+    rows.forEach((row) => {
+      seen[row.glyph] = (seen[row.glyph] || 0) + 1;
+    });
+    const strip = el(`<div class="react-strip">${Object.entries(seen)
+      .map(([glyph, count]) => {
+        const art = REACTS.find((item) => item[0] === glyph);
+        return `<span class="react-chip">${icon(art ? art[1] : 'heart', 13)}${count > 1 ? count : ''}</span>`;
+      })
+      .join('')}</div>`);
+    node.appendChild(strip);
+  }
+
+  let timer = null;
+  const open = () => {
+    const mine = rows.find((row) => String(row.user) === String(state.user?.id));
+    const menu = el(`<div class="react-row">
+      ${REACTS.map(([glyph, art]) => `<button class="react-pick ${mine?.glyph === glyph ? 'on' : ''}" data-react="${glyph}">${icon(art, 20)}</button>`).join('')}
+    </div>`);
+    const sheet = openSheet('', menu);
+    menu.querySelectorAll('[data-react]').forEach((button) => {
+      button.onclick = async () => {
+        sheet.close();
+        try {
+          await api.messageReact(message.id, mine?.glyph === button.dataset.react ? '' : button.dataset.react);
+          done?.();
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  };
+
+  node.addEventListener('pointerdown', () => {
+    timer = setTimeout(open, 480);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((type) => {
+    node.addEventListener(type, () => clearTimeout(timer));
+  });
+  node.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    open();
+  });
+}
 
 const SAFE_HOSTS = ['spokum.github.io', 'github.com', 't.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'ok.ru', 'wikipedia.org', 'yandex.ru', 'google.com', 'rutube.ru', 'dzen.ru'];
 

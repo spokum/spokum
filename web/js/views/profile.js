@@ -172,6 +172,100 @@ async function openAppeals() {
 }
 
 
+
+async function openInvite() {
+  if (!api.inviteMine) return toast('Приглашения появятся, когда база будет обновлена', 'err');
+  const body = el('<div class="col"><div class="card" style="height:120px;opacity:.35"></div></div>');
+  const sheet = openSheet('Позвать друга', body);
+  let info;
+  try {
+    info = await api.inviteMine();
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+  const link = `https://spokum.github.io/spokum/?invite=${info.code}`;
+  body.innerHTML = `<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Отдайте код другу. Он вводит его в первую неделю после регистрации и получает сто пятьдесят монет, вам приходит двести пятьдесят.</p>
+    <div class="card code-card">
+      <div class="code-row"><span class="code-value">${esc(info.code)}</span></div>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <button class="btn btn-sm grow" data-copy>${icon('share', 15)} Скопировать код</button>
+        <button class="btn btn-sm grow" data-link>${icon('forward', 15)} Ссылка</button>
+      </div>
+    </div>
+    <div class="row between"><span class="small muted">Пришло по коду</span><span class="strong">${info.used}</span></div>
+    ${info.taken ? '' : `<div class="divider"></div>
+      <div class="tiny muted">Если вас позвали, введите чужой код</div>
+      <div class="row" style="gap:8px">
+        <input class="input grow" data-code placeholder="Код друга">
+        <button class="btn btn-primary" data-use>${icon('check', 16)}</button>
+      </div>`}
+  </div>`;
+  body.querySelector('[data-copy]').onclick = () => {
+    navigator.clipboard?.writeText(info.code);
+    toast('Код скопирован');
+  };
+  body.querySelector('[data-link]').onclick = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'СпокУм', text: `Заходи в СпокУм, мой код ${info.code}`, url: link });
+        return;
+      }
+    } catch {}
+    navigator.clipboard?.writeText(link);
+    toast('Ссылка скопирована');
+  };
+  body.querySelector('[data-use]')?.addEventListener('click', async () => {
+    const code = body.querySelector('[data-code]').value.trim();
+    if (!code) return toast('Впишите код', 'err');
+    try {
+      await api.inviteUse(code);
+      const { user } = await api.me();
+      if (user) setUser(user);
+      sheet.close();
+      toast('Готово, вам сто пятьдесят монет');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  });
+}
+
+async function openTwins() {
+  if (!api.moodTwins) return toast('Появится, когда база будет обновлена', 'err');
+  const body = el('<div class="col"><div class="card" style="height:120px;opacity:.35"></div></div>');
+  const sheet = openSheet('Похожие по настроению', body);
+  let info;
+  try {
+    info = await api.moodTwins();
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+  const mood = MOODS[info.mood] || MOODS.calm;
+  if (!info.people.length) {
+    body.innerHTML = emptyState('users', 'Пока никого', 'Напишите пару записей, и мы найдём похожих людей');
+    return;
+  }
+  body.innerHTML = `<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Ваше настроение за две недели: <span class="strong" style="color:${mood.ink}">${esc(mood.label.toLowerCase())}</span>. Эти люди писали о том же.</p>
+    <div class="col" data-list style="gap:6px"></div>
+  </div>`;
+  const list = body.querySelector('[data-list]');
+  info.people.forEach((who) => {
+    const row = el(`<button class="list-item">${avatar(who, 40)}
+      <span class="grow" style="text-align:left;min-width:0">
+        <span class="small strong truncate">${esc(who.displayName)}</span>
+        <span class="tiny muted"> @${esc(who.username)} · записей ${who.posts}</span>
+      </span>${icon('forward', 15)}</button>`);
+    row.onclick = () => {
+      sheet.close();
+      openProfile(who.username);
+    };
+    list.appendChild(row);
+  });
+}
+
 const SHELF_KINDS = [
   ['music', 'Музыка', 'volume'],
   ['book', 'Книга', 'feed'],
@@ -402,6 +496,8 @@ export async function render(root) {
       ${isBeta(fresh) ? `<button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-card>${icon('image', 20)}<div class="grow"><div class="strong small">Открытка настроения</div><div class="tiny muted">Карточка недели, которой можно поделиться</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>` : ''}
+      ${isBeta(fresh) ? `<button class="card list-item" data-invite>${icon('add_user', 20)}<div class="grow"><div class="strong small">Позвать друга</div><div class="tiny muted">Ваш код, монеты вам и другу</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-twins>${icon('users', 20)}<div class="grow"><div class="strong small">Похожие по настроению</div><div class="tiny muted">Люди, у которых недели похожи на вашу</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
@@ -426,6 +522,8 @@ export async function render(root) {
   if (isBeta(fresh)) drawShelf(body, fresh, true, () => render(root));
   body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
+  body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
+  body.querySelector('[data-twins]')?.addEventListener('click', () => openTwins());
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;

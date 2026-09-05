@@ -3711,3 +3711,166 @@ grant execute on function public.admin_health() to authenticated;
 grant execute on function public.admin_praise_pick() to authenticated;
 grant execute on function public.admin_praise(uuid, text, integer) to authenticated;
 grant execute on function public.admin_quiet_call(text) to authenticated;
+
+create table if not exists public.invites (
+  code text primary key,
+  owner_id uuid not null references public.profiles on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists invites_owner on public.invites (owner_id);
+
+create table if not exists public.invite_uses (
+  id bigint generated always as identity primary key,
+  code text not null references public.invites on delete cascade,
+  owner_id uuid not null references public.profiles on delete cascade,
+  guest_id uuid not null references public.profiles on delete cascade unique,
+  created_at timestamptz not null default now()
+);
+
+alter table public.invites enable row level security;
+alter table public.invite_uses enable row level security;
+
+drop policy if exists invites_own on public.invites;
+create policy invites_own on public.invites for select using (owner_id = auth.uid());
+
+drop policy if exists invite_uses_own on public.invite_uses;
+create policy invite_uses_own on public.invite_uses for select
+  using (owner_id = auth.uid() or guest_id = auth.uid());
+
+create or replace function public.invite_mine()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  mine text;
+  used integer;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  select code into mine from public.invites where owner_id = auth.uid() limit 1;
+  if mine is null then
+    mine := lower(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+    insert into public.invites (code, owner_id) values (mine, auth.uid());
+  end if;
+  select count(*) into used from public.invite_uses where owner_id = auth.uid();
+  return jsonb_build_object('code', mine, 'used', coalesce(used, 0),
+    'taken', exists (select 1 from public.invite_uses where guest_id = auth.uid()));
+end;
+$$;
+
+create or replace function public.invite_use(code text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  clean text := lower(regexp_replace(coalesce(code, ''), '[^a-z0-9]', '', 'g'));
+  host uuid;
+  born timestamptz;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  select created_at into born from public.profiles where id = auth.uid();
+  if born < now() - interval '7 days' then raise exception 'Код можно ввести только в первую неделю'; end if;
+  if exists (select 1 from public.invite_uses where guest_id = auth.uid()) then
+    raise exception 'Вы уже вводили код';
+  end if;
+  select owner_id into host from public.invites where invites.code = clean;
+  if host is null then raise exception 'Такого кода нет'; end if;
+  if host = auth.uid() then raise exception 'Свой код не считается'; end if;
+
+  insert into public.invite_uses (code, owner_id, guest_id) values (clean, host, auth.uid());
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set coins = coalesce(coins, 0) + 150 where id = auth.uid();
+  update public.profiles set coins = coalesce(coins, 0) + 250 where id = host;
+  perform set_config('spokum.privileged', 'off', true);
+  insert into public.coin_log (user_id, amount, reason) values
+    (auth.uid(), 150, 'Пришёл по приглашению'),
+    (host, 250, 'Позвал друга');
+  perform public.notify_user(host, 'gift', 'К вам пришёл друг',
+    'Кто-то зашёл по вашему приглашению, вам двести пятьдесят монет', jsonb_build_object('coins', 250));
+  return jsonb_build_object('ok', true, 'coins', 150);
+end;
+$$;
+
+create or replace function public.mood_twins()
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+declare
+  mine text;
+begin
+  select mood into mine from public.posts
+   where author_id = auth.uid() and not removed and created_at > now() - interval '14 days'
+   group by mood order by count(*) desc limit 1;
+  if mine is null then select mood into mine from public.profiles where id = auth.uid(); end if;
+  if mine is null then return jsonb_build_object('mood', null, 'people', '[]'::jsonb); end if;
+
+  return jsonb_build_object('mood', mine, 'people', coalesce((
+    select jsonb_agg(row_to_json(t)) from (
+      select p.id, p.username, p.display_name as "displayName", p.avatar, p.hue, p.mood,
+             count(x.id) as posts
+      from public.profiles p
+      join public.posts x on x.author_id = p.id and not x.removed and x.created_at > now() - interval '14 days'
+      where p.id <> auth.uid()
+        and p.banned_until is null
+        and x.mood = mine
+        and not exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.target_id = p.id)
+      group by p.id
+      order by count(x.id) desc
+      limit 8
+    ) t
+  ), '[]'::jsonb));
+end;
+$$;
+
+create table if not exists public.message_reactions (
+  message_id bigint not null references public.messages on delete cascade,
+  user_id uuid not null references public.profiles on delete cascade,
+  glyph text not null,
+  created_at timestamptz not null default now(),
+  primary key (message_id, user_id)
+);
+
+alter table public.message_reactions enable row level security;
+
+drop policy if exists message_reactions_read on public.message_reactions;
+create policy message_reactions_read on public.message_reactions for select
+  using (exists (
+    select 1 from public.messages m
+    join public.chat_members cm on cm.chat_id = m.chat_id
+    where m.id = message_id and cm.user_id = auth.uid()
+  ));
+
+create or replace function public.message_react(target bigint, glyph text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  room bigint;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  select chat_id into room from public.messages where id = target;
+  if room is null then raise exception 'Сообщение не найдено'; end if;
+  if not exists (select 1 from public.chat_members where chat_id = room and user_id = auth.uid()) then
+    raise exception 'Это не ваш чат';
+  end if;
+  if coalesce(trim(glyph), '') = '' then
+    delete from public.message_reactions where message_id = target and user_id = auth.uid();
+    return jsonb_build_object('ok', true, 'glyph', null);
+  end if;
+  if glyph not in ('heart', 'smile', 'sad', 'fire', 'ok', 'wave') then raise exception 'Такой реакции нет'; end if;
+  insert into public.message_reactions (message_id, user_id, glyph)
+  values (target, auth.uid(), glyph)
+  on conflict (message_id, user_id) do update set glyph = excluded.glyph, created_at = now();
+  return jsonb_build_object('ok', true, 'glyph', glyph);
+end;
+$$;
+
+create or replace function public.chat_reactions(room bigint)
+returns jsonb language sql security definer stable set search_path = public as $$
+  select coalesce(jsonb_object_agg(message_id, rows), '{}'::jsonb) from (
+    select r.message_id, jsonb_agg(jsonb_build_object('glyph', r.glyph, 'user', r.user_id)) as rows
+    from public.message_reactions r
+    join public.messages m on m.id = r.message_id
+    where m.chat_id = room
+      and exists (select 1 from public.chat_members cm where cm.chat_id = room and cm.user_id = auth.uid())
+    group by r.message_id
+  ) grouped;
+$$;
+
+grant execute on function public.invite_mine() to authenticated;
+grant execute on function public.invite_use(text) to authenticated;
+grant execute on function public.mood_twins() to authenticated;
+grant execute on function public.message_react(bigint, text) to authenticated;
+grant execute on function public.chat_reactions(bigint) to authenticated;

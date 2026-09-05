@@ -1397,6 +1397,36 @@ export async function createSupabase(url, key) {
       return data;
     },
 
+    async inviteMine() {
+      const { data, error } = await sb.rpc('invite_mine');
+      guard(error);
+      return data || { code: '', used: 0, taken: false };
+    },
+
+    async inviteUse(code) {
+      const { data, error } = await sb.rpc('invite_use', { code });
+      guard(error);
+      return data;
+    },
+
+    async moodTwins() {
+      const { data, error } = await sb.rpc('mood_twins');
+      guard(error);
+      return { mood: data?.mood || null, people: data?.people || [] };
+    },
+
+    async messageReact(id, glyph) {
+      const { data, error } = await sb.rpc('message_react', { target: id, glyph: glyph || '' });
+      guard(error);
+      return data;
+    },
+
+    async chatReactions(chatId) {
+      const { data, error } = await sb.rpc('chat_reactions', { room: chatId });
+      guard(error);
+      return { reactions: data || {} };
+    },
+
     async seasonState() {
       const { data, error } = await sb.rpc('season_state');
       guard(error);

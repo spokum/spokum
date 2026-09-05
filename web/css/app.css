@@ -1799,12 +1799,12 @@ svg { display: block; flex: none; }
 }
 
 .season-leaf {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   display: grid;
   place-items: center;
-  border-radius: 15px;
+  border-radius: 12px;
   color: #e0a15c;
   background: rgba(216, 140, 72, .16);
 }
@@ -1973,8 +1973,36 @@ body.still *::after {
 
 .season-top {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+}
+
+.season-text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.season-bar {
+  margin-top: 12px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(216, 140, 72, .16);
+  overflow: hidden;
+}
+
+.season-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #e0a15c;
+  transition: width .3s var(--ease);
+}
+
+.season-go {
+  width: 100%;
+  margin-top: 12px;
 }
 
 .season-close {
@@ -1985,3 +2013,101 @@ body.still *::after {
 }
 
 .mood-word { opacity: .9; }
+
+.react-strip {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.react-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.react-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.react-pick {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 12px 0;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.react-pick.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pin-box {
+  width: min(320px, 100%);
+  margin: auto;
+  text-align: center;
+}
+
+.pin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 22px 0 26px;
+}
+
+.pin-dots i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+
+.pin-dots i.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.pin-key {
+  padding: 16px 0;
+  border-radius: var(--r-md);
+  font-size: 20px;
+  font-weight: 650;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.pin-key.ghost {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.pin-box.shake { animation: pinShake .38s var(--ease); }
+
+@keyframes pinShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
