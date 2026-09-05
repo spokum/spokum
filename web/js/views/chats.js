@@ -1,4 +1,4 @@
-import { api, state, isOffline, isPremium, isBeta } from '../store.js';
+import { api, state, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, clockTime, durationText, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet } from '../ui.js';
@@ -204,7 +204,7 @@ export async function openChat(chatId) {
   const draw = async () => {
     const { messages } = await api.messages(chatId);
     let reactions = {};
-    if (api.chatReactions && isBeta(state.user)) {
+    if (api.chatReactions) {
       try {
         const answer = await api.chatReactions(chatId);
         reactions = answer.reactions || {};
@@ -299,7 +299,7 @@ const REACTS = [
 ];
 
 function wireReact(node, message, rows, done) {
-  if (!api.messageReact || !isBeta(state.user) || message.kind === 'system' || message.kind === 'call') return;
+  if (!api.messageReact || message.kind === 'system' || message.kind === 'call') return;
   if (rows.length) {
     const seen = {};
     rows.forEach((row) => {

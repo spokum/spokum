@@ -5007,7 +5007,6 @@ function mine(canvas, report) {
 export const GAMES = [
   {
     id: 'shelter',
-    fresh: true,
     title: 'Убежище',
     desc: 'Выживалка: днём дрова, ночью костёр и звери',
     tint: ['#101a14', '#1e2c1e'],
@@ -5015,7 +5014,6 @@ export const GAMES = [
   },
   {
     id: 'tube',
-    fresh: true,
     title: 'Труба',
     desc: 'Трёхмерный тоннель, который крутится вокруг вас',
     tint: ['#04070f', '#152444'],
@@ -5023,7 +5021,6 @@ export const GAMES = [
   },
   {
     id: 'mine',
-    fresh: true,
     title: 'Шахта',
     desc: 'Спуск вглубь за кристаллами мимо камней',
     tint: ['#141017', '#2c1e1e'],

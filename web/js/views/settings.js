@@ -1,4 +1,4 @@
-import { api, state, setUser, applyAppearance, isPremium, isBeta, myTheme, saveMyTheme, PREMIUM_PERKS } from '../store.js';
+import { api, state, setUser, applyAppearance, isPremium, myTheme, saveMyTheme, PREMIUM_PERKS } from '../store.js';
 import { el, esc, fullDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, confirmSheet, emptyState } from '../ui.js';
@@ -21,14 +21,14 @@ const THEMES = [
   ['ink', 'Чернила', 'linear-gradient(140deg,#05070a,#141c26)', '#e6ebf2', true],
   ['rose', 'Роза', 'linear-gradient(140deg,#261923,#4a2440)', '#f2dfe8', true],
   ['gold', 'Золото', 'linear-gradient(140deg,#1f1a10,#4a3c1c)', '#f2e8d2', true],
-  ['autumn', 'Осень', 'linear-gradient(140deg,#17110c,#3a2413)', '#efe0cf', false, true],
-  ['rain', 'Дождь', 'linear-gradient(140deg,#0e1418,#22323c)', '#d8e3ea', false, true],
-  ['cocoa', 'Какао', 'linear-gradient(140deg,#140f0d,#33221c)', '#e8dbd2', false, true],
-  ['lilac', 'Сирень', 'linear-gradient(140deg,#f4f2f8,#ddd6ee)', '#2a2437', false, true],
-  ['carbon', 'Карбон', 'linear-gradient(140deg,#0c0d0f,#1b1e22)', '#dcdfe4', false, true],
-  ['pearl', 'Жемчуг', 'linear-gradient(140deg,#eef1f4,#ffffff)', '#1f2933', true, true],
-  ['emerald', 'Изумруд', 'linear-gradient(140deg,#071411,#134034)', '#d6ece4', true, true],
-  ['nebula', 'Туманность', 'linear-gradient(140deg,#0a0817,#2a1d5c)', '#e2ddf5', true, true]
+  ['autumn', 'Осень', 'linear-gradient(140deg,#17110c,#3a2413)', '#efe0cf', false],
+  ['rain', 'Дождь', 'linear-gradient(140deg,#0e1418,#22323c)', '#d8e3ea', false],
+  ['cocoa', 'Какао', 'linear-gradient(140deg,#140f0d,#33221c)', '#e8dbd2', false],
+  ['lilac', 'Сирень', 'linear-gradient(140deg,#f4f2f8,#ddd6ee)', '#2a2437', false],
+  ['carbon', 'Карбон', 'linear-gradient(140deg,#0c0d0f,#1b1e22)', '#dcdfe4', false],
+  ['pearl', 'Жемчуг', 'linear-gradient(140deg,#eef1f4,#ffffff)', '#1f2933', true],
+  ['emerald', 'Изумруд', 'linear-gradient(140deg,#071411,#134034)', '#d6ece4', true],
+  ['nebula', 'Туманность', 'linear-gradient(140deg,#0a0817,#2a1d5c)', '#e2ddf5', true]
 ];
 
 const ACCENTS = [
@@ -92,7 +92,7 @@ export async function render(root) {
       <div class="small" style="margin-bottom:10px">Акцент</div>
       <div class="accent-row" data-accents></div>
       <div class="divider"></div>
-      ${isBeta(state.user) ? `<button class="list-item" data-mine>${icon('palette', 18)}<div class="grow"><div class="small strong">Своя тема</div><div class="tiny muted">Соберите оформление под себя</div></div>${icon('forward', 15)}</button>` : ''}
+      <button class="list-item" data-mine>${icon('palette', 18)}<div class="grow"><div class="small strong">Своя тема</div><div class="tiny muted">Соберите оформление под себя</div></div>${icon('forward', 15)}</button>
     </div>
 
     ${premiumCard()}
@@ -110,13 +110,13 @@ export async function render(root) {
       <label class="row between" style="padding:8px 0"><span class="small">Тихая ночь: мягче экран после 23:00</span><input type="checkbox" data-pref="night" ${current.night ? 'checked' : ''}></label>
     </div>
 
-    ${isBeta(state.user) ? `<div class="card appear">
+    <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('eye', 18)}<span class="strong small">Что видно</span></div>
       <button class="list-item" data-mutewords>${icon('search', 18)}<div class="grow"><div class="small strong">Стоп-слова</div><div class="tiny muted" data-mute-count>Записи с этими словами будут свёрнуты</div></div>${icon('forward', 15)}</button>
       <label class="row between" style="padding:8px 0"><span class="small">Крупный текст</span><input type="checkbox" data-pref="bigtext" ${current.bigtext ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Больше контраста</span><input type="checkbox" data-pref="contrast" ${current.contrast ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Меньше движения</span><input type="checkbox" data-pref="still" ${current.still ? 'checked' : ''}></label>
-    </div>` : ''}
+    </div>
 
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('bell', 18)}<span class="strong small">Уведомления</span></div>
@@ -132,8 +132,8 @@ export async function render(root) {
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('lock', 18)}<span class="strong small">Безопасность</span></div>
       <button class="list-item" data-password>${icon('key', 18)}<div class="grow"><div class="small strong">Сменить пароль</div><div class="tiny muted">Другие сессии закроются</div></div>${icon('forward', 15)}</button>
-      ${isBeta(state.user) ? `<button class="list-item" data-pin>${icon('lock', 18)}<div class="grow"><div class="small strong">Код на вход</div><div class="tiny muted" data-pin-state>Спрашивать код при запуске</div></div>${icon('forward', 15)}</button>
-      <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>` : ''}
+      <button class="list-item" data-pin>${icon('lock', 18)}<div class="grow"><div class="small strong">Код на вход</div><div class="tiny muted" data-pin-state>Спрашивать код при запуске</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
     </div>
 
@@ -157,7 +157,7 @@ export async function render(root) {
 
   const premium = isPremium(state.user);
   const themes = root.querySelector('[data-themes]');
-  themes.innerHTML = THEMES.filter(([, , , , , beta]) => !beta || isBeta(state.user)).map(
+  themes.innerHTML = THEMES.map(
     ([key, label, bg, ink, locked]) => `<button class="swatch ${locked && !premium ? 'locked' : ''}" data-theme="${key}" data-locked="${locked && !premium}" style="background:${bg}" aria-pressed="${document.documentElement.dataset.theme === key}">
       ${locked && !premium ? `<span class="swatch-lock">${icon('lock', 11, 2.4)}</span>` : ''}
       <span style="color:${ink}">${label}</span></button>`

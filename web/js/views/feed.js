@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, isBeta } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
@@ -37,7 +37,6 @@ export function saveMuteWords(list) {
 }
 
 function mutedBy(post) {
-  if (!isBeta(state.user)) return null;
   const words = muteWords();
   if (!words.length) return null;
   const text = `${post.text || ''} ${(post.tags || []).join(' ')}`.toLowerCase();
@@ -218,7 +217,7 @@ async function loadSeason(root) {
   } catch {
     return;
   }
-  if (!info || info.season !== 'autumn' || !isBeta(state.user)) return;
+  if (!info || info.season !== 'autumn') return;
   if (localStorage.getItem(SEASON_HIDE) === info.season) return;
   const share = info.total ? Math.round((info.collected / info.total) * 100) : 0;
   host.innerHTML = `<div class="card season-card">
@@ -280,7 +279,7 @@ function renderComposer(root) {
   }
   const card = el(`
     <div class="card composer">
-      ${isBeta(state.user) ? `<div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>` : ''}
+      <div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>
       <div class="row" style="align-items:flex-start">
         ${avatar(state.user, 40)}
         <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="${esc(dayTheme()[1])}"></textarea>
@@ -295,8 +294,8 @@ function renderComposer(root) {
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
           <button class="icon-btn" data-reels>${icon('video', 18)}<span>В Видео</span></button>
           <button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>
-          ${isBeta(state.user) ? `<button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
-          <button class="icon-btn" data-later>${icon('clock', 18)}<span>Позже</span></button>` : ''}
+          <button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
+          <button class="icon-btn" data-later>${icon('clock', 18)}<span>Позже</span></button>
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
@@ -359,7 +358,7 @@ function renderComposer(root) {
     saveDraft();
     area.style.height = 'auto';
     area.style.height = `${Math.min(220, area.scrollHeight)}px`;
-    care.innerHTML = isBeta(state.user) && needsCare(area.value) ? careCard() : '';
+    care.innerHTML = needsCare(area.value) ? careCard() : '';
   });
 
   const moods = card.querySelector('[data-moods]');

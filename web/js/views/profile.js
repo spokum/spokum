@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, isBeta, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -493,11 +493,11 @@ export async function render(root) {
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
-      ${isBeta(fresh) ? `<button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-card>${icon('image', 20)}<div class="grow"><div class="strong small">Открытка настроения</div><div class="tiny muted">Карточка недели, которой можно поделиться</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>` : ''}
-      ${isBeta(fresh) ? `<button class="card list-item" data-invite>${icon('add_user', 20)}<div class="grow"><div class="strong small">Позвать друга</div><div class="tiny muted">Ваш код, монеты вам и другу</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-twins>${icon('users', 20)}<div class="grow"><div class="strong small">Похожие по настроению</div><div class="tiny muted">Люди, у которых недели похожи на вашу</div></div>${icon('forward', 16)}</button>` : ''}
+      <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-invite>${icon('add_user', 20)}<div class="grow"><div class="strong small">Позвать друга</div><div class="tiny muted">Ваш код, монеты вам и другу</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-twins>${icon('users', 20)}<div class="grow"><div class="strong small">Похожие по настроению</div><div class="tiny muted">Люди, у которых недели похожи на вашу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
@@ -519,7 +519,7 @@ export async function render(root) {
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
-  if (isBeta(fresh)) drawShelf(body, fresh, true, () => render(root));
+  drawShelf(body, fresh, true, () => render(root));
   body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
   body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
@@ -831,7 +831,7 @@ function openEditor(done) {
         <div data-avatar>${avatar(user, 54)}</div>
         <div class="col grow" style="gap:6px">
           <button class="btn btn-sm" data-pick>${icon('image', 16)} Сменить фото</button>
-          ${isBeta(user) ? `<button class="btn btn-sm" data-shapes>${icon('palette', 15)} Собрать из фигур</button>` : ''}
+          <button class="btn btn-sm" data-shapes>${icon('palette', 15)} Собрать из фигур</button>
           <button class="btn btn-sm btn-danger hidden" data-clear>${icon('trash', 15)} Убрать фото</button>
         </div>
       </div>
@@ -1248,7 +1248,7 @@ export async function openProfile(username) {
         const shelf = body.querySelector('[data-shelf]');
         if (shelf) shelf.innerHTML = giftShelf(gifts);
       } catch {}
-      if (isBeta(state.user)) drawShelf(body, user, false);
+      drawShelf(body, user, false);
     }
 
     const list = body.querySelector('[data-posts]');
