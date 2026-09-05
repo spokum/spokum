@@ -87,6 +87,12 @@ function pauseOverlay(ctx, size) {
   ctx.textAlign = 'start';
 }
 
+function capture(node, event) {
+  try {
+    capture(node, event);
+  } catch {}
+}
+
 function tapOnce(handler) {
   let last = 0;
   return (event) => {
@@ -186,7 +192,7 @@ function orbit(canvas, report) {
         });
         bind('pointerdown', (event) => {
           event.preventDefault();
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           if (state.over) {
             reset();
             return;
@@ -1052,7 +1058,7 @@ function storm(canvas, report) {
             touch = null;
             return;
           }
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           aim(event);
         });
         bind('pointermove', (event) => {
@@ -1329,7 +1335,7 @@ function maze3d(canvas, report) {
             reset();
             return;
           }
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           const spot = pointerPos(node, event);
           if (spot.x < width * 0.42 && spot.y > height * 0.55) stick = { id: event.pointerId, ox: spot.x, oy: spot.y, x: spot.x, y: spot.y };
           else drag = { id: event.pointerId, x: spot.x };
@@ -1681,7 +1687,7 @@ function dread(canvas, report) {
         bind('pointerdown', (event) => {
           event.preventDefault();
           if (state.over) return reset();
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           const spot = pointerPos(node, event);
           if (spot.x < width * 0.42 && spot.y > height * 0.55) stick = { id: event.pointerId, ox: spot.x, oy: spot.y, x: spot.x, y: spot.y };
           else drag = { id: event.pointerId, x: spot.x };
@@ -3737,7 +3743,7 @@ function sky(canvas, report) {
         bind('touchmove', steer);
         bind('pointerdown', (event) => {
           event.preventDefault();
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           if (S.over) {
             reset();
             return;
@@ -3975,7 +3981,7 @@ function roll(canvas, report) {
         bind('touchmove', move);
         bind('pointerdown', (event) => {
           event.preventDefault();
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           if (S.over) {
             start(1, 0, 3);
             return;
@@ -4277,7 +4283,7 @@ function trace(canvas, report) {
       bind(bind, node) {
         const down = (event) => {
           event.preventDefault();
-          node.setPointerCapture?.(event.pointerId);
+          capture(node, event);
           if (S.over) {
             start(1, 0);
             return;
@@ -4361,7 +4367,665 @@ function trace(canvas, report) {
   });
 }
 
+function shelter(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let S;
+    let aim = null;
+
+    const spawnWorld = () => {
+      const trees = [];
+      const berries = [];
+      for (let i = 0; i < 9; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const far = 90 + Math.random() * 190;
+        trees.push({ x: width / 2 + Math.cos(angle) * far, y: height / 2 + Math.sin(angle) * far, wood: 3 });
+      }
+      for (let i = 0; i < 7; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const far = 70 + Math.random() * 200;
+        berries.push({ x: width / 2 + Math.cos(angle) * far, y: height / 2 + Math.sin(angle) * far, ripe: true, at: 0 });
+      }
+      return { trees, berries };
+    };
+
+    const start = () => {
+      const world = spawnWorld();
+      S = {
+        x: width / 2,
+        y: height / 2 + 60,
+        wood: 2,
+        food: 2,
+        health: 100,
+        hunger: 100,
+        fire: 70,
+        clock: 0,
+        night: false,
+        nights: 0,
+        score: 0,
+        beasts: [],
+        marks: [],
+        over: false,
+        trees: world.trees,
+        berries: world.berries
+      };
+      aim = null;
+    };
+
+    start();
+
+    const fireX = () => width / 2;
+    const fireY = () => height / 2;
+
+    const near = (a, b, gap) => Math.hypot(a.x - b.x, a.y - b.y) < gap;
+
+    return {
+      score: () => Math.floor(S.score),
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const go = (event) => {
+          event.preventDefault();
+          if (S.over) {
+            start();
+            return;
+          }
+          aim = pointerPos(node, event);
+        };
+        bind('pointerdown', (event) => {
+          capture(node, event);
+          go(event);
+        });
+        bind('pointermove', (event) => {
+          if (!aim) return;
+          aim = pointerPos(node, event);
+          event.preventDefault();
+        });
+        bind('touchmove', go);
+        bind('touchstart', go);
+        bind('pointerup', () => {
+          aim = null;
+        });
+      },
+      update(dt) {
+        if (S.over) return;
+        S.clock += dt;
+        S.score += dt * 4;
+        const dayLength = 40;
+        const phase = (S.clock % dayLength) / dayLength;
+        const night = phase > 0.58;
+        if (night && !S.night) {
+          S.night = true;
+        }
+        if (!night && S.night) {
+          S.night = false;
+          S.nights += 1;
+          S.score += 140;
+          S.beasts = [];
+        }
+
+        if (aim) {
+          const dx = aim.x - S.x;
+          const dy = aim.y - S.y;
+          const far = Math.hypot(dx, dy);
+          if (far > 4) {
+            const speed = 132 * dt;
+            S.x += (dx / far) * speed;
+            S.y += (dy / far) * speed;
+          }
+        }
+        S.x = Math.max(14, Math.min(width - 14, S.x));
+        S.y = Math.max(60, Math.min(height - 24, S.y));
+
+        S.trees.forEach((tree) => {
+          if (tree.wood <= 0 || !near(S, tree, 34)) return;
+          tree.wood -= dt * 1.2;
+          S.wood += dt * 1.2;
+          if (tree.wood <= 0) tree.wood = 0;
+        });
+        S.berries.forEach((bush) => {
+          if (!bush.ripe || !near(S, bush, 30)) return;
+          bush.ripe = false;
+          bush.at = S.clock;
+          S.food += 1;
+          S.marks.push({ x: bush.x, y: bush.y, life: 1, text: 'еда' });
+        });
+        S.berries.forEach((bush) => {
+          if (!bush.ripe && S.clock - bush.at > 26) bush.ripe = true;
+        });
+
+        const atFire = Math.hypot(S.x - fireX(), S.y - fireY()) < 46;
+        if (atFire && S.wood >= 1) {
+          const put = Math.min(S.wood, dt * 2.4);
+          S.wood -= put;
+          S.fire = Math.min(100, S.fire + put * 26);
+        }
+
+        S.fire = Math.max(0, S.fire - dt * (night ? 4.2 : 2.4));
+        S.hunger = Math.max(0, S.hunger - dt * 2.1);
+        if (S.hunger < 40 && S.food >= 1) {
+          S.food -= 1;
+          S.hunger = Math.min(100, S.hunger + 42);
+          S.marks.push({ x: S.x, y: S.y - 18, life: 1, text: 'сыт' });
+        }
+
+        const cold = night && (!atFire || S.fire < 12);
+        if (cold) S.health -= dt * (S.fire < 8 ? 5.5 : 3);
+        if (S.hunger <= 0) S.health -= dt * 5;
+        if (!cold && S.hunger > 45) S.health = Math.min(100, S.health + dt * 2.2);
+
+        if (night) {
+          const want = 1 + Math.floor(S.nights * 0.8);
+          if (S.beasts.length < want && Math.random() < dt * 0.7) {
+            const edge = Math.random() * Math.PI * 2;
+            S.beasts.push({
+              x: width / 2 + Math.cos(edge) * (width * 0.8),
+              y: height / 2 + Math.sin(edge) * (height * 0.7),
+              hurt: 0
+            });
+          }
+          S.beasts.forEach((beast) => {
+            const dx = S.x - beast.x;
+            const dy = S.y - beast.y;
+            const far = Math.hypot(dx, dy) || 1;
+            const scared = Math.hypot(beast.x - fireX(), beast.y - fireY()) < 60 + S.fire * 0.9;
+            const speed = (scared ? -70 : 52 + S.nights * 5) * dt;
+            beast.x += (dx / far) * speed;
+            beast.y += (dy / far) * speed;
+            if (far < 20) {
+              beast.hurt -= dt;
+              if (beast.hurt <= 0) {
+                beast.hurt = 0.8;
+                S.health -= 9;
+                S.marks.push({ x: S.x, y: S.y - 20, life: 1, text: 'ай' });
+              }
+            }
+          });
+        }
+
+        S.marks.forEach((mark) => {
+          mark.life -= dt * 1.4;
+          mark.y -= dt * 18;
+        });
+        S.marks = S.marks.filter((mark) => mark.life > 0);
+
+        if (S.health <= 0) {
+          S.health = 0;
+          S.over = true;
+          report?.(Math.floor(S.score));
+        }
+      },
+      draw(ctx) {
+        const phase = (S.clock % 40) / 40;
+        const dark = S.night ? Math.min(1, (phase - 0.58) / 0.12) : 0;
+        backdrop(ctx, width, height, S.night ? ['#070c14', '#0d1622'] : ['#152018', '#20301f']);
+
+        ctx.strokeStyle = 'rgba(238,242,251,.05)';
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath();
+          ctx.arc(fireX(), fireY(), 40 + i * 42, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        S.trees.forEach((tree) => {
+          ctx.fillStyle = tree.wood > 0 ? 'rgba(126,180,140,.85)' : 'rgba(120,120,120,.35)';
+          ctx.beginPath();
+          ctx.moveTo(tree.x, tree.y - 20);
+          ctx.lineTo(tree.x + 13, tree.y + 10);
+          ctx.lineTo(tree.x - 13, tree.y + 10);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = 'rgba(90,70,50,.9)';
+          ctx.fillRect(tree.x - 2.5, tree.y + 8, 5, 9);
+        });
+
+        S.berries.forEach((bush) => {
+          ctx.fillStyle = bush.ripe ? '#d98fae' : 'rgba(150,150,150,.28)';
+          ctx.beginPath();
+          ctx.arc(bush.x, bush.y, 8, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        const glow = ctx.createRadialGradient(fireX(), fireY(), 6, fireX(), fireY(), 60 + S.fire);
+        glow.addColorStop(0, `rgba(255,180,90,${0.5 + S.fire / 260})`);
+        glow.addColorStop(1, 'rgba(255,150,60,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = S.fire > 6 ? '#ffb45c' : 'rgba(120,110,100,.7)';
+        ctx.beginPath();
+        ctx.arc(fireX(), fireY(), 10 + S.fire / 14, 0, Math.PI * 2);
+        ctx.fill();
+
+        S.beasts.forEach((beast) => {
+          ctx.fillStyle = '#c98b8b';
+          ctx.beginPath();
+          ctx.arc(beast.x, beast.y, 11, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#0b0f16';
+          ctx.fillRect(beast.x - 5, beast.y - 3, 3, 3);
+          ctx.fillRect(beast.x + 2, beast.y - 3, 3, 3);
+        });
+
+        ctx.fillStyle = '#eef2fb';
+        ctx.beginPath();
+        ctx.arc(S.x, S.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        S.marks.forEach((mark) => {
+          ctx.globalAlpha = Math.max(0, mark.life);
+          ctx.fillStyle = '#eef2fb';
+          ctx.font = '600 12px Inter, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(mark.text, mark.x, mark.y);
+          ctx.globalAlpha = 1;
+          ctx.textAlign = 'start';
+        });
+
+        if (dark > 0) {
+          ctx.fillStyle = `rgba(4,7,14,${dark * 0.42})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        const bar = (x, y, value, color, label) => {
+          ctx.fillStyle = 'rgba(238,242,251,.14)';
+          ctx.beginPath();
+          ctx.roundRect(x, y, 92, 9, 5);
+          ctx.fill();
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.roundRect(x, y, Math.max(2, (92 * Math.max(0, value)) / 100), 9, 5);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(238,242,251,.75)';
+          ctx.font = '600 10px Inter, system-ui, sans-serif';
+          ctx.fillText(label, x, y - 4);
+        };
+        bar(16, 26, S.health, '#8fd7c2', 'здоровье');
+        bar(16, 52, S.hunger, '#e8c07d', 'сытость');
+        bar(16, 78, S.fire, '#ffb45c', 'костёр');
+
+        ctx.fillStyle = 'rgba(238,242,251,.9)';
+        ctx.font = '600 13px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Дров ${Math.floor(S.wood)}`, width - 16, 34);
+        ctx.fillText(`Еды ${S.food}`, width - 16, 54);
+        ctx.fillText(`Ночей ${S.nights}`, width - 16, 74);
+        ctx.fillText(`Очки ${Math.floor(S.score)}`, width - 16, 94);
+        ctx.textAlign = 'start';
+
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(S.night ? 'Ночь: держитесь у огня' : 'День: соберите дрова и ягоды', width / 2, height - 16);
+        ctx.textAlign = 'start';
+
+        if (S.over) overText(ctx, width, height, 'Вы не дожили до утра', 'Коснитесь, чтобы начать заново');
+      }
+    };
+  });
+}
+
+function tube(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let S;
+    let grab = null;
+
+    const start = () => {
+      S = { z: 0, angle: 0, spin: 0, speed: 13, score: 0, rings: [], over: false, ahead: 26, coins: 0 };
+      grow();
+    };
+
+    const grow = () => {
+      while (S.ahead < S.z + 190) {
+        const bars = [];
+        if (Math.random() < 0.72) {
+          const gates = 1 + (Math.random() < 0.3 ? 1 : 0);
+          for (let i = 0; i < gates; i++) {
+            bars.push({ at: Math.random() * Math.PI * 2, span: 0.55 + Math.random() * 0.5 });
+          }
+        }
+        S.rings.push({ z: S.ahead, bars, hue: 180 + Math.random() * 90, coin: Math.random() < 0.45 ? Math.random() * Math.PI * 2 : null, taken: false });
+        S.ahead += 9 + Math.random() * 6;
+      }
+      S.rings = S.rings.filter((ring) => ring.z > S.z - 6);
+    };
+
+    start();
+
+    const project = (angle, z, radius) => {
+      const rz = z - S.z;
+      if (rz < 0.6) return null;
+      const local = angle - S.angle + Math.PI / 2;
+      const scale = (height * 2.6) / rz;
+      return {
+        x: width / 2 + Math.cos(local) * radius * scale,
+        y: height / 2 + Math.sin(local) * radius * scale,
+        d: rz
+      };
+    };
+
+    const fog = (d) => Math.max(0, Math.min(1, 1 - d / 130));
+
+    return {
+      score: () => Math.floor(S.score),
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const down = (event) => {
+          event.preventDefault();
+          capture(node, event);
+          if (S.over) {
+            start();
+            return;
+          }
+          grab = { x: pointerPos(node, event).x, angle: S.angle };
+        };
+        const move = (event) => {
+          if (!grab) return;
+          event.preventDefault();
+          const now = pointerPos(node, event).x;
+          S.angle = grab.angle + ((now - grab.x) / width) * 5.2;
+        };
+        bind('pointerdown', down);
+        bind('touchstart', down);
+        bind('pointermove', move);
+        bind('touchmove', move);
+        bind('pointerup', () => {
+          grab = null;
+        });
+        bind('touchend', () => {
+          grab = null;
+        });
+        bind('keydown', (event) => {
+          if (S.over && event.key === ' ') return start();
+          if (event.key === 'ArrowLeft') S.angle -= 0.28;
+          if (event.key === 'ArrowRight') S.angle += 0.28;
+        }, window);
+      },
+      update(dt) {
+        if (S.over) return;
+        S.speed = Math.min(40, S.speed + dt * 0.6);
+        S.z += S.speed * dt;
+        S.score += S.speed * dt * 0.7;
+        grow();
+
+        for (const ring of S.rings) {
+          if (Math.abs(ring.z - S.z) > 0.9) continue;
+          if (ring.coin !== null && !ring.taken) {
+            const gap = Math.abs(((ring.coin - S.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+            if (gap > Math.PI - 0.45) {
+              ring.taken = true;
+              S.coins += 1;
+              S.score += 60;
+            }
+          }
+          for (const bar of ring.bars) {
+            const gap = Math.abs(((bar.at - S.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+            if (gap > Math.PI - bar.span / 2) {
+              S.over = true;
+              report?.(Math.floor(S.score));
+              return;
+            }
+          }
+        }
+      },
+      draw(ctx) {
+        backdrop(ctx, width, height, ['#04070f', '#101a2e']);
+        const radius = 1;
+        const sorted = [...S.rings].sort((a, b) => b.z - a.z);
+        for (const ring of sorted) {
+          const d = ring.z - S.z;
+          if (d < 0.7 || d > 135) continue;
+          const alpha = fog(d);
+          const points = [];
+          for (let i = 0; i <= 28; i++) {
+            points.push(project((i / 28) * Math.PI * 2, ring.z, radius));
+          }
+          if (points.some((point) => !point)) continue;
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+          ctx.strokeStyle = `hsla(${ring.hue}, 55%, 60%, ${alpha * 0.35})`;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          ring.bars.forEach((bar) => {
+            const arc = [];
+            for (let i = 0; i <= 12; i++) {
+              arc.push(project(bar.at - bar.span / 2 + (bar.span * i) / 12, ring.z, radius));
+            }
+            if (arc.some((point) => !point)) return;
+            ctx.beginPath();
+            ctx.moveTo(arc[0].x, arc[0].y);
+            arc.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+            ctx.strokeStyle = `hsla(${ring.hue}, 70%, 62%, ${alpha})`;
+            ctx.lineWidth = Math.max(3, 220 / d);
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          });
+
+          if (ring.coin !== null && !ring.taken) {
+            const spot = project(ring.coin, ring.z, radius * 0.82);
+            if (spot) {
+              ctx.fillStyle = `rgba(216,180,92,${alpha})`;
+              ctx.beginPath();
+              ctx.arc(spot.x, spot.y, Math.max(2, 60 / d), 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        const meY = height / 2 + ((height * 2.6) / 5) * radius * 0.86;
+        ctx.fillStyle = '#eef2fb';
+        ctx.beginPath();
+        ctx.arc(width / 2, Math.min(height - 46, meY), 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(126,231,196,.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(width / 2, Math.min(height - 46, meY), 16, 0, Math.PI * 2);
+        ctx.stroke();
+
+        hud(ctx, width, [`Очки ${Math.floor(S.score)}`, `Искры ${S.coins}`, `Скорость ${Math.round(S.speed * 10)}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Ведите пальцем: труба крутится вокруг вас', width / 2, height - 16);
+        ctx.textAlign = 'start';
+        if (S.over) overText(ctx, width, height, 'Врезались', 'Коснитесь, чтобы начать заново');
+      }
+    };
+  });
+}
+
+function mine(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let S;
+    let aim = null;
+
+    const start = () => {
+      S = { x: width / 2, depth: 0, speed: 90, score: 0, gems: 0, lives: 3, rocks: [], stones: [], over: false, flash: 0, ahead: 0 };
+      grow();
+    };
+
+    const grow = () => {
+      while (S.ahead < S.depth + height * 2) {
+        const kind = Math.random();
+        if (kind < 0.62) {
+          S.rocks.push({ x: 30 + Math.random() * (width - 60), y: S.ahead, r: 14 + Math.random() * 16, hot: Math.random() < 0.25 });
+        } else {
+          S.stones.push({ x: 24 + Math.random() * (width - 48), y: S.ahead, taken: false });
+        }
+        S.ahead += 46 + Math.random() * 46;
+      }
+      S.rocks = S.rocks.filter((rock) => rock.y > S.depth - height);
+      S.stones = S.stones.filter((stone) => stone.y > S.depth - height);
+    };
+
+    start();
+
+    const meY = () => height * 0.3;
+
+    return {
+      score: () => Math.floor(S.score),
+      resize(size) {
+        width = size.w;
+        height = size.h;
+      },
+      bind(bind, node) {
+        const steer = (event) => {
+          event.preventDefault();
+          if (S.over) {
+            start();
+            return;
+          }
+          aim = pointerPos(node, event).x;
+        };
+        bind('pointerdown', (event) => {
+          capture(node, event);
+          steer(event);
+        });
+        bind('pointermove', (event) => {
+          if (aim === null) return;
+          aim = pointerPos(node, event).x;
+        });
+        bind('touchstart', steer);
+        bind('touchmove', steer);
+        bind('pointerup', () => {
+          aim = null;
+        });
+      },
+      update(dt) {
+        if (S.over) return;
+        S.speed = Math.min(320, S.speed + dt * 7);
+        S.depth += S.speed * dt;
+        S.score += S.speed * dt * 0.09;
+        if (S.flash > 0) S.flash = Math.max(0, S.flash - dt * 2);
+        grow();
+
+        if (aim !== null) S.x += (aim - S.x) * Math.min(1, dt * 7);
+        S.x = Math.max(16, Math.min(width - 16, S.x));
+
+        const y = S.depth + meY();
+        for (const stone of S.stones) {
+          if (stone.taken || Math.abs(stone.y - y) > 16) continue;
+          if (Math.abs(stone.x - S.x) > 20) continue;
+          stone.taken = true;
+          S.gems += 1;
+          S.score += 45;
+        }
+        for (const rock of S.rocks) {
+          if (rock.hit || Math.abs(rock.y - y) > rock.r + 10) continue;
+          if (Math.abs(rock.x - S.x) > rock.r + 10) continue;
+          rock.hit = true;
+          S.flash = 1;
+          S.lives -= rock.hot ? 2 : 1;
+          if (S.lives <= 0) {
+            S.lives = 0;
+            S.over = true;
+            report?.(Math.floor(S.score));
+            return;
+          }
+        }
+      },
+      draw(ctx) {
+        backdrop(ctx, width, height, ['#141017', '#241a1a']);
+        const top = S.depth - meY();
+        ctx.strokeStyle = 'rgba(238,242,251,.05)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 12; i++) {
+          const y = ((i * 90 - (S.depth % 90)) + height) % height;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        S.stones.forEach((stone) => {
+          if (stone.taken) return;
+          const y = stone.y - top;
+          if (y < -30 || y > height + 30) return;
+          ctx.fillStyle = '#7fd7e8';
+          ctx.beginPath();
+          ctx.moveTo(stone.x, y - 9);
+          ctx.lineTo(stone.x + 8, y);
+          ctx.lineTo(stone.x, y + 9);
+          ctx.lineTo(stone.x - 8, y);
+          ctx.closePath();
+          ctx.fill();
+        });
+
+        S.rocks.forEach((rock) => {
+          const y = rock.y - top;
+          if (y < -60 || y > height + 60) return;
+          ctx.fillStyle = rock.hit ? 'rgba(120,120,120,.25)' : rock.hot ? '#c9603f' : '#6b6560';
+          ctx.beginPath();
+          ctx.arc(rock.x, y, rock.r, 0, Math.PI * 2);
+          ctx.fill();
+          if (rock.hot && !rock.hit) {
+            ctx.strokeStyle = 'rgba(255,150,80,.5)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(rock.x, y, rock.r + 5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+
+        ctx.fillStyle = '#eef2fb';
+        ctx.beginPath();
+        ctx.moveTo(S.x, meY() + 14);
+        ctx.lineTo(S.x + 11, meY() - 10);
+        ctx.lineTo(S.x - 11, meY() - 10);
+        ctx.closePath();
+        ctx.fill();
+
+        if (S.flash > 0) {
+          ctx.fillStyle = `rgba(220,110,120,${S.flash * 0.3})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        hud(ctx, width, [`Глубина ${Math.floor(S.depth / 10)}`, `Кристаллы ${S.gems}`, `Жизни ${S.lives}`]);
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Ведите пальцем, камни бьют, раскалённые бьют вдвое', width / 2, height - 16);
+        ctx.textAlign = 'start';
+        if (S.over) overText(ctx, width, height, 'Завалило', 'Коснитесь, чтобы копать снова');
+      }
+    };
+  });
+}
+
 export const GAMES = [
+  {
+    id: 'shelter',
+    title: 'Убежище',
+    desc: 'Выживалка: днём дрова, ночью костёр и звери',
+    tint: ['#101a14', '#1e2c1e'],
+    mount: shelter
+  },
+  {
+    id: 'tube',
+    title: 'Труба',
+    desc: 'Трёхмерный тоннель, который крутится вокруг вас',
+    tint: ['#04070f', '#152444'],
+    mount: tube
+  },
+  {
+    id: 'mine',
+    title: 'Шахта',
+    desc: 'Спуск вглубь за кристаллами мимо камней',
+    tint: ['#141017', '#2c1e1e'],
+    mount: mine
+  },
   {
     id: 'sky',
     title: 'Небесный каньон',

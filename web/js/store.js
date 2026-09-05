@@ -85,7 +85,7 @@ export function isPremium(user) {
   return !!(user && user.premiumUntil && user.premiumUntil > Date.now());
 }
 
-export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss', 'ink', 'rose', 'gold'];
+export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss', 'ink', 'rose', 'gold', 'pearl', 'emerald', 'nebula', 'mine'];
 export const PREMIUM_ACCENTS = ['gold', 'rose', 'ice'];
 
 export const PREMIUM_PERKS = [
@@ -128,6 +128,62 @@ export function setUser(user) {
   emit('user', user);
 }
 
+const MINE_KEY = 'spokum.theme.mine';
+
+export function myTheme() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MINE_KEY));
+    if (saved && typeof saved.hue === 'number') return saved;
+  } catch {}
+  return { dark: true, hue: 210, tint: 14, accent: '#87b7a3' };
+}
+
+export function saveMyTheme(patch) {
+  const next = { ...myTheme(), ...patch };
+  localStorage.setItem(MINE_KEY, JSON.stringify(next));
+  paintMyTheme();
+  return next;
+}
+
+export function paintMyTheme() {
+  const mine = myTheme();
+  let tag = document.getElementById('spokum-mine');
+  if (!tag) {
+    tag = document.createElement('style');
+    tag.id = 'spokum-mine';
+    document.head.appendChild(tag);
+  }
+  const hue = mine.hue;
+  const tint = Math.max(0, Math.min(40, mine.tint ?? 14));
+  const ink = mine.dark
+    ? {
+        bg: `hsl(${hue} ${tint}% 7%)`,
+        bg2: `hsl(${hue} ${tint}% 11%)`,
+        surface: 'rgba(255,255,255,.04)',
+        surface2: 'rgba(255,255,255,.07)',
+        line: 'rgba(255,255,255,.08)',
+        lineStrong: 'rgba(255,255,255,.15)',
+        text: `hsl(${hue} 18% 90%)`,
+        muted: `hsl(${hue} 12% 60%)`,
+        shadow: '0 16px 40px rgba(0,0,0,.5)',
+        glow: '.55'
+      }
+    : {
+        bg: `hsl(${hue} ${Math.min(30, tint + 8)}% 95%)`,
+        bg2: `hsl(${hue} ${Math.min(30, tint + 8)}% 99%)`,
+        surface: 'rgba(20,25,35,.035)',
+        surface2: 'rgba(20,25,35,.06)',
+        line: 'rgba(20,25,35,.1)',
+        lineStrong: 'rgba(20,25,35,.17)',
+        text: `hsl(${hue} 22% 16%)`,
+        muted: `hsl(${hue} 12% 44%)`,
+        shadow: '0 14px 34px rgba(40,50,70,.1)',
+        glow: '.7'
+      };
+  tag.textContent = `[data-theme='mine']{--bg:${ink.bg};--bg-2:${ink.bg2};--surface:${ink.surface};--surface-2:${ink.surface2};--line:${ink.line};--line-strong:${ink.lineStrong};--text:${ink.text};--muted:${ink.muted};--shadow:${ink.shadow};--glow-1:${mine.accent}1f;--glow-2:${mine.accent}14;--glow:${ink.glow};}
+[data-theme='mine'][data-accent]{--accent:${mine.accent};--accent-soft:${mine.accent}2b;--accent-ink:${mine.dark ? '#08110e' : '#ffffff'};}`;
+}
+
 export function applyAppearance(user) {
   const root = document.documentElement;
   let theme = user?.theme || localStorage.getItem('spokum.theme') || 'calm';
@@ -144,6 +200,7 @@ export function applyAppearance(user) {
       patch.accent = accent;
     }
   }
+  if (theme === 'mine') paintMyTheme();
   root.dataset.theme = theme;
   root.dataset.accent = accent;
   localStorage.setItem('spokum.theme', theme);

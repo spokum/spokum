@@ -1,4 +1,4 @@
-import { api, state, setUser, applyAppearance, isPremium, PREMIUM_PERKS } from '../store.js';
+import { api, state, setUser, applyAppearance, isPremium, myTheme, saveMyTheme, PREMIUM_PERKS } from '../store.js';
 import { el, esc, fullDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, confirmSheet, emptyState } from '../ui.js';
@@ -20,7 +20,15 @@ const THEMES = [
   ['storm', 'Гроза', 'linear-gradient(140deg,#151d23,#283a45)', '#dde8ef', false],
   ['ink', 'Чернила', 'linear-gradient(140deg,#05070a,#141c26)', '#e6ebf2', true],
   ['rose', 'Роза', 'linear-gradient(140deg,#261923,#4a2440)', '#f2dfe8', true],
-  ['gold', 'Золото', 'linear-gradient(140deg,#1f1a10,#4a3c1c)', '#f2e8d2', true]
+  ['gold', 'Золото', 'linear-gradient(140deg,#1f1a10,#4a3c1c)', '#f2e8d2', true],
+  ['autumn', 'Осень', 'linear-gradient(140deg,#17110c,#3a2413)', '#efe0cf', false],
+  ['rain', 'Дождь', 'linear-gradient(140deg,#0e1418,#22323c)', '#d8e3ea', false],
+  ['cocoa', 'Какао', 'linear-gradient(140deg,#140f0d,#33221c)', '#e8dbd2', false],
+  ['lilac', 'Сирень', 'linear-gradient(140deg,#f4f2f8,#ddd6ee)', '#2a2437', false],
+  ['carbon', 'Карбон', 'linear-gradient(140deg,#0c0d0f,#1b1e22)', '#dcdfe4', false],
+  ['pearl', 'Жемчуг', 'linear-gradient(140deg,#eef1f4,#ffffff)', '#1f2933', true],
+  ['emerald', 'Изумруд', 'linear-gradient(140deg,#071411,#134034)', '#d6ece4', true],
+  ['nebula', 'Туманность', 'linear-gradient(140deg,#0a0817,#2a1d5c)', '#e2ddf5', true]
 ];
 
 const ACCENTS = [
@@ -75,6 +83,8 @@ export async function render(root) {
       <div class="divider"></div>
       <div class="small" style="margin-bottom:10px">Акцент</div>
       <div class="accent-row" data-accents></div>
+      <div class="divider"></div>
+      <button class="list-item" data-mine>${icon('palette', 18)}<div class="grow"><div class="small strong">Своя тема</div><div class="tiny muted">Соберите оформление под себя</div></div>${icon('forward', 15)}</button>
     </div>
 
     ${premiumCard()}
@@ -225,6 +235,7 @@ export async function render(root) {
         : 'Коды ещё не созданы, пароль восстановить нельзя';
     }).catch(() => {});
   }
+  root.querySelector('[data-mine]').onclick = () => openMyTheme(() => render(root));
   root.querySelector('[data-codes]').onclick = () => openCodes(() => render(root));
 
   root.querySelector('[data-rules]').onclick = async () => {
@@ -272,6 +283,94 @@ export async function render(root) {
   });
 }
 
+
+
+const MY_ACCENTS = ['#87b7a3', '#9c93c2', '#c79486', '#8badca', '#c6b083', '#d98fae', '#7fd7e8', '#d8b45c', '#9bb37f', '#e08f6a'];
+
+function openMyTheme(done) {
+  if (!isPremium(state.user)) return toast('Своя тема доступна с подпиской СпокУм Премиум', 'err');
+  let mine = myTheme();
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Соберите оформление под себя. Тема живёт на этом устройстве и включается как обычная.</p>
+    <div class="row" style="gap:8px">
+      <button class="btn grow" data-dark>Тёмная</button>
+      <button class="btn grow" data-light>Светлая</button>
+    </div>
+    <div>
+      <div class="tiny muted" style="margin-bottom:6px">Оттенок фона</div>
+      <input type="range" class="range" data-hue min="0" max="359" value="${mine.hue}">
+    </div>
+    <div>
+      <div class="tiny muted" style="margin-bottom:6px">Насыщенность</div>
+      <input type="range" class="range" data-tint min="0" max="40" value="${mine.tint ?? 14}">
+    </div>
+    <div>
+      <div class="tiny muted" style="margin-bottom:8px">Акцент</div>
+      <div class="accent-row" data-colors></div>
+    </div>
+    <div class="card" data-preview style="padding:14px">
+      <div class="strong small">Как это выглядит</div>
+      <p class="tiny muted" style="margin:6px 0 10px;line-height:1.5">Тихий вечер, чай и никаких срочных дел.</p>
+      <button class="btn btn-primary btn-sm" type="button">Кнопка</button>
+    </div>
+    <button class="btn btn-primary" data-use>${icon('palette', 17)} Включить свою тему</button>
+  </div>`);
+  const sheet = openSheet('Своя тема', body);
+  const colors = body.querySelector('[data-colors]');
+  const preview = body.querySelector('[data-preview]');
+
+  const paint = () => {
+    body.querySelector('[data-dark]').classList.toggle('btn-primary', mine.dark);
+    body.querySelector('[data-light]').classList.toggle('btn-primary', !mine.dark);
+    colors.innerHTML = MY_ACCENTS.map(
+      (color) => `<button class="accent-dot" data-color="${color}" aria-pressed="${color === mine.accent}" style="background:${color}"></button>`
+    ).join('');
+    colors.querySelectorAll('[data-color]').forEach((button) => {
+      button.onclick = () => {
+        mine = saveMyTheme({ accent: button.dataset.color });
+        paint();
+      };
+    });
+    const tint = Math.min(40, mine.tint ?? 14);
+    preview.style.background = mine.dark ? `hsl(${mine.hue} ${tint}% 11%)` : `hsl(${mine.hue} ${Math.min(30, tint + 8)}% 99%)`;
+    preview.style.color = mine.dark ? `hsl(${mine.hue} 18% 90%)` : `hsl(${mine.hue} 22% 16%)`;
+    preview.style.borderColor = mine.dark ? 'rgba(255,255,255,.12)' : 'rgba(20,25,35,.12)';
+    preview.querySelector('.btn').style.background = mine.accent;
+    preview.querySelector('.btn').style.color = mine.dark ? '#08110e' : '#ffffff';
+  };
+
+  body.querySelector('[data-dark]').onclick = () => {
+    mine = saveMyTheme({ dark: true });
+    paint();
+  };
+  body.querySelector('[data-light]').onclick = () => {
+    mine = saveMyTheme({ dark: false });
+    paint();
+  };
+  body.querySelector('[data-hue]').addEventListener('input', (event) => {
+    mine = saveMyTheme({ hue: Number(event.target.value) });
+    paint();
+  });
+  body.querySelector('[data-tint]').addEventListener('input', (event) => {
+    mine = saveMyTheme({ tint: Number(event.target.value) });
+    paint();
+  });
+  body.querySelector('[data-use]').onclick = async () => {
+    setPref('theme', 'mine');
+    const patch = { theme: 'mine' };
+    if (state.user) {
+      setUser({ ...state.user, ...patch });
+      applyAppearance(state.user);
+      api.updateMe(patch).catch(() => {});
+    } else {
+      applyAppearance(null);
+    }
+    sheet.close();
+    toast('Своя тема включена');
+    done?.();
+  };
+  paint();
+}
 
 async function openCodes(done) {
   if (!state.user) return toast('Сначала войдите', 'err');

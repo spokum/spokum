@@ -364,6 +364,127 @@
   --accent-shadow: 0 10px 26px -12px var(--accent);
 }
 
+
+[data-theme='autumn'] {
+  --bg: #17110c;
+  --bg-2: #221810;
+  --surface: rgba(255,220,180,.045);
+  --surface-2: rgba(255,220,180,.075);
+  --line: rgba(255,214,168,.1);
+  --line-strong: rgba(255,214,168,.18);
+  --text: #efe0cf;
+  --muted: #a08b76;
+  --shadow: 0 16px 40px rgba(0,0,0,.5);
+  --glow-1: rgba(216,140,72,.1);
+  --glow-2: rgba(180,96,60,.09);
+  --glow: .6;
+}
+
+[data-theme='rain'] {
+  --bg: #0e1418;
+  --bg-2: #141d23;
+  --surface: rgba(200,225,240,.04);
+  --surface-2: rgba(200,225,240,.07);
+  --line: rgba(190,215,235,.09);
+  --line-strong: rgba(190,215,235,.16);
+  --text: #d8e3ea;
+  --muted: #7d8d99;
+  --shadow: 0 16px 40px rgba(0,0,0,.45);
+  --glow-1: rgba(120,170,200,.08);
+  --glow-2: rgba(90,130,170,.08);
+  --glow: .5;
+}
+
+[data-theme='cocoa'] {
+  --bg: #140f0d;
+  --bg-2: #1e1613;
+  --surface: rgba(240,210,190,.04);
+  --surface-2: rgba(240,210,190,.07);
+  --line: rgba(230,200,180,.09);
+  --line-strong: rgba(230,200,180,.16);
+  --text: #e8dbd2;
+  --muted: #98857b;
+  --shadow: 0 16px 40px rgba(0,0,0,.5);
+  --glow-1: rgba(190,130,90,.08);
+  --glow-2: rgba(150,100,70,.07);
+  --glow: .5;
+}
+
+[data-theme='lilac'] {
+  --bg: #f4f2f8;
+  --bg-2: #fcfbff;
+  --surface: rgba(60,50,90,.035);
+  --surface-2: rgba(60,50,90,.06);
+  --line: rgba(60,50,90,.1);
+  --line-strong: rgba(60,50,90,.17);
+  --text: #2a2437;
+  --muted: #6f6883;
+  --shadow: 0 14px 34px rgba(70,60,110,.1);
+  --glow-1: rgba(160,140,220,.16);
+  --glow-2: rgba(200,170,230,.16);
+  --glow: .7;
+}
+
+[data-theme='carbon'] {
+  --bg: #0c0d0f;
+  --bg-2: #131518;
+  --surface: rgba(255,255,255,.03);
+  --surface-2: rgba(255,255,255,.055);
+  --line: rgba(255,255,255,.07);
+  --line-strong: rgba(255,255,255,.13);
+  --text: #dcdfe4;
+  --muted: #7c828c;
+  --shadow: 0 16px 40px rgba(0,0,0,.55);
+  --glow-1: rgba(140,150,165,.05);
+  --glow-2: rgba(110,120,140,.05);
+  --glow: .35;
+}
+
+[data-theme='pearl'] {
+  --bg: #eef1f4;
+  --bg-2: #ffffff;
+  --surface: rgba(30,45,60,.03);
+  --surface-2: rgba(30,45,60,.055);
+  --line: rgba(30,45,60,.1);
+  --line-strong: rgba(30,45,60,.16);
+  --text: #1f2933;
+  --muted: #667382;
+  --shadow: 0 14px 34px rgba(40,60,80,.1);
+  --glow-1: rgba(150,190,220,.18);
+  --glow-2: rgba(200,210,230,.18);
+  --glow: .75;
+}
+
+[data-theme='emerald'] {
+  --bg: #071411;
+  --bg-2: #0d211c;
+  --surface: rgba(160,255,220,.045);
+  --surface-2: rgba(160,255,220,.075);
+  --line: rgba(150,240,210,.1);
+  --line-strong: rgba(150,240,210,.18);
+  --text: #d6ece4;
+  --muted: #7fa094;
+  --shadow: 0 16px 40px rgba(0,0,0,.5);
+  --glow-1: rgba(60,200,150,.1);
+  --glow-2: rgba(40,150,120,.09);
+  --glow: .6;
+}
+
+[data-theme='nebula'] {
+  --bg: #0a0817;
+  --bg-2: #151030;
+  --surface: rgba(200,190,255,.05);
+  --surface-2: rgba(200,190,255,.085);
+  --line: rgba(190,180,255,.12);
+  --line-strong: rgba(190,180,255,.2);
+  --text: #e2ddf5;
+  --muted: #8c86ad;
+  --shadow: 0 18px 44px rgba(0,0,0,.55);
+  --glow-1: rgba(150,110,255,.14);
+  --glow-2: rgba(90,150,255,.12);
+  --glow: .75;
+}
+
 [data-theme='neon'][data-accent='mint']   { --accent: #5be6c7; --accent-soft: rgba(91,230,199,.16);  --accent-ink: #05221c; }
 [data-theme='neon'][data-accent='violet'] { --accent: #a58bff; --accent-soft: rgba(165,139,255,.18); --accent-ink: #140a33; }
 [data-theme='neon'][data-accent='coral']  { --accent: #ff8f7a; --accent-soft: rgba(255,143,122,.18); --accent-ink: #2e0e07; }
@@ -1613,4 +1734,41 @@ svg { display: block; flex: none; }
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 1.5px;
+}
+
+.range {
+  width: 100%;
+  height: 22px;
+  appearance: none;
+  background: transparent;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+.range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
 }
