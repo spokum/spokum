@@ -643,6 +643,7 @@ export const local = {
       return { posts: rows, more: false, cursor: null };
     }
     const all = state.posts
+      .filter((p) => !p.publishAt || p.publishAt <= Date.now() || p.authorId === viewer?.id)
       .filter((p) => (includeRemoved || !p.removed) && (!mood || p.mood === mood))
       .filter((p) => {
         const own = p.kind || 'text';
@@ -744,7 +745,7 @@ export const local = {
     return { ok: true };
   },
 
-  async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll }) {
+  async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll, publishAt }) {
     const user = need();
     notMuted(user);
     const body = String(text || '').trim().slice(0, 5000);
@@ -766,6 +767,7 @@ export const local = {
       views: 0,
       mood: MOODS.includes(mood) ? mood : 'calm',
       createdAt: Date.now(),
+      publishAt: publishAt && publishAt > Date.now() ? publishAt : 0,
       removed: false,
       removedBy: null,
       removedReason: '',

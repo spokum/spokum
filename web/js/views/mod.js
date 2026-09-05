@@ -1,4 +1,4 @@
-import { api, state, setUser } from '../store.js';
+import { api, state, setUser, isBeta } from '../store.js';
 import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, promptSheet, emptyState, pickImage } from '../ui.js';
@@ -11,7 +11,7 @@ const TABS = [
   ['queue', 'Публикации'],
   ['reels', 'Видео'],
   ['reports', 'Жалобы'],
-  ['appeals', 'Споры'],
+  ['appeals', 'Споры', true],
   ['school', 'Наставник'],
   ['strikes', 'Мой статус']
 ];
@@ -44,7 +44,9 @@ export async function openMod() {
   let active = 'queue';
 
   const drawTabs = () => {
-    tabs.innerHTML = TABS.map(([key, label]) => `<button class="tab ${key === active ? 'active' : ''}" data-tab="${key}">${label}</button>`).join('');
+    tabs.innerHTML = TABS.filter(([, , beta]) => !beta || isBeta(state.user))
+      .map(([key, label]) => `<button class="tab ${key === active ? 'active' : ''}" data-tab="${key}">${label}</button>`)
+      .join('');
     tabs.querySelectorAll('[data-tab]').forEach((button) => {
       button.onclick = () => {
         active = button.dataset.tab;

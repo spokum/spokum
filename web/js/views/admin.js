@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, isPremium } from '../store.js';
+import { api, state, setUser, MOODS, isPremium, isBeta } from '../store.js';
 import { el, esc, timeAgo, fullDate, debounce, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, promptSheet, emptyState } from '../ui.js';
@@ -7,7 +7,7 @@ import { RANKS } from '../store.js';
 
 const TABS = [
   ['stats', 'Аналитика'],
-  ['health', 'Здоровье'],
+  ['health', 'Здоровье', true],
   ['users', 'Люди'],
   ['team', 'Модераторы'],
   ['content', 'Контент'],
@@ -42,7 +42,9 @@ export async function openAdmin() {
   let active = 'stats';
 
   const drawTabs = () => {
-    tabs.innerHTML = TABS.map(([key, label]) => `<button class="tab ${key === active ? 'active' : ''}" data-tab="${key}">${label}</button>`).join('');
+    tabs.innerHTML = TABS.filter(([, , beta]) => !beta || isBeta(state.user))
+      .map(([key, label]) => `<button class="tab ${key === active ? 'active' : ''}" data-tab="${key}">${label}</button>`)
+      .join('');
     tabs.querySelectorAll('[data-tab]').forEach((button) => {
       button.onclick = () => {
         active = button.dataset.tab;

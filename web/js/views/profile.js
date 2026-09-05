@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, isBeta, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -399,9 +399,9 @@ export async function render(root) {
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
+      ${isBeta(fresh) ? `<button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-card>${icon('image', 20)}<div class="grow"><div class="strong small">Открытка настроения</div><div class="tiny muted">Карточка недели, которой можно поделиться</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
@@ -423,7 +423,7 @@ export async function render(root) {
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
-  drawShelf(body, fresh, true, () => render(root));
+  if (isBeta(fresh)) drawShelf(body, fresh, true, () => render(root));
   body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
 
@@ -653,6 +653,78 @@ function openPinEditor(user, done) {
   draw();
 }
 
+
+function shapeAvatar(seed, hue) {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  let value = seed;
+  const next = () => {
+    value = (value * 1103515245 + 12345) % 2147483648;
+    return value / 2147483648;
+  };
+  const back = ctx.createLinearGradient(0, 0, size, size);
+  back.addColorStop(0, `hsl(${hue} 44% 26%)`);
+  back.addColorStop(1, `hsl(${(hue + 60) % 360} 40% 16%)`);
+  ctx.fillStyle = back;
+  ctx.fillRect(0, 0, size, size);
+  const count = 4 + Math.floor(next() * 4);
+  for (let i = 0; i < count; i++) {
+    const shade = `hsla(${(hue + 30 + i * 37) % 360}, ${45 + next() * 30}%, ${52 + next() * 26}%, ${0.35 + next() * 0.45})`;
+    ctx.fillStyle = shade;
+    const kind = Math.floor(next() * 3);
+    const x = next() * size;
+    const y = next() * size;
+    const r = 30 + next() * 90;
+    ctx.beginPath();
+    if (kind === 0) {
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    } else if (kind === 1) {
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y + r);
+      ctx.lineTo(x - r, y + r);
+      ctx.closePath();
+    } else {
+      ctx.roundRect(x - r / 2, y - r / 2, r, r, 18);
+    }
+    ctx.fill();
+  }
+  return canvas.toDataURL('image/png');
+}
+
+function openShapes(done) {
+  let hue = Number(state.user?.hue) || 220;
+  let seed = Math.floor(Math.random() * 100000) + 1;
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Аватар из фигур для тех, кто не хочет ставить фото. Каждый раз получается новый.</p>
+    <div class="row" style="justify-content:center"><img data-shot class="shape-avatar" alt=""></div>
+    <div><div class="tiny muted" style="margin-bottom:6px">Цвет</div><input type="range" class="range" data-hue min="0" max="359" value="${hue}"></div>
+    <button class="btn" data-roll>${icon('refresh', 16)} Другой набор</button>
+    <button class="btn btn-primary" data-use>${icon('check', 17)} Поставить</button>
+  </div>`);
+  const sheet = openSheet('Аватар из фигур', body);
+  const shot = body.querySelector('[data-shot]');
+  const paint = () => {
+    shot.src = shapeAvatar(seed, hue);
+  };
+  body.querySelector('[data-roll]').onclick = () => {
+    seed = Math.floor(Math.random() * 100000) + 1;
+    paint();
+  };
+  body.querySelector('[data-hue]').addEventListener('input', (event) => {
+    hue = Number(event.target.value);
+    paint();
+  });
+  body.querySelector('[data-use]').onclick = () => {
+    done(shot.src);
+    sheet.close();
+    toast('Аватар собран, не забудьте сохранить профиль');
+  };
+  paint();
+}
+
 function openEditor(done) {
   const user = state.user;
   const body = el(`
@@ -661,6 +733,7 @@ function openEditor(done) {
         <div data-avatar>${avatar(user, 54)}</div>
         <div class="col grow" style="gap:6px">
           <button class="btn btn-sm" data-pick>${icon('image', 16)} Сменить фото</button>
+          ${isBeta(user) ? `<button class="btn btn-sm" data-shapes>${icon('palette', 15)} Собрать из фигур</button>` : ''}
           <button class="btn btn-sm btn-danger hidden" data-clear>${icon('trash', 15)} Убрать фото</button>
         </div>
       </div>
@@ -698,6 +771,12 @@ function openEditor(done) {
       redraw();
     }
   };
+  body.querySelector('[data-shapes]')?.addEventListener('click', () => {
+    openShapes((picture) => {
+      avatarData = picture;
+      redraw();
+    });
+  });
   clearButton.addEventListener('click', () => {
     avatarData = null;
     redraw();
@@ -1071,7 +1150,7 @@ export async function openProfile(username) {
         const shelf = body.querySelector('[data-shelf]');
         if (shelf) shelf.innerHTML = giftShelf(gifts);
       } catch {}
-      drawShelf(body, user, false);
+      if (isBeta(state.user)) drawShelf(body, user, false);
     }
 
     const list = body.querySelector('[data-posts]');

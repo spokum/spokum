@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, isBeta } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
@@ -37,6 +37,7 @@ export function saveMuteWords(list) {
 }
 
 function mutedBy(post) {
+  if (!isBeta(state.user)) return null;
   const words = muteWords();
   if (!words.length) return null;
   const text = `${post.text || ''} ${(post.tags || []).join(' ')}`.toLowerCase();
@@ -217,7 +218,7 @@ async function loadSeason(root) {
   } catch {
     return;
   }
-  if (!info || info.season !== 'autumn') return;
+  if (!info || info.season !== 'autumn' || !isBeta(state.user)) return;
   if (localStorage.getItem(SEASON_HIDE) === info.season) return;
   host.innerHTML = `<div class="card season-card">
     <div class="season-leaf">${icon('maple', 26)}</div>
@@ -281,7 +282,7 @@ function renderComposer(root) {
         ${avatar(state.user, 40)}
         <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="${esc(dayTheme()[1])}"></textarea>
       </div>
-      <div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>
+      ${isBeta(state.user) ? `<div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>` : ''}
       <div data-preview></div>
       <div data-care></div>
       ${draft.text.trim() ? '<div class="tiny muted" style="margin:6px 0 0">Черновик сохранён, можно уйти и вернуться</div>' : ''}
@@ -292,7 +293,8 @@ function renderComposer(root) {
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
           <button class="icon-btn" data-reels>${icon('video', 18)}<span>В Видео</span></button>
           <button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>
-          <button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
+          ${isBeta(state.user) ? `<button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
+          <button class="icon-btn" data-later>${icon('clock', 18)}<span>Позже</span></button>` : ''}
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
@@ -300,6 +302,37 @@ function renderComposer(root) {
     </div>`);
 
   card.querySelector('[data-poll-new]')?.addEventListener('click', () => openPollComposer(root));
+  card.querySelector('[data-later]')?.addEventListener('click', async () => {
+    if (!draft.text.trim() && !draft.media.length) return toast('Сначала напишите запись', 'err');
+    const menu = el(`<div class="col" style="gap:6px">
+      ${[[1, 'Через час'], [3, 'Через три часа'], [8, 'Утром, через восемь часов'], [24, 'Завтра в это же время']]
+        .map(([hours, label]) => `<button class="list-item" data-hours="${hours}">${icon('clock', 17)}<span>${label}</span></button>`)
+        .join('')}
+    </div>`);
+    const sheet = openSheet('Опубликовать позже', menu);
+    menu.querySelectorAll('[data-hours]').forEach((button) => {
+      button.onclick = async () => {
+        sheet.close();
+        try {
+          await api.createPost({
+            text: draft.text.trim(),
+            image: draft.media[0] || null,
+            media: draft.media,
+            mood: draft.mood,
+            publishAt: Date.now() + Number(button.dataset.hours) * 3600000
+          });
+          draft.text = '';
+          draft.media = [];
+          saveDraft();
+          toast('Запись выйдет в назначенное время');
+          load(root);
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  });
+
   card.querySelector('[data-voice]')?.addEventListener('click', async () => {
     const { recordVoice } = await import('./chats.js');
     recordVoice(async ({ media, duration }) => {
@@ -324,7 +357,7 @@ function renderComposer(root) {
     saveDraft();
     area.style.height = 'auto';
     area.style.height = `${Math.min(220, area.scrollHeight)}px`;
-    care.innerHTML = needsCare(area.value) ? careCard() : '';
+    care.innerHTML = isBeta(state.user) && needsCare(area.value) ? careCard() : '';
   });
 
   const moods = card.querySelector('[data-moods]');
@@ -874,6 +907,7 @@ export function postCard(post, refresh, options = {}) {
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 18)}</button>
       </div>
       ${post.pinned ? `<div class="post-repost">${icon('star', 13)}<span>Закреплено автором</span></div>` : ''}
+      ${post.publishAt && post.publishAt > Date.now() ? `<div class="post-repost">${icon('clock', 13)}<span>Выйдет ${esc(timeAgo(post.publishAt).replace('назад', ''))} спустя, пока видно только вам</span></div>` : ''}
       ${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
       ${post.sound && !post.media?.length && !post.video ? voiceBlock(post) : ''}
       ${postMedia(post)}

@@ -89,6 +89,7 @@ function shapePost(row, likedIds, extra = {}) {
     sound: row.sound || null,
     poll: row.poll || null,
     pinned: !!row.pinned,
+    publishAt: ms(row.publish_at),
     repostOf: row.repost_of || null,
     origin: extra.origin || null
   };
@@ -225,6 +226,7 @@ export async function createSupabase(url, key) {
   const POST_CORE = 'id, body, image, mood, created_at, removed, removed_reason';
   const POST_TAIL = 'author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
   const POST_TIERS = [
+    `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
     `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, ${POST_TAIL}`,
     `${POST_CORE}, kind, media, video, poster, duration, views, ${POST_TAIL}`,
     `${POST_CORE}, ${POST_TAIL}`
@@ -238,6 +240,7 @@ export async function createSupabase(url, key) {
     legacyPosts = postTier >= POST_TIERS.length - 1;
     return true;
   };
+  let later = true;
   const missingColumn = (error) => !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message || ''));
 
   const wake = () => {
@@ -590,6 +593,7 @@ export async function createSupabase(url, key) {
         if (!includeRemoved) request = request.eq('removed', false);
         if (picked) return request.in('id', picked).limit(picked.length);
         request = request.order('created_at', { ascending: false }).limit(size);
+        if (later) request = request.lte('publish_at', new Date().toISOString());
         if (mood) request = request.eq('mood', mood);
         if (!legacyPosts && kind === 'reels') request = request.in('kind', ['video', 'album']);
         if (!legacyPosts && kind === 'video') request = request.eq('kind', 'video');
@@ -599,6 +603,10 @@ export async function createSupabase(url, key) {
         return request;
       };
       let { data, error } = await build();
+      if (missingColumn(error) && later) {
+        later = false;
+        ({ data, error } = await build());
+      }
       while (missingColumn(error) && dropTier()) {
         if (legacyPosts && (kind === 'video' || kind === 'album' || kind === 'reels')) return { posts: [], more: false, cursor: null };
         ({ data, error } = await build());
@@ -677,7 +685,7 @@ export async function createSupabase(url, key) {
       return data.publicUrl;
     },
 
-    async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll }) {
+    async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll, publishAt }) {
       const id = requireUid();
       const body = String(text || '').trim().slice(0, 5000);
       const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
@@ -695,7 +703,8 @@ export async function createSupabase(url, key) {
         sound: sound || null,
         poll: poll || null
       };
-      const shed = [['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
+      if (publishAt && publishAt > Date.now()) payload.publish_at = new Date(publishAt).toISOString();
+      const shed = [['publish_at'], ['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
       let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
       for (const keys of shed) {
         if (!missingColumn(error)) break;

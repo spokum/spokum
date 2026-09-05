@@ -278,6 +278,22 @@ export async function openChat(chatId) {
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
+
+const SAFE_HOSTS = ['spokum.github.io', 'github.com', 't.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'ok.ru', 'wikipedia.org', 'yandex.ru', 'google.com', 'rutube.ru', 'dzen.ru'];
+
+function linkWarning(text) {
+  const found = String(text || '').match(/https?:\/\/[^\s]+|(?:^|\s)[a-z0-9-]+\.(?:ru|com|net|org|io|xyz|top|info|site|online|link)(?:\/[^\s]*)?/gi);
+  if (!found) return '';
+  const risky = found
+    .map((raw) => raw.trim().replace(/^https?:\/\//i, '').split('/')[0].toLowerCase())
+    .filter((host) => host && !SAFE_HOSTS.some((safe) => host === safe || host.endsWith('.' + safe)));
+  if (!risky.length) return '';
+  const odd = risky.find((host) => /xn--|[а-яё]/i.test(host) || host.split('.').length > 3 || host.length > 30);
+  return `<div class="link-warn">${icon('warn', 13)}<span>${odd
+    ? 'Ссылка выглядит подозрительно, домен маскируется под чужой. Не вводите там пароли'
+    : 'Ссылка ведёт на незнакомый сайт. Не вводите там пароль от СпокУма'}</span></div>`;
+}
+
 function bubble(message, chat, lastAuthor) {
   const mine = message.author?.id === state.user?.id;
   if (message.kind === 'call') {
@@ -297,7 +313,7 @@ function bubble(message, chat, lastAuthor) {
     inner = `<div class="chat-reel" data-reel><video src="${esc(message.media || '')}" playsinline muted loop preload="metadata"></video><span class="chat-reel-play">${icon('play', 22)}</span></div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
   } else if (message.kind === 'post') {
     inner = `<div class="chat-reel" data-reel>${message.media ? `<img src="${esc(message.media)}" alt="" loading="lazy">` : `<span class="chat-reel-play">${icon('feed', 22)}</span>`}</div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
-  } else inner = esc(message.body);
+  } else inner = esc(message.body) + linkWarning(message.body);
 
   const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
   const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
