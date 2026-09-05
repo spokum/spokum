@@ -356,10 +356,20 @@ export async function openMoodMap() {
   return sheet;
 }
 
+const STREAK_KEY = 'spokum.streak.day';
+
 export async function refreshStreak() {
   if (!api.touchStreak || !state.user) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STREAK_KEY) || 'null');
+    if (saved && saved.day === today && saved.user === state.user.id) return { days: saved.days, best: saved.best, same: true };
+  } catch {}
   try {
     const result = await api.touchStreak();
+    try {
+      localStorage.setItem(STREAK_KEY, JSON.stringify({ day: today, user: state.user.id, days: result.days, best: result.best }));
+    } catch {}
     if (!result.same) {
       const { user } = await api.me();
       if (user) setUser(user);

@@ -351,18 +351,41 @@ async function handle(signal) {
   }
 }
 
+let live = false;
+
 export function initCalls() {
   if (started) return;
   started = true;
-  window.addEventListener('spokum:call', (event) => handle(event.detail));
-  clearInterval(poller);
-  poller = setInterval(async () => {
+  window.addEventListener('spokum:call', (event) => {
+    live = true;
+    handle(event.detail);
+  });
+  window.addEventListener('spokum:message', () => {
+    live = true;
+  });
+
+  const check = async () => {
     if (!state.user || !api.callInbox) return;
+    if (document.hidden) return;
     try {
       const { signals } = await api.callInbox(lastSignal);
       for (const signal of signals) await handle(signal);
     } catch {}
-  }, 3500);
+  };
+
+  const pace = () => {
+    clearInterval(poller);
+    const alive = live || api.realtimeUp?.();
+    const gap = document.hidden ? 45000 : alive ? 20000 : 7000;
+    poller = setInterval(check, gap);
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    pace();
+    if (!document.hidden) check();
+  });
+  setInterval(pace, 60000);
+  pace();
 }
 
 export function stopCalls() {

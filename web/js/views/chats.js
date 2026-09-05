@@ -202,14 +202,12 @@ export async function openChat(chatId) {
   });
 
   const draw = async () => {
-    const { messages } = await api.messages(chatId);
-    let reactions = {};
-    if (api.chatReactions) {
-      try {
-        const answer = await api.chatReactions(chatId);
-        reactions = answer.reactions || {};
-      } catch {}
-    }
+    const [{ messages }, reactions] = await Promise.all([
+      api.messages(chatId),
+      api.chatReactions
+        ? api.chatReactions(chatId).then((answer) => answer.reactions || {}).catch(() => ({}))
+        : Promise.resolve({})
+    ]);
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 120;
     body.innerHTML = '';
     if (!messages.length) {

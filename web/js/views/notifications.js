@@ -185,6 +185,12 @@ export async function pullNotifications() {
       systemNotify(row);
       if (!document.hidden && row.kind !== 'message' && row.kind !== 'newpost') toast(row.title || 'Новое уведомление');
     });
+  const fresh = rows.filter((row) => !row.read).length;
+  if (fresh < rows.length || rows.length < 12) {
+    unread = fresh;
+    paint();
+    return;
+  }
   await refreshBell();
 }
 

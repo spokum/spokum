@@ -36,6 +36,22 @@ export async function initBackend() {
   return backend.mode;
 }
 
+const memo = new Map();
+
+export async function cached(key, ttl, make) {
+  const now = Date.now();
+  const hit = memo.get(key);
+  if (hit && now - hit.at < ttl) return hit.value;
+  const value = await make();
+  memo.set(key, { at: now, value });
+  return value;
+}
+
+export function forget(key) {
+  if (key) memo.delete(key);
+  else memo.clear();
+}
+
 export function isBeta(user) {
   const who = user || state.user;
   return !!(who && (who.isBeta || who.username === 'silver'));

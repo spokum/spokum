@@ -167,7 +167,7 @@ export function renderAuth(root, done) {
     drawAvatar();
 
     form.querySelector('[data-pick]')?.addEventListener('click', async () => {
-      const image = await pickImage(500);
+      const image = await pickImage(360);
       if (image) {
         avatar = image;
         drawAvatar();

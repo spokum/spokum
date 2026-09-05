@@ -273,6 +273,15 @@ function start() {
     setTimeout(() => module.offerNotifications?.(), 4000);
   }).catch(() => {});
   import('./accounts.js').then((module) => module.rememberCurrent()).catch(() => {});
+  if (api.tidyProfile) {
+    setTimeout(() => {
+      api.tidyProfile()
+        .then((result) => {
+          if (result?.moved) refreshUser();
+        })
+        .catch(() => {});
+    }, 6000);
+  }
   handOverSession();
 }
 
@@ -372,9 +381,15 @@ async function openTab(tab) {
   try {
     const bell = await import('./views/notifications.js');
     bell.mountBell(host, tab);
-    bell.refreshBell();
+    if (Date.now() - bellAt > 20000) {
+      bellAt = Date.now();
+      bell.refreshBell();
+    }
   } catch {}
-  refreshUnread();
+  if (Date.now() - unreadAt > 45000) {
+    unreadAt = Date.now();
+    refreshUnread();
+  }
 }
 
 async function refreshUnread() {
@@ -453,7 +468,10 @@ document.addEventListener('click', async (event) => {
   openLightbox(shot.dataset.full || shot.src, { caption: shot.dataset.caption || (shot.classList.contains('status-icon') ? 'Статус' : '') });
 }, true);
 
-window.addEventListener('spokum:message', () => refreshUnread());
+window.addEventListener('spokum:message', () => {
+  unreadAt = Date.now();
+  refreshUnread();
+});
 
 window.addEventListener('spokum:notify', async (event) => {
   const bell = await import('./views/notifications.js');
@@ -465,6 +483,9 @@ window.addEventListener('spokum:notify', async (event) => {
   else if (item.kind !== 'message' && item.kind !== 'newpost') toast(item.title || 'Новое уведомление');
 });
 
+let unreadAt = 0;
+let bellAt = 0;
+
 async function pullNews() {
   if (!state.user) return;
   api.wake?.();
@@ -472,14 +493,17 @@ async function pullNews() {
     const bell = await import('./views/notifications.js');
     await bell.pullNotifications();
   } catch {}
-  refreshUnread();
+  if (Date.now() - unreadAt > 45000) {
+    unreadAt = Date.now();
+    refreshUnread();
+  }
 }
 
 let newsTimer = null;
 
 function paceNews() {
   clearInterval(newsTimer);
-  const gap = document.hidden ? 25000 : 7000;
+  const gap = document.hidden ? 60000 : 20000;
   newsTimer = setInterval(pullNews, gap);
 }
 
@@ -490,7 +514,10 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', pullNews);
 window.addEventListener('focus', pullNews);
-setInterval(refreshUser, 30000);
+setInterval(() => {
+  if (document.hidden) return;
+  refreshUser();
+}, 120000);
 subscribe((event) => {
   if (event === 'user') applyAppearance(state.user);
 });

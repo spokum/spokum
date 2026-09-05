@@ -1,4 +1,4 @@
-import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium } from '../store.js';
+import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, cached, forget } from '../store.js';
 import { el, esc, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
@@ -163,7 +163,7 @@ async function loadEvent(root) {
   if (!host || !api.eventState || !state.user) return;
   let info = null;
   try {
-    info = await api.eventState();
+    info = await cached('event', 600000, () => api.eventState());
   } catch {
     host.innerHTML = '';
     return;
@@ -193,6 +193,8 @@ async function loadEvent(root) {
       try {
         await api.eventClaim();
         info.claimed = true;
+        forget('event');
+        forget('season');
         import('../app.js').then(({ refreshUser }) => refreshUser?.()).catch(() => {});
         toast('Розочка на память и 100 монет ваши');
         draw();
@@ -213,7 +215,7 @@ async function loadSeason(root) {
   if (!host || !api.seasonState || !state.user) return;
   let info = null;
   try {
-    info = await api.seasonState();
+    info = await cached('season', 600000, () => api.seasonState());
   } catch {
     return;
   }
@@ -245,7 +247,7 @@ async function loadAnnouncements(root) {
   const host = root.querySelector('[data-announce]');
   if (!host || !api.listAnnouncements) return;
   try {
-    const { announcements } = await api.listAnnouncements();
+    const { announcements } = await cached('announce', 600000, () => api.listAnnouncements());
     const hidden = JSON.parse(localStorage.getItem('spokum.announce.hidden') || '[]');
     const fresh = (announcements || []).filter((row) => !hidden.includes(row.id));
     host.innerHTML = fresh

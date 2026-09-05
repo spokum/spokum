@@ -863,7 +863,7 @@ function openEditor(done) {
     redraw();
   };
   body.querySelector('[data-pick]').onclick = async () => {
-    const image = await pickImage(500);
+    const image = await pickImage(360);
     if (image) {
       avatarData = image;
       redraw();

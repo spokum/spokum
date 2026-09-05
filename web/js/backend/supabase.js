@@ -224,7 +224,8 @@ export async function createSupabase(url, key) {
   }
 
   const POST_CORE = 'id, body, image, mood, created_at, removed, removed_reason';
-  const POST_TAIL = 'author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  const AUTHOR_FIELDS = 'id, username, display_name, avatar, hue, mood, is_admin, is_moderator, is_developer, is_verified, mod_rank, premium_until, status_icon, is_beta';
+  const POST_TAIL = `author:profiles!posts_author_id_fkey(${AUTHOR_FIELDS}), likes(count), comments(count)`;
   const POST_TIERS = [
     `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
     `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, ${POST_TAIL}`,
@@ -242,6 +243,31 @@ export async function createSupabase(url, key) {
   };
   let later = true;
   const missingColumn = (error) => !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message || ''));
+
+  const uploadData = async (dataUrl, hint = 'jpg') => {
+    const me = uid;
+    if (!me) throw new Error('Нужен вход');
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const known = /^(video|image)\//.test(blob.type || '') ? blob.type.split(';')[0] : '';
+    const type = known || 'image/jpeg';
+    const ext = (type.split('/')[1] || 'jpg').replace('quicktime', 'mov');
+    const path = `${me}/${hint}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const upload = await sb.storage.from('media').upload(path, blob, { contentType: type, upsert: false });
+    if (upload.error) throw new Error(upload.error.message);
+    const { data } = sb.storage.from('media').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const lighten = async (value, hint) => {
+    if (typeof value !== 'string' || !value.startsWith('data:')) return value;
+    if (value.length < 24000) return value;
+    try {
+      return await uploadData(value, hint);
+    } catch {
+      return value;
+    }
+  };
 
   const wake = () => {
     if (!uid) return;
@@ -306,6 +332,10 @@ export async function createSupabase(url, key) {
 
     wake,
 
+    realtimeUp() {
+      return channel?.state === 'joined';
+    },
+
     async register({ username, displayName, password }) {
       const name = String(username || '').toLowerCase().replace(/^@/, '');
       if (!/^[a-z0-9_]{3,20}$/.test(name)) throw new Error('Юзернейм: 3-20 символов, латиница, цифры и _');
@@ -361,6 +391,36 @@ export async function createSupabase(url, key) {
       return { user: await profileById(uid) };
     },
 
+    async tidyProfile() {
+      if (!uid) return { moved: 0 };
+      const { data } = await sb.from('profiles').select('avatar, banner, pins, status_icon').eq('id', uid).maybeSingle();
+      if (!data) return { moved: 0 };
+      const heavy = (value) => typeof value === 'string' && value.startsWith('data:') && value.length >= 24000;
+      const fields = {};
+      let moved = 0;
+      if (heavy(data.avatar)) {
+        fields.avatar = await lighten(data.avatar, 'avatar');
+        if (fields.avatar !== data.avatar) moved += 1;
+      }
+      if (heavy(data.banner)) {
+        fields.banner = await lighten(data.banner, 'banner');
+        if (fields.banner !== data.banner) moved += 1;
+      }
+      if (heavy(data.status_icon)) {
+        fields.status_icon = await lighten(data.status_icon, 'status');
+        if (fields.status_icon !== data.status_icon) moved += 1;
+      }
+      const pins = normalizePins(data.pins);
+      if (pins.some((pin) => heavy(pin.image))) {
+        for (const pin of pins) pin.image = await lighten(pin.image, 'pin');
+        fields.pins = pins;
+        moved += 1;
+      }
+      if (!moved) return { moved: 0 };
+      await sb.from('profiles').update(fields).eq('id', uid);
+      return { moved };
+    },
+
     async updateMe(patch) {
       const id = requireUid();
       const fields = {};
@@ -370,16 +430,20 @@ export async function createSupabase(url, key) {
       if (patch.mood != null) fields.mood = patch.mood;
       if (patch.theme != null) fields.theme = patch.theme;
       if (patch.accent != null) fields.accent = patch.accent;
-      if (patch.avatar !== undefined) fields.avatar = patch.avatar;
-      if (patch.pins !== undefined) fields.pins = normalizePins(patch.pins);
-      if (patch.banner !== undefined) fields.banner = patch.banner;
+      if (patch.avatar !== undefined) fields.avatar = await lighten(patch.avatar, 'avatar');
+      if (patch.pins !== undefined) {
+        const pins = normalizePins(patch.pins);
+        for (const pin of pins) pin.image = await lighten(pin.image, 'pin');
+        fields.pins = pins;
+      }
+      if (patch.banner !== undefined) fields.banner = await lighten(patch.banner, 'banner');
       if (patch.dayWord !== undefined) {
         fields.day_word = patch.dayWord;
         fields.day_word_at = new Date().toISOString();
       }
       if (patch.shareWord !== undefined) fields.share_word = !!patch.shareWord;
       if (patch.notifyPosts !== undefined) fields.notify_posts = !!patch.notifyPosts;
-      if (patch.statusIcon !== undefined) fields.status_icon = patch.statusIcon;
+      if (patch.statusIcon !== undefined) fields.status_icon = await lighten(patch.statusIcon, 'status');
       const { error } = await sb.from('profiles').update(fields).eq('id', id);
       guard(error);
       return { user: await profileById(id) };
@@ -669,13 +733,13 @@ export async function createSupabase(url, key) {
     },
 
     async uploadMedia(dataUrl, hint = 'jpg') {
-      const me = requireUid();
+      requireUid();
       const response = await fetch(dataUrl);
       const blob = await response.blob();
       const known = /^(video|image)\//.test(blob.type || '') ? blob.type.split(';')[0] : '';
       const type = known || (hint === 'mp4' ? 'video/mp4' : 'image/jpeg');
       const ext = (type.split('/')[1] || hint).replace('quicktime', 'mov');
-      const path = `${me}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const upload = await sb.storage.from('media').upload(path, blob, { contentType: type, upsert: false });
       if (upload.error) {
         if (/bucket/i.test(upload.error.message)) throw new Error('В Supabase нет хранилища media. Прогоните schema.sql заново');
@@ -743,9 +807,9 @@ export async function createSupabase(url, key) {
     async listComments(id) {
       const grab = (columns) =>
         sb.from('comments').select(columns).eq('post_id', id).order('id', { ascending: true }).limit(200);
-      let { data, error } = await grab('id, body, created_at, removed, removed_reason, author:profiles!comments_author_id_fkey(*)');
+      let { data, error } = await grab(`id, body, created_at, removed, removed_reason, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`);
       if (missingColumn(error)) {
-        ({ data, error } = await grab('id, body, created_at, author:profiles!comments_author_id_fkey(*)'));
+        ({ data, error } = await grab(`id, body, created_at, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`));
       }
       guard(error);
       return {
@@ -889,7 +953,7 @@ export async function createSupabase(url, key) {
     async messages(chatId) {
       const { data, error } = await sb
         .from('messages')
-        .select('*, author:profiles!messages_author_id_fkey(*)')
+        .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .eq('chat_id', chatId)
         .eq('removed', false)
         .order('id', { ascending: true })
@@ -910,7 +974,7 @@ export async function createSupabase(url, key) {
           media: payload.media || null,
           duration: payload.duration || 0
         })
-        .select('*, author:profiles!messages_author_id_fkey(*)')
+        .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .single();
       guard(error);
       return { message: shapeMessage(data) };
@@ -1721,7 +1785,7 @@ export async function createSupabase(url, key) {
     async stories() {
       const { data, error } = await sb
         .from('stories')
-        .select('*, author:profiles!stories_author_id_fkey(*)')
+        .select(`*, author:profiles!stories_author_id_fkey(${AUTHOR_FIELDS})`)
         .gt('expires_at', new Date().toISOString())
         .order('id', { ascending: true });
       guard(error);
