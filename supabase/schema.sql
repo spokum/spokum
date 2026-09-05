@@ -3588,3 +3588,126 @@ grant execute on function public.my_appeals() to authenticated;
 grant execute on function public.appeal_queue() to authenticated;
 grant execute on function public.appeal_judge(bigint, text, text) to authenticated;
 grant execute on function public.month_recap() to authenticated;
+
+create or replace function public.admin_health()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+
+  select jsonb_build_object(
+    'freshUsers', (select count(*) from public.profiles where created_at > now() - interval '24 hours'),
+    'reportsDay', (select count(*) from public.reports where created_at > now() - interval '24 hours'),
+    'reportsWeek', (select count(*) from public.reports where created_at > now() - interval '7 days'),
+    'removedDay', (select count(*) from public.posts where removed and removed_at > now() - interval '24 hours'),
+    'punishDay', (select count(*) from public.punishments where created_at > now() - interval '24 hours'),
+    'openReports', (select count(*) from public.reports where status = 'open'),
+    'openAppeals', (select count(*) from public.appeals where status = 'open'),
+    'silentMods', (
+      select coalesce(jsonb_agg(jsonb_build_object('username', m.username, 'displayName', m.display_name)), '[]'::jsonb)
+      from public.profiles m
+      where m.is_moderator and not m.is_admin
+        and not exists (
+          select 1 from public.punishments p
+          where p.actor_id = m.id and p.created_at > now() - interval '7 days'
+        )
+    ),
+    'crowdedDevices', (
+      select coalesce(jsonb_agg(row_to_json(d)), '[]'::jsonb) from (
+        select device_id, count(distinct user_id) as people
+        from public.device_users
+        where last_seen > now() - interval '7 days'
+        group by device_id
+        having count(distinct user_id) >= 3
+        order by count(distinct user_id) desc
+        limit 5
+      ) d
+    ),
+    'nightOwls', (
+      select coalesce(jsonb_agg(jsonb_build_object('username', username, 'displayName', display_name)), '[]'::jsonb)
+      from (
+        select username, display_name from public.profiles
+        where last_seen > now() - interval '12 hours'
+          and extract(hour from (last_seen at time zone 'Europe/Moscow')) between 2 and 5
+        order by last_seen desc
+        limit 6
+      ) owls
+    ),
+    'quietest', (
+      select coalesce(jsonb_agg(jsonb_build_object('username', username, 'displayName', display_name, 'days', floor(extract(epoch from (now() - last_seen)) / 86400))), '[]'::jsonb)
+      from (
+        select username, display_name, last_seen from public.profiles
+        where last_seen < now() - interval '14 days'
+        order by last_seen asc
+        limit 5
+      ) sleepy
+    )
+  ) into result;
+
+  return result;
+end;
+$$;
+
+create or replace function public.admin_praise_pick()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  result jsonb;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  select jsonb_build_object(
+    'id', p.id,
+    'username', p.username,
+    'displayName', p.display_name,
+    'avatar', p.avatar,
+    'hue', p.hue,
+    'posts', (select count(*) from public.posts x where x.author_id = p.id and not x.removed and x.created_at > now() - interval '7 days'),
+    'answers', (select count(*) from public.comments c where c.author_id = p.id and not c.removed and c.created_at > now() - interval '7 days')
+  ) into result
+  from public.profiles p
+  where p.banned_until is null
+    and p.id <> auth.uid()
+    and p.last_seen > now() - interval '7 days'
+    and not exists (select 1 from public.punishments pun where pun.user_id = p.id and pun.created_at > now() - interval '30 days')
+  order by random()
+  limit 1;
+  return coalesce(result, jsonb_build_object('id', null));
+end;
+$$;
+
+drop function if exists public.admin_praise(uuid, text, integer);
+
+create or replace function public.admin_praise(target uuid, note text, purse integer default 100)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  gift integer := least(500, greatest(0, coalesce(purse, 100)));
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  if target is null then raise exception 'Некого хвалить'; end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set coins = coalesce(coins, 0) + gift where id = target;
+  perform set_config('spokum.privileged', 'off', true);
+  insert into public.coin_log (user_id, amount, reason) values (target, gift, 'Спасибо от администрации');
+  perform public.notify_user(target, 'premium', 'Спасибо вам',
+    coalesce(nullif(trim(note), ''), 'Администрация заметила, что с вами в сети спокойнее'),
+    jsonb_build_object('coins', gift));
+  return jsonb_build_object('ok', true, 'coins', gift);
+end;
+$$;
+
+create or replace function public.admin_quiet_call(body text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админов'; end if;
+  insert into public.announcements (title, body, tone, until, author_id)
+  values ('Пять минут тишины',
+    coalesce(nullif(trim(body), ''), 'Отложите телефон, посмотрите в окно и просто подышите. Мы никуда не убежим'),
+    'info', now() + interval '2 hours', auth.uid());
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.admin_health() to authenticated;
+grant execute on function public.admin_praise_pick() to authenticated;
+grant execute on function public.admin_praise(uuid, text, integer) to authenticated;
+grant execute on function public.admin_quiet_call(text) to authenticated;

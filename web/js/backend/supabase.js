@@ -1502,6 +1502,30 @@ export async function createSupabase(url, key) {
       return { stats: data };
     },
 
+    async adminHealth() {
+      const { data, error } = await sb.rpc('admin_health');
+      guard(error);
+      return { health: data || {} };
+    },
+
+    async praisePick() {
+      const { data, error } = await sb.rpc('admin_praise_pick');
+      guard(error);
+      return { who: data && data.id ? data : null };
+    },
+
+    async praise(id, note, coins) {
+      const { data, error } = await sb.rpc('admin_praise', { target: id, note: note || '', purse: coins || 100 });
+      guard(error);
+      return data;
+    },
+
+    async quietCall(body) {
+      const { error } = await sb.rpc('admin_quiet_call', { body: body || '' });
+      guard(error);
+      return { ok: true };
+    },
+
     async adminUsers(query) {
       const { data, error } = await sb.rpc('admin_users', { search: query || '' });
       guard(error);

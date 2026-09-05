@@ -7,6 +7,7 @@ import { RANKS } from '../store.js';
 
 const TABS = [
   ['stats', 'Аналитика'],
+  ['health', 'Здоровье'],
   ['users', 'Люди'],
   ['team', 'Модераторы'],
   ['content', 'Контент'],
@@ -55,6 +56,7 @@ export async function openAdmin() {
     body.innerHTML = '<div class="card" style="height:140px;opacity:.35"></div>';
     try {
       if (active === 'stats') await drawStats(body);
+      if (active === 'health') await drawHealth(body);
       if (active === 'users') await drawUsers(body);
       if (active === 'team') await drawTeam(body);
       if (active === 'content') await drawContent(body);
@@ -68,6 +70,168 @@ export async function openAdmin() {
 
   drawTabs();
   draw();
+}
+
+
+async function drawHealth(body) {
+  if (!api.adminHealth) {
+    body.innerHTML = emptyState('warn', 'Раздел недоступен', 'Прогоните схему, и здоровье сети появится');
+    return;
+  }
+  let health = {};
+  try {
+    const answer = await api.adminHealth();
+    health = answer.health || {};
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+
+  const alarm = [];
+  if ((health.openReports || 0) > 10) alarm.push(`Жалоб без ответа: ${health.openReports}`);
+  if ((health.reportsDay || 0) > (health.reportsWeek || 0) / 7 * 3 && (health.reportsDay || 0) > 5) {
+    alarm.push('Жалоб за сутки втрое больше обычного');
+  }
+  if ((health.freshUsers || 0) > 40) alarm.push(`Регистраций за сутки: ${health.freshUsers}`);
+  if ((health.crowdedDevices || []).length) alarm.push('Есть телефоны, с которых заходят три и больше аккаунтов');
+  if ((health.openAppeals || 0) > 0) alarm.push(`Споров ждут решения: ${health.openAppeals}`);
+
+  const tile = (label, value, tone) => `<div class="health-tile ${tone || ''}">
+    <div class="v">${value}</div><div class="k">${esc(label)}</div></div>`;
+
+  body.innerHTML = `<div class="col">
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">${icon('spark', 18)}<span class="strong small">Что происходит прямо сейчас</span></div>
+      <div class="health-grid">
+        ${tile('новых людей за сутки', health.freshUsers ?? 0)}
+        ${tile('жалоб за сутки', health.reportsDay ?? 0, (health.reportsDay || 0) > 10 ? 'warn' : '')}
+        ${tile('снято записей', health.removedDay ?? 0)}
+        ${tile('наказаний', health.punishDay ?? 0)}
+        ${tile('жалоб открыто', health.openReports ?? 0, (health.openReports || 0) > 10 ? 'warn' : '')}
+        ${tile('споров открыто', health.openAppeals ?? 0, (health.openAppeals || 0) ? 'warn' : '')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">${icon('warn', 18)}<span class="strong small">На что посмотреть</span></div>
+      ${alarm.length
+        ? alarm.map((line) => `<div class="small" style="padding:5px 0;line-height:1.5">${esc(line)}</div>`).join('')
+        : '<div class="tiny muted">Всё ровно, ничего необычного</div>'}
+    </div>
+
+    ${(health.silentMods || []).length
+      ? `<div class="card">
+          <div class="row" style="margin-bottom:8px">${icon('shield', 18)}<span class="strong small">Молчат неделю</span></div>
+          <div class="chips">${health.silentMods.map((row) => `<span class="chip">@${esc(row.username)}</span>`).join('')}</div>
+          <div class="tiny muted" style="margin-top:8px">Модераторы без единого действия за семь дней. Может, им просто нечего разбирать</div>
+        </div>`
+      : ''}
+
+    ${(health.nightOwls || []).length
+      ? `<div class="card">
+          <div class="row" style="margin-bottom:8px">${icon('moon', 18)}<span class="strong small">Кто не спит</span></div>
+          <div class="chips">${health.nightOwls.map((row) => `<span class="chip">@${esc(row.username)}</span>`).join('')}</div>
+          <div class="tiny muted" style="margin-top:8px">Заходили между двумя и шестью утра. Может, стоит позвать их подышать</div>
+        </div>`
+      : ''}
+
+    ${(health.quietest || []).length
+      ? `<div class="card">
+          <div class="row" style="margin-bottom:8px">${icon('leaf', 18)}<span class="strong small">Давно не заходили</span></div>
+          ${health.quietest.map((row) => `<div class="row between" style="padding:5px 0"><span class="small">@${esc(row.username)}</span><span class="tiny muted">${row.days} дней</span></div>`).join('')}
+        </div>`
+      : ''}
+
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">${icon('heart', 18)}<span class="strong small">Приятные кнопки</span></div>
+      <button class="list-item" data-praise>${icon('gift', 18)}<div class="grow" style="text-align:left"><div class="small strong">Похвалить случайного человека</div><div class="tiny muted">Спасибо и монеты тому, кто ведёт себя тихо и хорошо</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-quiet>${icon('leaf', 18)}<div class="grow" style="text-align:left"><div class="small strong">Объявить пять минут тишины</div><div class="tiny muted">Всем прилетит спокойное объявление на два часа</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-copy>${icon('share', 18)}<div class="grow" style="text-align:left"><div class="small strong">Скопировать сводку</div><div class="tiny muted">Цифры текстом, чтобы кинуть себе в заметки</div></div>${icon('forward', 15)}</button>
+    </div>
+  </div>`;
+
+  body.querySelector('[data-praise]').onclick = () => openPraise(body);
+  body.querySelector('[data-quiet]').onclick = async () => {
+    const { promptSheet } = await import('../ui.js');
+    const text = await promptSheet({
+      title: 'Пять минут тишины',
+      label: 'Что написать, можно оставить пустым',
+      placeholder: 'Отложите телефон и просто подышите',
+      multiline: true,
+      confirm: 'Объявить'
+    });
+    if (text === null) return;
+    try {
+      await api.quietCall(text);
+      toast('Объявление ушло всем');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+  body.querySelector('[data-copy]').onclick = () => {
+    const lines = [
+      `Новых людей за сутки: ${health.freshUsers ?? 0}`,
+      `Жалоб за сутки: ${health.reportsDay ?? 0}, за неделю: ${health.reportsWeek ?? 0}`,
+      `Снято записей за сутки: ${health.removedDay ?? 0}`,
+      `Наказаний за сутки: ${health.punishDay ?? 0}`,
+      `Открытых жалоб: ${health.openReports ?? 0}, споров: ${health.openAppeals ?? 0}`
+    ];
+    navigator.clipboard?.writeText(lines.join('\n'));
+    toast('Скопировано');
+  };
+}
+
+async function openPraise(body) {
+  let who = null;
+  try {
+    const answer = await api.praisePick();
+    who = answer.who;
+  } catch (error) {
+    return toast(error.message, 'err');
+  }
+  if (!who) return toast('Пока некого хвалить', 'err');
+
+  const sheetBody = el(`<div class="col">
+    <div class="row" style="gap:10px">${avatar(who, 46)}
+      <div class="grow"><div class="strong">${esc(who.displayName)}</div>
+      <div class="tiny muted">@${esc(who.username)} · за неделю ${who.posts || 0} записей и ${who.answers || 0} ответов</div></div>
+    </div>
+    <textarea class="textarea" data-note placeholder="За что спасибо, можно не писать"></textarea>
+    <div class="row" style="gap:8px">
+      <button class="btn grow" data-coins="50">50 монет</button>
+      <button class="btn grow btn-primary" data-coins="150">150 монет</button>
+      <button class="btn grow" data-coins="300">300 монет</button>
+    </div>
+    <button class="btn btn-primary" data-send>${icon('heart', 17)} Сказать спасибо</button>
+    <button class="btn btn-ghost" data-again>${icon('refresh', 16)} Другой человек</button>
+  </div>`);
+  const sheet = openSheet('Похвалить', sheetBody);
+  let coins = 150;
+  const paint = () => {
+    sheetBody.querySelectorAll('[data-coins]').forEach((button) => {
+      button.classList.toggle('btn-primary', Number(button.dataset.coins) === coins);
+    });
+  };
+  sheetBody.querySelectorAll('[data-coins]').forEach((button) => {
+    button.onclick = () => {
+      coins = Number(button.dataset.coins);
+      paint();
+    };
+  });
+  sheetBody.querySelector('[data-again]').onclick = () => {
+    sheet.close();
+    openPraise(body);
+  };
+  sheetBody.querySelector('[data-send]').onclick = async () => {
+    try {
+      await api.praise(who.id, sheetBody.querySelector('[data-note]').value, coins);
+      sheet.close();
+      toast(`${who.displayName} получил спасибо и ${coins} монет`);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+  paint();
 }
 
 async function drawStats(body) {

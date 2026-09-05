@@ -821,7 +821,7 @@ svg { display: block; flex: none; }
 .composer-send { flex: 0 0 auto; max-width: 100%; }
 .composer-send span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-@media (max-width: 400px) {
+@media (max-width: 460px) {
   .composer-actions { flex-wrap: nowrap; }
   .composer-tools .icon-btn span { display: none; }
   .composer-tools .icon-btn { padding: 7px 9px; }
@@ -1900,4 +1900,35 @@ body.still *::after {
   border: 1px solid var(--line);
   background: var(--surface);
   text-align: left;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.health-tile {
+  padding: 10px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.health-tile .v {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.health-tile .k {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.health-tile.warn {
+  border-color: rgba(198, 176, 131, .4);
+  background: rgba(198, 176, 131, .1);
 }

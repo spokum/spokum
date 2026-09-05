@@ -2163,6 +2163,77 @@ export const local = {
     };
   },
 
+  async adminHealth() {
+    needAdmin();
+    const now = Date.now();
+    const day = now - 86400000;
+    const week = now - 7 * 86400000;
+    return {
+      health: {
+        freshUsers: state.users.filter((u) => u.createdAt > day).length,
+        reportsDay: (state.reports || []).filter((r) => r.createdAt > day).length,
+        reportsWeek: (state.reports || []).filter((r) => r.createdAt > week).length,
+        removedDay: state.posts.filter((p) => p.removed && (p.removedAt || 0) > day).length,
+        punishDay: (state.punishments || []).filter((p) => p.createdAt > day).length,
+        openReports: (state.reports || []).filter((r) => r.status === 'open').length,
+        openAppeals: (state.appeals || []).filter((a) => a.status === 'open').length,
+        silentMods: state.users
+          .filter((u) => u.isModerator && !u.isAdmin && !(state.punishments || []).some((p) => p.actorId === u.id && p.createdAt > week))
+          .map((u) => ({ username: u.username, displayName: u.displayName })),
+        crowdedDevices: [],
+        nightOwls: [],
+        quietest: state.users
+          .filter((u) => (u.lastSeen || 0) < now - 14 * 86400000)
+          .slice(0, 5)
+          .map((u) => ({ username: u.username, displayName: u.displayName, days: Math.floor((now - (u.lastSeen || now)) / 86400000) }))
+      }
+    };
+  },
+
+  async praisePick() {
+    const user = needAdmin();
+    const pool = state.users.filter((u) => u.id !== user.id && !(u.bannedUntil > Date.now()));
+    if (!pool.length) return { who: null };
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const week = Date.now() - 7 * 86400000;
+    return {
+      who: {
+        ...pub(pick),
+        posts: state.posts.filter((p) => p.authorId === pick.id && !p.removed && p.createdAt > week).length,
+        answers: (state.comments || []).filter((c) => c.authorId === pick.id && c.createdAt > week).length
+      }
+    };
+  },
+
+  async praise(id, note, coins) {
+    needAdmin();
+    const target = state.users.find((u) => u.id === id);
+    if (!target) fail('Некого хвалить');
+    const gift = Math.min(500, Math.max(0, Number(coins) || 100));
+    target.coins = (target.coins || 0) + gift;
+    state.coinLog = state.coinLog || [];
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: id, amount: gift, reason: 'Спасибо от администрации', createdAt: Date.now() });
+    note_(id, 'premium', 'Спасибо вам', String(note || '').trim() || 'Администрация заметила, что с вами в сети спокойнее', { coins: gift });
+    save();
+    return { ok: true, coins: gift };
+  },
+
+  async quietCall(body) {
+    const user = needAdmin();
+    state.announcements = state.announcements || [];
+    state.announcements.push({
+      id: (state.announcements.length || 0) + 1,
+      title: 'Пять минут тишины',
+      body: String(body || '').trim() || 'Отложите телефон, посмотрите в окно и просто подышите. Мы никуда не убежим',
+      tone: 'info',
+      until: Date.now() + 7200000,
+      createdAt: Date.now(),
+      authorId: user.id
+    });
+    save();
+    return { ok: true };
+  },
+
   async adminUsers(query) {
     needAdmin();
     const q = String(query || '').toLowerCase().replace(/^@/, '');
