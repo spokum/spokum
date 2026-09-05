@@ -3356,3 +3356,235 @@ revoke all on function public.recovery_make() from public, anon;
 grant execute on function public.recovery_make() to authenticated;
 grant execute on function public.recovery_state() to authenticated;
 grant execute on function public.recovery_use(text, text, text) to anon, authenticated;
+
+alter table public.gift_types add column if not exists season text not null default '';
+
+insert into public.gift_types (id, title, price, rarity, art, hue, sort, season) values
+  ('acorn', 'Жёлудь', 70, 'common', 'acorn', 32, 11, 'autumn'),
+  ('maple', 'Кленовый лист', 130, 'rare', 'maple', 18, 12, 'autumn'),
+  ('plaid', 'Тёплый плед', 260, 'epic', 'plaid', 8, 13, 'autumn'),
+  ('cocoa', 'Какао с зефиром', 420, 'epic', 'cocoa', 26, 14, 'autumn')
+on conflict (id) do update set title = excluded.title, price = excluded.price,
+  rarity = excluded.rarity, art = excluded.art, hue = excluded.hue,
+  sort = excluded.sort, season = excluded.season;
+
+create or replace function public.season_now()
+returns text language sql immutable set search_path = public as $$
+  select case
+    when extract(month from (now() at time zone 'Europe/Moscow')) in (9, 10, 11) then 'autumn'
+    when extract(month from (now() at time zone 'Europe/Moscow')) in (12, 1, 2) then 'winter'
+    when extract(month from (now() at time zone 'Europe/Moscow')) in (3, 4, 5) then 'spring'
+    else 'summer'
+  end;
+$$;
+
+create or replace function public.season_state()
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+declare
+  now_season text := public.season_now();
+  mine integer;
+  all_kinds integer;
+begin
+  select count(distinct g.type_id) into mine
+    from public.gifts g join public.gift_types t on t.id = g.type_id
+   where g.owner_id = auth.uid() and not g.sold and t.season <> '';
+  select count(*) into all_kinds from public.gift_types where season <> '';
+  return jsonb_build_object(
+    'season', now_season,
+    'title', case now_season
+      when 'autumn' then 'Осень в СпокУме'
+      when 'winter' then 'Зима в СпокУме'
+      when 'spring' then 'Весна в СпокУме'
+      else 'Лето в СпокУме' end,
+    'text', case now_season
+      when 'autumn' then 'Сезонные подарки: жёлудь, кленовый лист, плед и какао. Останутся у вас навсегда'
+      when 'winter' then 'Зимние подарки появятся в декабре'
+      when 'spring' then 'Весенние подарки появятся в марте'
+      else 'Летние подарки появятся в июне' end,
+    'collected', coalesce(mine, 0),
+    'total', coalesce(all_kinds, 0)
+  );
+end;
+$$;
+
+alter table public.posts add column if not exists publish_at timestamptz not null default now();
+create index if not exists posts_publish_at on public.posts (publish_at desc);
+
+alter table public.profiles add column if not exists shelf jsonb not null default '[]'::jsonb;
+
+create or replace function public.set_shelf(rows jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  if jsonb_array_length(coalesce(rows, '[]'::jsonb)) > 12 then raise exception 'Не больше двенадцати полок'; end if;
+  perform set_config('spokum.privileged', 'on', true);
+  update public.profiles set shelf = coalesce(rows, '[]'::jsonb) where id = auth.uid();
+  perform set_config('spokum.privileged', 'off', true);
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.guard_fresh_author()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  born timestamptz;
+  made integer;
+begin
+  select created_at into born from public.profiles where id = new.author_id;
+  if born is null or born < now() - interval '24 hours' then return new; end if;
+  select count(*) into made from public.posts
+   where author_id = new.author_id and created_at > now() - interval '1 hour';
+  if made >= 8 then
+    raise exception 'Первые сутки можно не больше восьми записей в час. Так мы держим спам подальше';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_guard_fresh on public.posts;
+create trigger posts_guard_fresh before insert on public.posts
+for each row execute function public.guard_fresh_author();
+
+create table if not exists public.appeals (
+  id bigint generated always as identity primary key,
+  punishment_id bigint not null references public.punishments on delete cascade,
+  user_id uuid not null references public.profiles on delete cascade,
+  body text not null,
+  status text not null default 'open',
+  answer text not null default '',
+  judge_id uuid references public.profiles on delete set null,
+  created_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+create index if not exists appeals_status on public.appeals (status, created_at desc);
+
+alter table public.appeals enable row level security;
+
+drop policy if exists appeals_own on public.appeals;
+create policy appeals_own on public.appeals for select
+  using (user_id = auth.uid() or public.viewer_is_moderator());
+
+create or replace function public.appeal_send(target bigint, body text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  row public.punishments;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  if length(coalesce(trim(body), '')) < 10 then raise exception 'Опишите подробнее, хотя бы десять символов'; end if;
+  select * into row from public.punishments where id = target;
+  if row.id is null or row.user_id <> auth.uid() then raise exception 'Это не ваше наказание'; end if;
+  if row.created_at < now() - interval '30 days' then raise exception 'Спорить можно тридцать дней'; end if;
+  if exists (select 1 from public.appeals where punishment_id = target) then
+    raise exception 'Спор по этому наказанию уже отправлен';
+  end if;
+  insert into public.appeals (punishment_id, user_id, body) values (target, auth.uid(), body);
+  perform public.notify_admins('modaction', 'Спор о наказании',
+    'Пользователь просит пересмотреть решение', jsonb_build_object('punishment', target));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.my_appeals()
+returns jsonb language sql security definer stable set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', a.id,
+    'punishment', a.punishment_id,
+    'kind', p.kind,
+    'reason', p.reason,
+    'body', a.body,
+    'status', a.status,
+    'answer', a.answer,
+    'createdAt', a.created_at
+  ) order by a.created_at desc), '[]'::jsonb)
+  from public.appeals a join public.punishments p on p.id = a.punishment_id
+  where a.user_id = auth.uid();
+$$;
+
+create or replace function public.appeal_queue()
+returns jsonb language sql security definer stable set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', a.id,
+    'punishment', a.punishment_id,
+    'kind', p.kind,
+    'reason', p.reason,
+    'minutes', p.minutes,
+    'body', a.body,
+    'status', a.status,
+    'createdAt', a.created_at,
+    'who', jsonb_build_object('id', u.id, 'username', u.username, 'displayName', u.display_name, 'avatar', u.avatar, 'hue', u.hue),
+    'actor', jsonb_build_object('id', m.id, 'username', m.username, 'displayName', m.display_name)
+  ) order by a.created_at desc), '[]'::jsonb)
+  from public.appeals a
+  join public.punishments p on p.id = a.punishment_id
+  join public.profiles u on u.id = a.user_id
+  left join public.profiles m on m.id = p.actor_id
+  where public.viewer_is_moderator() and a.status = 'open';
+$$;
+
+drop function if exists public.appeal_judge(bigint, text, text);
+
+create or replace function public.appeal_judge(target bigint, verdict text, note text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  row public.appeals;
+  punish public.punishments;
+begin
+  if not public.viewer_is_admin() then raise exception 'Только админ'; end if;
+  select * into row from public.appeals where id = target;
+  if row.id is null then raise exception 'Спор не найден'; end if;
+  if row.status <> 'open' then raise exception 'Спор уже закрыт'; end if;
+  select * into punish from public.punishments where id = row.punishment_id;
+
+  if verdict = 'accept' then
+    perform set_config('spokum.privileged', 'on', true);
+    if punish.kind = 'ban' then
+      update public.profiles set banned_until = null, ban_reason = '' where id = row.user_id;
+    elsif punish.kind = 'mute' then
+      update public.profiles set muted_until = null where id = row.user_id;
+    end if;
+    perform set_config('spokum.privileged', 'off', true);
+    update public.punishments set reverted = true, reverted_by = auth.uid() where id = row.punishment_id;
+    perform public.notify_user(row.user_id, 'punish', 'Наказание снято',
+      coalesce(nullif(note, ''), 'Мы пересмотрели решение, всё в порядке'), jsonb_build_object('appeal', target));
+  else
+    perform public.notify_user(row.user_id, 'punish', 'Наказание оставлено',
+      coalesce(nullif(note, ''), 'Мы посмотрели ещё раз и оставили решение'), jsonb_build_object('appeal', target));
+  end if;
+
+  update public.appeals
+     set status = case when verdict = 'accept' then 'accepted' else 'kept' end,
+         answer = coalesce(note, ''),
+         judge_id = auth.uid(),
+         closed_at = now()
+   where id = target;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.month_recap()
+returns jsonb language sql security definer stable set search_path = public as $$
+  select jsonb_build_object(
+    'posts', (select count(*) from public.posts
+       where author_id = auth.uid() and not removed and created_at >= date_trunc('month', now())),
+    'likes', (select count(*) from public.likes l join public.posts p on p.id = l.post_id
+       where p.author_id = auth.uid() and l.created_at >= date_trunc('month', now())),
+    'answers', (select count(*) from public.comments
+       where author_id = auth.uid() and not removed and created_at >= date_trunc('month', now())),
+    'friends', (select count(*) from public.follows where follower_id = auth.uid()),
+    'gifts', (select count(*) from public.gifts where owner_id = auth.uid() and not sold),
+    'streak', (select coalesce(best_streak, 0) from public.profiles where id = auth.uid()),
+    'coins', (select coalesce(coins, 0) from public.profiles where id = auth.uid()),
+    'month', extract(month from (now() at time zone 'Europe/Moscow'))
+  );
+$$;
+
+grant execute on function public.season_now() to authenticated, anon;
+grant execute on function public.season_state() to authenticated;
+grant execute on function public.set_shelf(jsonb) to authenticated;
+grant execute on function public.appeal_send(bigint, text) to authenticated;
+grant execute on function public.my_appeals() to authenticated;
+grant execute on function public.appeal_queue() to authenticated;
+grant execute on function public.appeal_judge(bigint, text, text) to authenticated;
+grant execute on function public.month_recap() to authenticated;

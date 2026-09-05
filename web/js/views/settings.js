@@ -46,6 +46,14 @@ const ACCENTS = [
 
 const PREF_KEY = 'spokum.prefs.v1';
 
+export function applyComfort() {
+  const saved = prefs();
+  const root = document.body;
+  root.classList.toggle('big-text', !!saved.bigtext);
+  root.classList.toggle('high-contrast', !!saved.contrast);
+  root.classList.toggle('still', !!saved.still);
+}
+
 export function applyNight() {
   let want = false;
   try {
@@ -100,6 +108,14 @@ export async function render(root) {
         : ''}
       <label class="row between" style="padding:8px 0"><span class="small">Тихий режим по вечерам</span><input type="checkbox" data-pref="quiet" ${current.quiet ? 'checked' : ''}></label>
       <label class="row between" style="padding:8px 0"><span class="small">Тихая ночь: мягче экран после 23:00</span><input type="checkbox" data-pref="night" ${current.night ? 'checked' : ''}></label>
+    </div>
+
+    <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('eye', 18)}<span class="strong small">Что видно</span></div>
+      <button class="list-item" data-mutewords>${icon('search', 18)}<div class="grow"><div class="small strong">Стоп-слова</div><div class="tiny muted" data-mute-count>Записи с этими словами будут свёрнуты</div></div>${icon('forward', 15)}</button>
+      <label class="row between" style="padding:8px 0"><span class="small">Крупный текст</span><input type="checkbox" data-pref="bigtext" ${current.bigtext ? 'checked' : ''}></label>
+      <label class="row between" style="padding:8px 0"><span class="small">Больше контраста</span><input type="checkbox" data-pref="contrast" ${current.contrast ? 'checked' : ''}></label>
+      <label class="row between" style="padding:8px 0"><span class="small">Меньше движения</span><input type="checkbox" data-pref="still" ${current.still ? 'checked' : ''}></label>
     </div>
 
     <div class="card appear">
@@ -235,6 +251,12 @@ export async function render(root) {
         : 'Коды ещё не созданы, пароль восстановить нельзя';
     }).catch(() => {});
   }
+  const muteCount = root.querySelector('[data-mute-count]');
+  import('./feed.js').then(({ muteWords }) => {
+    const list = muteWords();
+    if (muteCount && list.length) muteCount.textContent = `Слов в списке: ${list.length}`;
+  }).catch(() => {});
+  root.querySelector('[data-mutewords]').onclick = () => openMuteWords(() => render(root));
   root.querySelector('[data-mine]').onclick = () => openMyTheme(() => render(root));
   root.querySelector('[data-codes]').onclick = () => openCodes(() => render(root));
 
@@ -269,6 +291,7 @@ export async function render(root) {
         document.documentElement.style.setProperty('--ease', box.checked ? 'cubic-bezier(.22,.61,.36,1)' : 'linear');
       }
       if (box.dataset.pref === 'night') applyNight();
+      applyComfort();
       toast('Сохранено');
     };
   });
@@ -286,6 +309,53 @@ export async function render(root) {
 
 
 const MY_ACCENTS = ['#87b7a3', '#9c93c2', '#c79486', '#8badca', '#c6b083', '#d98fae', '#7fd7e8', '#d8b45c', '#9bb37f', '#e08f6a'];
+
+
+async function openMuteWords(done) {
+  const { muteWords, saveMuteWords } = await import('./feed.js');
+  let list = muteWords();
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Записи с этими словами будут свёрнуты под серую плашку. Открыть их всё равно можно, но они не появятся неожиданно.</p>
+    <div class="row" style="gap:8px">
+      <input class="input grow" data-word placeholder="Например: политика">
+      <button class="btn btn-primary" data-add>${icon('plus', 16)}</button>
+    </div>
+    <div class="chips" data-list></div>
+  </div>`);
+  const sheet = openSheet('Стоп-слова', body);
+  const chips = body.querySelector('[data-list]');
+  const draw = () => {
+    chips.innerHTML = list.length
+      ? list.map((word) => `<button class="chip" data-drop="${esc(word)}">${esc(word)} ${icon('close', 12)}</button>`).join('')
+      : '<div class="tiny muted">Список пуст</div>';
+    chips.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = () => {
+        list = list.filter((word) => word !== button.dataset.drop);
+        saveMuteWords(list);
+        draw();
+        done?.();
+      };
+    });
+  };
+  const add = () => {
+    const input = body.querySelector('[data-word]');
+    const word = input.value.trim().toLowerCase();
+    if (!word) return;
+    if (word.length < 2) return toast('Слишком коротко', 'err');
+    if (list.includes(word)) return toast('Уже в списке', 'err');
+    list = [...list, word];
+    saveMuteWords(list);
+    input.value = '';
+    draw();
+    done?.();
+  };
+  body.querySelector('[data-add]').onclick = add;
+  body.querySelector('[data-word]').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') add();
+  });
+  draw();
+  void sheet;
+}
 
 function openMyTheme(done) {
   if (!isPremium(state.user)) return toast('Своя тема доступна с подпиской СпокУм Премиум', 'err');

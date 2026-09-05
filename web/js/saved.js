@@ -54,3 +54,35 @@ export function toggleSaved(post) {
 export function dropSaved(id) {
   write(read().filter((row) => String(row.id) !== String(id)));
 }
+
+const FOLDER_KEY = 'spokum.folders.v1';
+
+export function folders() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOLDER_KEY));
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addFolder(name) {
+  const clean = String(name || '').trim().slice(0, 24);
+  if (!clean) return folders();
+  const list = folders();
+  if (list.includes(clean)) return list;
+  const next = [...list, clean].slice(0, 12);
+  localStorage.setItem(FOLDER_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function dropFolder(name) {
+  const next = folders().filter((row) => row !== name);
+  localStorage.setItem(FOLDER_KEY, JSON.stringify(next));
+  write(read().map((row) => (row.folder === name ? { ...row, folder: '' } : row)));
+  return next;
+}
+
+export function setFolder(id, folder) {
+  write(read().map((row) => (String(row.id) === String(id) ? { ...row, folder: folder || '' } : row)));
+}

@@ -408,7 +408,7 @@ async function openStickers(send) {
   await draw();
 }
 
-async function recordVoice(send) {
+export async function recordVoice(send, options = {}) {
   if (!navigator.mediaDevices?.getUserMedia) return toast('Микрофон недоступен', 'err');
   let stream;
   try {
@@ -427,9 +427,12 @@ async function recordVoice(send) {
       <div class="strong" data-timer style="font-size:24px">0:00</div>
       <div class="row" style="gap:8px"><button class="btn grow" data-cancel>Отмена</button><button class="btn btn-primary grow" data-stop>Отправить</button></div>
     </div>`);
-  const sheet = openSheet('Запись голосового', body);
+  const sheet = openSheet(options.title || 'Запись голосового', body);
+  const limit = Number(options.limit) || 120;
   const timer = setInterval(() => {
-    body.querySelector('[data-timer]').textContent = durationText((Date.now() - started) / 1000);
+    const spent = (Date.now() - started) / 1000;
+    body.querySelector('[data-timer]').textContent = durationText(spent);
+    if (spent >= limit) finish(true);
   }, 200);
 
   const finish = (keep) => {

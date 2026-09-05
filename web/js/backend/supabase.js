@@ -680,7 +680,7 @@ export async function createSupabase(url, key) {
       const id = requireUid();
       const body = String(text || '').trim().slice(0, 5000);
       const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
-      if (!body && !image && !album.length && !video && !poll) throw new Error('Пустой пост');
+      if (!body && !image && !album.length && !video && !poll && !sound) throw new Error('Пустой пост');
       const payload = {
         author_id: id,
         body,
@@ -1385,6 +1385,48 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('delete_comment', { target: id, reason: reason || null });
       guard(error);
       return data;
+    },
+
+    async seasonState() {
+      const { data, error } = await sb.rpc('season_state');
+      guard(error);
+      return data || { season: 'autumn', collected: 0, total: 0 };
+    },
+
+    async setShelf(rows) {
+      const { error } = await sb.rpc('set_shelf', { rows });
+      guard(error);
+      return { ok: true };
+    },
+
+    async appealSend(punishmentId, body) {
+      const { data, error } = await sb.rpc('appeal_send', { target: punishmentId, body });
+      guard(error);
+      return data;
+    },
+
+    async myAppeals() {
+      const { data, error } = await sb.rpc('my_appeals');
+      guard(error);
+      return { appeals: data || [] };
+    },
+
+    async appealQueue() {
+      const { data, error } = await sb.rpc('appeal_queue');
+      guard(error);
+      return { appeals: data || [] };
+    },
+
+    async appealJudge(id, verdict, note) {
+      const { data, error } = await sb.rpc('appeal_judge', { target: id, verdict, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async monthRecap() {
+      const { data, error } = await sb.rpc('month_recap');
+      guard(error);
+      return data || {};
     },
 
     async recoveryState() {

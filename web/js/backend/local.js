@@ -30,6 +30,7 @@ function blank() {
     coinLog: [],
     eventClaims: [],
     recoveryCodes: [],
+    appeals: [],
     follows: [],
     thanks: [],
     gifts: [],
@@ -184,7 +185,12 @@ export const GIFT_TYPES = [
   { id: 'flame', title: 'Огонёк', price: 300, rarity: 'epic', art: 'flame', hue: 20 },
   { id: 'crystal', title: 'Кристалл', price: 450, rarity: 'epic', art: 'crystal', hue: 190 },
   { id: 'crown', title: 'Корона', price: 700, rarity: 'legend', art: 'crown', hue: 45 },
-  { id: 'comet', title: 'Комета', price: 1200, rarity: 'legend', art: 'comet', hue: 265 }
+  { id: 'comet', title: 'Комета', price: 1200, rarity: 'legend', art: 'comet', hue: 265 },
+  { id: 'acorn', title: 'Жёлудь', price: 70, rarity: 'common', art: 'acorn', hue: 32, season: 'autumn' },
+  { id: 'maple', title: 'Кленовый лист', price: 130, rarity: 'rare', art: 'maple', hue: 18, season: 'autumn' },
+  { id: 'plaid', title: 'Тёплый плед', price: 260, rarity: 'epic', art: 'plaid', hue: 8, season: 'autumn' },
+  { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' },
+  { id: 'rose', title: 'Розочка лета', price: 0, rarity: 'legend', art: 'rose', hue: 340, season: 'summer' }
 ];
 
 const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];
@@ -214,6 +220,20 @@ function sweepCampfire() {
     state.campSeats = state.campSeats.filter((seat) => !dead.includes(seat.roomId));
     state.campMessages = state.campMessages.filter((row) => !dead.includes(row.roomId));
   }
+}
+
+function note_(userId, kind, title, body, meta) {
+  state.notifications = state.notifications || [];
+  state.notifications.push({
+    id: state.notifications.length + 1,
+    userId,
+    kind,
+    title,
+    body: body || '',
+    meta: meta || {},
+    createdAt: Date.now(),
+    read: false
+  });
 }
 
 function pub(user) {
@@ -727,7 +747,7 @@ export const local = {
     notMuted(user);
     const body = String(text || '').trim().slice(0, 5000);
     const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
-    if (!body && !image && !album.length && !video && !poll) fail('Пустой пост');
+    if (!body && !image && !album.length && !video && !poll && !sound) fail('Пустой пост');
     const post = {
       id: next('posts'),
       authorId: user.id,
@@ -1886,6 +1906,125 @@ export const local = {
     });
     save();
     return { ok: true, mode: 'removed' };
+  },
+
+  async seasonState() {
+    const user = me();
+    const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][new Date().getMonth()];
+    const seasonal = ['acorn', 'maple', 'plaid', 'cocoa'];
+    const mine = new Set((state.gifts || []).filter((g) => g.ownerId === user?.id && !g.sold && seasonal.includes(g.typeId)).map((g) => g.typeId));
+    const titles = { autumn: 'Осень в СпокУме', winter: 'Зима в СпокУме', spring: 'Весна в СпокУме', summer: 'Лето в СпокУме' };
+    return {
+      season,
+      title: titles[season],
+      text: season === 'autumn'
+        ? 'Сезонные подарки: жёлудь, кленовый лист, плед и какао. Останутся у вас навсегда'
+        : 'Сезонные подарки появятся в свой сезон',
+      collected: mine.size,
+      total: seasonal.length
+    };
+  },
+
+  async setShelf(rows) {
+    const user = need();
+    user.shelf = Array.isArray(rows) ? rows.slice(0, 12) : [];
+    save();
+    return { ok: true };
+  },
+
+  async appealSend(punishmentId, body) {
+    const user = need();
+    state.appeals = state.appeals || [];
+    if (String(body || '').trim().length < 10) fail('Опишите подробнее, хотя бы десять символов');
+    const punish = (state.punishments || []).find((row) => row.id === punishmentId);
+    if (!punish || punish.userId !== user.id) fail('Это не ваше наказание');
+    if (state.appeals.some((row) => row.punishmentId === punishmentId)) fail('Спор по этому наказанию уже отправлен');
+    state.appeals.push({
+      id: state.appeals.length + 1,
+      punishmentId,
+      userId: user.id,
+      body: String(body).trim(),
+      status: 'open',
+      answer: '',
+      createdAt: Date.now()
+    });
+    save();
+    return { ok: true };
+  },
+
+  async myAppeals() {
+    const user = need();
+    const rows = (state.appeals || []).filter((row) => row.userId === user.id);
+    return {
+      appeals: rows.map((row) => {
+        const punish = (state.punishments || []).find((item) => item.id === row.punishmentId) || {};
+        return { ...row, punishment: row.punishmentId, kind: punish.kind, reason: punish.reason };
+      })
+    };
+  },
+
+  async appealQueue() {
+    const user = need();
+    if (!user.isModerator && !user.isAdmin) fail('Нет прав');
+    const rows = (state.appeals || []).filter((row) => row.status === 'open');
+    return {
+      appeals: rows.map((row) => {
+        const punish = (state.punishments || []).find((item) => item.id === row.punishmentId) || {};
+        const who = state.users.find((item) => item.id === row.userId);
+        return {
+          ...row,
+          punishment: row.punishmentId,
+          kind: punish.kind,
+          reason: punish.reason,
+          minutes: punish.minutes,
+          who: who ? pub(who) : null,
+          actor: null
+        };
+      })
+    };
+  },
+
+  async appealJudge(id, verdict, note) {
+    const user = need();
+    if (!user.isAdmin) fail('Только админ');
+    const row = (state.appeals || []).find((item) => item.id === id);
+    if (!row) fail('Спор не найден');
+    if (row.status !== 'open') fail('Спор уже закрыт');
+    const punish = (state.punishments || []).find((item) => item.id === row.punishmentId);
+    const target = state.users.find((item) => item.id === row.userId);
+    if (verdict === 'accept' && target && punish) {
+      if (punish.kind === 'ban') {
+        target.bannedUntil = 0;
+        target.banReason = '';
+      }
+      if (punish.kind === 'mute') target.mutedUntil = 0;
+      punish.reverted = true;
+    }
+    row.status = verdict === 'accept' ? 'accepted' : 'kept';
+    row.answer = String(note || '');
+    note_(row.userId, 'punish', verdict === 'accept' ? 'Наказание снято' : 'Наказание оставлено', row.answer || 'Мы посмотрели ещё раз', { appeal: id });
+    save();
+    return { ok: true };
+  },
+
+  async monthRecap() {
+    const user = need();
+    const from = new Date();
+    from.setDate(1);
+    from.setHours(0, 0, 0, 0);
+    const start = from.getTime();
+    const mine = state.posts.filter((p) => p.authorId === user.id && !p.removed && p.createdAt >= start);
+    const ids = new Set(mine.map((p) => p.id));
+    return {
+      posts: mine.length,
+      likes: (state.likes || []).filter((l) => ids.has(l.postId)).length,
+      answers: (state.comments || []).filter((c) => c.authorId === user.id && !c.removed && c.createdAt >= start).length,
+      friends: (state.follows || []).filter((f) => f.followerId === user.id).length,
+      gifts: (state.gifts || []).filter((g) => g.ownerId === user.id && !g.sold).length,
+      streak: user.bestStreak || 0,
+      coins: user.coins || 0,
+      month: new Date().getMonth() + 1
+    };
   },
 
   async recoveryState() {

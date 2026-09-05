@@ -4,7 +4,66 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
 import { openProfile } from './profile.js';
 import { openStories, publishStory } from './stories.js';
-import { isSaved, toggleSaved, savedList, dropSaved } from '../saved.js';
+import { isSaved, toggleSaved, savedList, dropSaved, folders, addFolder, dropFolder, setFolder } from '../saved.js';
+
+
+const DAY_THEMES = [
+  ['Воскресный итог', 'Что было хорошего за неделю?'],
+  ['Понедельник маленьких целей', 'Одно дело, которое сегодня по силам'],
+  ['Вторник благодарности', 'Кому или чему вы сегодня благодарны?'],
+  ['Среда тишины', 'Что помогает вам выдохнуть?'],
+  ['Четверг маленьких побед', 'Что получилось, пусть и мелочь?'],
+  ['Пятница честности', 'Как вы на самом деле, без прикрас?'],
+  ['Субботний отдых', 'Чем себя порадуете сегодня?']
+];
+
+function dayTheme() {
+  return DAY_THEMES[new Date().getDay()];
+}
+
+const MUTE_KEY = 'spokum.mutewords.v1';
+
+export function muteWords() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MUTE_KEY));
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveMuteWords(list) {
+  localStorage.setItem(MUTE_KEY, JSON.stringify(list.slice(0, 40)));
+}
+
+function mutedBy(post) {
+  const words = muteWords();
+  if (!words.length) return null;
+  const text = `${post.text || ''} ${(post.tags || []).join(' ')}`.toLowerCase();
+  return words.find((word) => word && text.includes(word.toLowerCase())) || null;
+}
+
+const HARD_WORDS = [
+  'не хочу жить', 'незачем жить', 'покончить', 'суицид', 'убить себя', 'убью себя',
+  'вскрыть вены', 'ненавижу себя', 'нет сил жить', 'хочу умереть', 'мне незачем'
+];
+
+function needsCare(text) {
+  const clean = String(text || '').toLowerCase();
+  return HARD_WORDS.some((word) => clean.includes(word));
+}
+
+export function careCard() {
+  return `<div class="card care-card">
+    <div class="row" style="align-items:flex-start;gap:10px">
+      <span style="color:#e08fa8">${icon('heart', 18)}</span>
+      <div class="grow">
+        <div class="small strong">Вы не одни</div>
+        <div class="tiny muted" style="margin-top:4px;line-height:1.55">Если внутри совсем тяжело, поговорите с живым человеком. Телефон доверия работает круглосуточно и бесплатно: 8 800 2000 122. Ещё можно зайти в тихие комнаты, там дыхание и спокойные занятия.</div>
+      </div>
+    </div>
+  </div>`;
+}
 
 const DRAFT_KEY = 'spokum.draft.v1';
 
@@ -111,6 +170,7 @@ async function loadEvent(root) {
   }
   if (!info || !info.active) {
     host.innerHTML = '';
+    loadSeason(root);
     return;
   }
   const draw = () => {
@@ -143,6 +203,40 @@ async function loadEvent(root) {
     });
   };
   draw();
+}
+
+
+const SEASON_HIDE = 'spokum.season.hidden';
+
+async function loadSeason(root) {
+  const host = root.querySelector('[data-event]');
+  if (!host || !api.seasonState || !state.user) return;
+  let info = null;
+  try {
+    info = await api.seasonState();
+  } catch {
+    return;
+  }
+  if (!info || info.season !== 'autumn') return;
+  if (localStorage.getItem(SEASON_HIDE) === info.season) return;
+  host.innerHTML = `<div class="card season-card">
+    <div class="season-leaf">${icon('maple', 26)}</div>
+    <div class="grow" style="min-width:0">
+      <div class="strong small">${esc(info.title || 'Сезон')}</div>
+      <div class="tiny muted" style="margin-top:4px;line-height:1.5">${esc(info.text || '')}</div>
+      <div class="tiny muted" style="margin-top:6px">Собрано ${info.collected} из ${info.total}</div>
+    </div>
+    <button class="btn btn-icon btn-ghost" data-hide-season>${icon('close', 16)}</button>
+  </div>
+  <button class="btn" data-open-season style="width:100%;margin:-4px 0 12px">${icon('gift', 16)} Посмотреть сезонные подарки</button>`;
+  host.querySelector('[data-hide-season]').onclick = () => {
+    localStorage.setItem(SEASON_HIDE, info.season);
+    host.innerHTML = '';
+  };
+  host.querySelector('[data-open-season]').onclick = async () => {
+    const { openGiftShop } = await import('./gifts.js');
+    openGiftShop();
+  };
 }
 
 async function loadAnnouncements(root) {
@@ -185,9 +279,11 @@ function renderComposer(root) {
     <div class="card composer">
       <div class="row" style="align-items:flex-start">
         ${avatar(state.user, 40)}
-        <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="Поделись состоянием. Здесь не осудят"></textarea>
+        <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="${esc(dayTheme()[1])}"></textarea>
       </div>
+      <div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>
       <div data-preview></div>
+      <div data-care></div>
       ${draft.text.trim() ? '<div class="tiny muted" style="margin:6px 0 0">Черновик сохранён, можно уйти и вернуться</div>' : ''}
       <div class="chips" data-moods style="margin:12px 0 10px"></div>
       <div data-offer></div>
@@ -196,6 +292,7 @@ function renderComposer(root) {
           <button class="icon-btn" data-image>${icon('image', 18)}<span>Фото</span></button>
           <button class="icon-btn" data-reels>${icon('video', 18)}<span>В Видео</span></button>
           <button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>
+          <button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
@@ -203,14 +300,31 @@ function renderComposer(root) {
     </div>`);
 
   card.querySelector('[data-poll-new]')?.addEventListener('click', () => openPollComposer(root));
+  card.querySelector('[data-voice]')?.addEventListener('click', async () => {
+    const { recordVoice } = await import('./chats.js');
+    recordVoice(async ({ media, duration }) => {
+      try {
+        await api.createPost({ text: draft.text.trim(), mood: draft.mood, sound: media, duration });
+        draft.text = '';
+        draft.media = [];
+        saveDraft();
+        toast('Голос дня опубликован');
+        load(root);
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    }, { title: 'Голос дня', limit: 30 });
+  });
 
   const area = card.querySelector('textarea');
+  const care = card.querySelector('[data-care]');
   area.value = draft.text;
   area.addEventListener('input', () => {
     draft.text = area.value;
     saveDraft();
     area.style.height = 'auto';
     area.style.height = `${Math.min(220, area.scrollHeight)}px`;
+    care.innerHTML = needsCare(area.value) ? careCard() : '';
   });
 
   const moods = card.querySelector('[data-moods]');
@@ -363,17 +477,29 @@ function attachPullToRefresh(root) {
 }
 
 function openSaved(root) {
-  const list = savedList();
-  const body = el(`<div class="col" style="gap:8px">${
-    list.length
+  const body = el('<div class="col" style="gap:8px"></div>');
+  const sheet = openSheet('Сохранённое', body);
+  let picked = '';
+
+  const draw = () => {
+    const all = savedList();
+    const list = picked ? all.filter((row) => (row.folder || '') === picked) : all;
+    const tabs = ['', ...folders()];
+    body.innerHTML = `<div class="chips" data-folders>${tabs
+      .map((name) => `<button class="chip" data-folder="${esc(name)}" aria-pressed="${picked === name}">${name ? esc(name) : 'Всё'}</button>`)
+      .join('')}<button class="chip" data-new>${icon('plus', 13)} Папка</button></div>
+      <div class="col" style="gap:8px" data-rows></div>`;
+    const rows = body.querySelector('[data-rows]');
+    rows.innerHTML = list.length
       ? list
           .map(
             (row) => `<div class="card" style="padding:12px" data-row="${esc(String(row.id))}">
               <div class="row" style="gap:8px">${avatar(row.author, 36)}
                 <div class="grow" style="min-width:0">
                   <div class="small strong truncate">${esc(row.author?.displayName || '')}</div>
-                  <div class="tiny muted">сохранено ${esc(timeAgo(row.savedAt))} назад</div>
+                  <div class="tiny muted">сохранено ${esc(timeAgo(row.savedAt))} назад${row.folder ? ' в «' + esc(row.folder) + '»' : ''}</div>
                 </div>
+                <button class="btn btn-icon btn-ghost" data-move="${esc(String(row.id))}">${icon('more', 16)}</button>
                 <button class="btn btn-icon btn-ghost" data-drop="${esc(String(row.id))}">${icon('close', 16)}</button>
               </div>
               ${row.text ? `<div class="small" style="margin-top:8px;line-height:1.45">${esc(row.text.slice(0, 220))}</div>` : ''}
@@ -381,19 +507,56 @@ function openSaved(root) {
             </div>`
           )
           .join('')
-      : emptyState('star', 'Пока пусто', 'Сохраняйте записи, чтобы вернуться к ним позже')
-  }</div>`);
-  const sheet = openSheet('Сохранённое', body);
-  body.querySelectorAll('[data-drop]').forEach((button) => {
-    button.onclick = () => {
-      dropSaved(button.dataset.drop);
-      button.closest('[data-row]').remove();
-      if (!body.querySelector('[data-row]')) {
-        sheet.close();
-        toast('Список пуст');
-      }
+      : emptyState('star', 'Пока пусто', picked ? 'В этой папке ничего нет' : 'Сохраняйте записи, чтобы вернуться к ним позже');
+
+    body.querySelectorAll('[data-folder]').forEach((button) => {
+      button.onclick = () => {
+        picked = button.dataset.folder;
+        draw();
+      };
+    });
+    body.querySelector('[data-new]').onclick = async () => {
+      const { promptSheet } = await import('../ui.js');
+      const name = await promptSheet({ title: 'Новая папка', label: 'Как назовём', placeholder: 'Например: перечитать' });
+      if (!name) return;
+      addFolder(name);
+      draw();
     };
-  });
+    body.querySelectorAll('[data-move]').forEach((button) => {
+      button.onclick = () => {
+        const menu = el(`<div class="col" style="gap:6px">
+          ${['', ...folders()].map((name) => `<button class="list-item" data-put="${esc(name)}">${icon('star', 17)}<span>${name ? esc(name) : 'Без папки'}</span></button>`).join('')}
+          ${folders().length ? '<div class="divider"></div>' : ''}
+          ${folders().map((name) => `<button class="list-item" data-kill="${esc(name)}" style="color:#c98b8b">${icon('trash', 17)}<span>Удалить папку «${esc(name)}»</span></button>`).join('')}
+        </div>`);
+        const inner = openSheet('Куда положить', menu);
+        menu.querySelectorAll('[data-put]').forEach((row) => {
+          row.onclick = () => {
+            setFolder(button.dataset.move, row.dataset.put);
+            inner.close();
+            draw();
+          };
+        });
+        menu.querySelectorAll('[data-kill]').forEach((row) => {
+          row.onclick = () => {
+            dropFolder(row.dataset.kill);
+            if (picked === row.dataset.kill) picked = '';
+            inner.close();
+            draw();
+          };
+        });
+      };
+    });
+    body.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = () => {
+        dropSaved(button.dataset.drop);
+        draw();
+      };
+    });
+  };
+
+  draw();
+  return sheet;
 }
 
 async function load(root, options = {}) {
@@ -509,6 +672,23 @@ function drawPosts(root, posts, meta) {
   }
 
   shown.forEach((post, index) => {
+    const hidden = mutedBy(post);
+    if (hidden) {
+      const folded = el(`<div class="card muted-post">
+        <div class="row" style="gap:10px">
+          <span class="muted">${icon('eye', 17)}</span>
+          <div class="grow"><div class="small">Скрыто по вашей настройке</div>
+          <div class="tiny muted">Стоп-слово: ${esc(hidden)}</div></div>
+          <button class="btn btn-sm" data-show>Показать</button>
+        </div>
+      </div>`);
+      folded.querySelector('[data-show]').onclick = () => {
+        const card = postCard(post, () => load(root));
+        folded.replaceWith(card);
+      };
+      list.appendChild(folded);
+      return;
+    }
     const card = postCard(post, () => load(root));
     card.style.animationDelay = `${Math.min(index, 8) * 30}ms`;
     list.appendChild(card);
@@ -631,6 +811,51 @@ function tagged(text) {
   return esc(text).replace(/(^|\s)#([\wа-яё]{2,24})/gi, (all, space, tag) => `${space}<span class="hashtag" data-tag="${tag.toLowerCase()}">#${tag}</span>`);
 }
 
+
+function voiceBlock(post) {
+  const bars = [];
+  let seed = Number(post.id) || 7;
+  for (let i = 0; i < 26; i++) {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    bars.push(18 + ((seed >> 7) % 26));
+  }
+  return `<button class="voice-post" data-voice-play>
+    <span class="voice-play">${icon('play', 16)}</span>
+    <span class="voice-wave">${bars.map((height) => `<i style="height:${height}px"></i>`).join('')}</span>
+    <span class="tiny muted voice-time">${post.duration ? Math.round(post.duration) + ' с' : 'голос'}</span>
+    <audio preload="none" src="${esc(post.sound)}"></audio>
+  </button>`;
+}
+
+function wireVoice(card) {
+  const button = card.querySelector('[data-voice-play]');
+  if (!button) return;
+  const sound = button.querySelector('audio');
+  const glyph = button.querySelector('.voice-play');
+  button.onclick = (event) => {
+    event.preventDefault();
+    document.querySelectorAll('.voice-post audio').forEach((other) => {
+      if (other !== sound) {
+        other.pause();
+        other.closest('.voice-post')?.classList.remove('on');
+      }
+    });
+    if (sound.paused) {
+      sound.play().catch(() => toast('Не удалось проиграть', 'err'));
+      button.classList.add('on');
+      glyph.innerHTML = icon('pause', 16);
+    } else {
+      sound.pause();
+      button.classList.remove('on');
+      glyph.innerHTML = icon('play', 16);
+    }
+  };
+  sound.addEventListener('ended', () => {
+    button.classList.remove('on');
+    glyph.innerHTML = icon('play', 16);
+  });
+}
+
 export function postCard(post, refresh, options = {}) {
   const mood = MOODS[post.mood] || MOODS.calm;
   const card = el(`
@@ -650,6 +875,7 @@ export function postCard(post, refresh, options = {}) {
       </div>
       ${post.pinned ? `<div class="post-repost">${icon('star', 13)}<span>Закреплено автором</span></div>` : ''}
       ${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
+      ${post.sound && !post.media?.length && !post.video ? voiceBlock(post) : ''}
       ${postMedia(post)}
       ${pollBlock(post)}
       ${post.removed ? `<div class="pill bad" style="margin-top:10px">Скрыт модератором: ${esc(post.removedReason || 'без причины')}</div>` : ''}
@@ -745,6 +971,7 @@ export function postCard(post, refresh, options = {}) {
   });
 
   if (post.poll && api.pollResult) wirePoll(card, post);
+  wireVoice(card);
 
   card.querySelectorAll('.hashtag').forEach((tag) => {
     tag.onclick = (event) => {

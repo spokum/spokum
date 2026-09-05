@@ -216,6 +216,7 @@ async function boot() {
   guardHistory();
   import('./views/settings.js').then((module) => {
     module.applyNight?.();
+    module.applyComfort?.();
     setInterval(() => module.applyNight?.(), 300000);
   }).catch(() => {});
   await Promise.race([

@@ -84,8 +84,12 @@ export async function openGiftShop(target, done) {
     <p class="tiny muted" style="margin:0;line-height:1.5">Монеты зарабатываются в играх. Подарок можно оставить на витрине профиля или продать обратно за 70% цены.</p>`;
 
   const grid = body.querySelector('[data-grid]');
-  types.forEach((kind) => {
+  const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][new Date().getMonth()];
+  types
+    .filter((kind) => !kind.season || kind.season === season)
+    .forEach((kind) => {
     const card = el(`<button class="gift-card ${purse < kind.price ? 'poor' : ''}">
+      ${kind.season ? '<span class="gift-season">сезон</span>' : ''}
       ${giftArt(kind, 52)}
       <span class="strong tiny" style="margin-top:7px">${esc(kind.title)}</span>
       <span class="tiny muted">${esc(RARITY[kind.rarity] || '')}</span>
