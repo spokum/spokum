@@ -595,13 +595,15 @@ svg { display: block; flex: none; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px 18px; border-radius: 999px;
+  padding: 11px 14px; border-radius: 999px;
   max-width: 100%;
   background: var(--surface-2); border: 1px solid var(--line);
   font-weight: 600; font-size: 14px;
   min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: transform .18s var(--ease), background .18s var(--ease), border-color .18s var(--ease);
 }
+
+.btn > svg { flex: 0 0 auto; }
 .btn svg { flex: none; }
 @media (max-width: 380px) {
   .btn { padding: 11px 14px; font-size: 13.5px; gap: 6px; }
@@ -623,6 +625,7 @@ svg { display: block; flex: none; }
 }
 .input:focus, .textarea:focus, .select:focus { border-color: var(--accent); background: var(--surface-2); }
 .textarea { resize: none; min-height: 92px; line-height: 1.5; }
+.composer .textarea { min-height: 62px; padding: 10px 13px; }
 .select { appearance: none; }
 ::placeholder { color: var(--muted); }
 
@@ -751,8 +754,20 @@ svg { display: block; flex: none; }
 .chip[aria-pressed='true'] { border-color: transparent; background: var(--mood-color, var(--accent-soft)); color: var(--mood-ink, var(--text)); }
 .chip:active { transform: scale(.95); }
 
-.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.chips {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent 100%);
+}
 .chips::-webkit-scrollbar { display: none; }
+.chips > * { scroll-snap-align: start; }
+.chips.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 
 .nav {
   position: fixed; left: 50%; bottom: 18px; z-index: 50;
@@ -978,10 +993,10 @@ svg { display: block; flex: none; }
   -webkit-touch-callout: none;
 }
 
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
-.stat { padding: 14px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
-.stat .v { font-size: 24px; font-weight: 750; letter-spacing: -.02em; }
-.stat .k { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { padding: 12px 8px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); }
+.stat .v { font-size: 22px; font-weight: 750; letter-spacing: -.02em; }
+.stat .k { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.3; }
 
 .bars { display: flex; align-items: flex-end; gap: 6px; height: 110px; }
 .bars .b { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; align-items: center; height: 100%; }
@@ -1208,10 +1223,13 @@ svg { display: block; flex: none; }
 
 .hidden { display: none !important; }
 
+@media (max-width: 440px) {
+  .btn { padding: 11px 12px; font-size: 13.5px; }
+  .btn .btn-sm { font-size: 13px; }
+}
+
 @media (max-width: 460px) {
-  .post .mood-label { display: none; }
-  .post .mood-tag { padding: 6px; border-radius: 50%; }
-  .post .mood-dot { width: 8px; height: 8px; }
+  .post .mood-tag { display: none; }
   .shell { --pad: 14px; }
   .card { padding: 16px; }
   .post { padding: 14px 16px; }
@@ -1775,9 +1793,7 @@ svg { display: block; flex: none; }
 }
 
 .season-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: block;
   border-color: rgba(216, 140, 72, .3);
   background: linear-gradient(135deg, rgba(216, 140, 72, .11), rgba(180, 96, 60, .07));
 }
@@ -1809,13 +1825,15 @@ svg { display: block; flex: none; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin: 8px 0 0 50px;
+  margin: 0 0 10px;
   padding: 3px 9px;
   border-radius: 999px;
   font-size: 11px;
   color: var(--accent);
   background: var(--accent-soft);
 }
+
+.composer > div:empty { display: none; }
 
 .care-card {
   margin-top: 10px;
@@ -1952,3 +1970,18 @@ body.still *::after {
   border-radius: 42px;
   border: 1px solid var(--line);
 }
+
+.season-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.season-close {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0;
+}
+
+.mood-word { opacity: .9; }

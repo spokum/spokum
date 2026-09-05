@@ -221,15 +221,19 @@ async function loadSeason(root) {
   if (!info || info.season !== 'autumn' || !isBeta(state.user)) return;
   if (localStorage.getItem(SEASON_HIDE) === info.season) return;
   host.innerHTML = `<div class="card season-card">
-    <div class="season-leaf">${icon('maple', 26)}</div>
-    <div class="grow" style="min-width:0">
-      <div class="strong small">${esc(info.title || 'Сезон')}</div>
-      <div class="tiny muted" style="margin-top:4px;line-height:1.5">${esc(info.text || '')}</div>
-      <div class="tiny muted" style="margin-top:6px">Собрано ${info.collected} из ${info.total}</div>
+    <div class="season-top">
+      <div class="season-leaf">${icon('leaf', 22)}</div>
+      <div class="grow" style="min-width:0">
+        <div class="strong small">${esc(info.title || 'Сезон')}</div>
+        <div class="tiny muted" style="margin-top:3px;line-height:1.45">${esc(info.text || '')}</div>
+      </div>
+      <button class="btn btn-icon btn-ghost season-close" data-hide-season>${icon('close', 15)}</button>
     </div>
-    <button class="btn btn-icon btn-ghost" data-hide-season>${icon('close', 16)}</button>
-  </div>
-  <button class="btn" data-open-season style="width:100%;margin:-4px 0 12px">${icon('gift', 16)} Посмотреть сезонные подарки</button>`;
+    <div class="row between" style="margin-top:10px;gap:10px">
+      <span class="tiny muted">Собрано ${info.collected} из ${info.total}</span>
+      <button class="btn btn-sm" data-open-season>${icon('gift', 15)} Подарки сезона</button>
+    </div>
+  </div>`;
   host.querySelector('[data-hide-season]').onclick = () => {
     localStorage.setItem(SEASON_HIDE, info.season);
     host.innerHTML = '';
@@ -278,15 +282,15 @@ function renderComposer(root) {
   }
   const card = el(`
     <div class="card composer">
+      ${isBeta(state.user) ? `<div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>` : ''}
       <div class="row" style="align-items:flex-start">
         ${avatar(state.user, 40)}
         <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="${esc(dayTheme()[1])}"></textarea>
       </div>
-      ${isBeta(state.user) ? `<div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>` : ''}
       <div data-preview></div>
       <div data-care></div>
       ${draft.text.trim() ? '<div class="tiny muted" style="margin:6px 0 0">Черновик сохранён, можно уйти и вернуться</div>' : ''}
-      <div class="chips" data-moods style="margin:12px 0 10px"></div>
+      <div class="chips wrap" data-moods style="margin:10px 0 10px"></div>
       <div data-offer></div>
       <div class="composer-actions">
         <div class="composer-tools">
@@ -361,9 +365,26 @@ function renderComposer(root) {
   });
 
   const moods = card.querySelector('[data-moods]');
-  moods.innerHTML = Object.entries(MOODS)
-    .map(([key, m]) => `<button class="chip" style="${moodStyle(key)}" data-mood="${key}" aria-pressed="${draft.mood === key}"><i class="mood-dot"></i>${esc(m.label)}</button>`)
-    .join('');
+  let allMoods = false;
+  const drawMoods = () => {
+    const keys = Object.keys(MOODS);
+    const short = keys.slice(0, 4);
+    const shown = allMoods || !short.includes(draft.mood) ? keys : short;
+    moods.innerHTML = shown
+      .map((key) => `<button class="chip" style="${moodStyle(key)}" data-mood="${key}" aria-pressed="${draft.mood === key}"><i class="mood-dot"></i>${esc(MOODS[key].label)}</button>`)
+      .join('') + (shown.length < keys.length ? `<button class="chip" data-more-moods>${icon('more', 13)} Ещё</button>` : '');
+    moods.querySelector('[data-more-moods]')?.addEventListener('click', () => {
+      allMoods = true;
+      drawMoods();
+    });
+    moods.querySelectorAll('[data-mood]').forEach((button) => {
+      button.onclick = () => {
+        draft.mood = button.dataset.mood;
+        moods.querySelectorAll('[data-mood]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+        refreshOffer();
+      };
+    });
+  };
   const offer = card.querySelector('[data-offer]');
   const refreshOffer = async () => {
     const { HEAVY_MOODS, MODES } = await import('./safe.js');
@@ -381,13 +402,7 @@ function renderComposer(root) {
     };
   };
 
-  moods.querySelectorAll('[data-mood]').forEach((button) => {
-    button.onclick = () => {
-      draft.mood = button.dataset.mood;
-      moods.querySelectorAll('[data-mood]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-      refreshOffer();
-    };
-  });
+  drawMoods();
   refreshOffer();
 
   const preview = card.querySelector('[data-preview]');
@@ -901,7 +916,7 @@ export function postCard(post, refresh, options = {}) {
             <span class="strong truncate">${esc(post.author.displayName)}</span>
             ${badges(post.author)}
           </div>
-          <div class="tiny muted truncate">@${esc(post.author.username)} · ${timeAgo(post.createdAt)}</div>
+          <div class="tiny muted truncate">@${esc(post.author.username)} · ${timeAgo(post.createdAt)} · <span class="mood-word" style="color:${mood.ink}">${esc(mood.label.toLowerCase())}</span></div>
         </div>
         <span class="mood-tag" style="${moodStyle(post.mood)}" title="${esc(mood.label)}"><i class="mood-dot"></i><span class="mood-label">${esc(mood.label)}</span></span>
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 18)}</button>
