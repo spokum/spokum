@@ -106,6 +106,7 @@ export async function render(root) {
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('lock', 18)}<span class="strong small">Безопасность</span></div>
       <button class="list-item" data-password>${icon('key', 18)}<div class="grow"><div class="small strong">Сменить пароль</div><div class="tiny muted">Другие сессии закроются</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
     </div>
 
@@ -215,6 +216,17 @@ export async function render(root) {
     paintPush();
   };
 
+  const codeState = root.querySelector('[data-codes-state]');
+  if (api.recoveryState && state.user) {
+    api.recoveryState().then((info) => {
+      if (!codeState) return;
+      codeState.textContent = info?.total
+        ? `Готово кодов: ${info.total} из 3`
+        : 'Коды ещё не созданы, пароль восстановить нельзя';
+    }).catch(() => {});
+  }
+  root.querySelector('[data-codes]').onclick = () => openCodes(() => render(root));
+
   root.querySelector('[data-rules]').onclick = async () => {
     const { openRules } = await import('./rules.js');
     openRules();
@@ -258,6 +270,57 @@ export async function render(root) {
     local.reset();
     location.reload();
   });
+}
+
+
+async function openCodes(done) {
+  if (!state.user) return toast('Сначала войдите', 'err');
+  if (!api.recoveryMake) return toast('Коды появятся, когда база будет обновлена', 'err');
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Три одноразовых кода на случай, если забудете пароль. Один код открывает вход один раз и просит придумать новый пароль.</p>
+    <div class="card" style="padding:12px;background:var(--surface)">
+      <div class="tiny muted">Куда сохранить</div>
+      <div class="tiny muted" style="margin-top:6px;line-height:1.5">Запишите на бумаге, в заметках или в переписке с самим собой. Никому не показывайте: код это тот же пароль.</div>
+    </div>
+    <div data-list></div>
+    <button class="btn btn-primary" data-make>${icon('key', 17)} Создать новые коды</button>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Создание новых кодов гасит старые.</p>
+  </div>`);
+  const sheet = openSheet('Коды восстановления', body);
+  const list = body.querySelector('[data-list]');
+  const button = body.querySelector('[data-make]');
+
+  const show = (codes) => {
+    list.innerHTML = `<div class="card code-card">
+      ${codes.map((code) => `<div class="code-row"><span class="code-value">${esc(code)}</span></div>`).join('')}
+      <button class="btn btn-sm" data-copy style="width:100%;margin-top:10px">${icon('share', 15)} Скопировать все</button>
+    </div>`;
+    list.querySelector('[data-copy]').onclick = () => {
+      navigator.clipboard?.writeText(codes.join('\n'));
+      toast('Скопировано');
+    };
+  };
+
+  button.onclick = async () => {
+    const ok = await confirmSheet({
+      title: 'Создать коды',
+      text: 'Старые коды перестанут работать. Новые покажем один раз.',
+      confirm: 'Создать'
+    });
+    if (!ok) return;
+    button.disabled = true;
+    try {
+      const { codes } = await api.recoveryMake();
+      show(codes);
+      button.textContent = 'Создать заново';
+      toast('Сохраните коды, второй раз мы их не покажем');
+      done?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+    button.disabled = false;
+  };
+  void sheet;
 }
 
 function premiumCard() {

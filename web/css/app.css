@@ -1596,3 +1596,21 @@ svg { display: block; flex: none; }
 }
 
 .center { text-align: center; }
+
+.code-card { padding: 14px; background: var(--surface); }
+
+.code-row {
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.code-row + .code-row { margin-top: 8px; }
+
+.code-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}

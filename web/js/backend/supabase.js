@@ -1387,6 +1387,29 @@ export async function createSupabase(url, key) {
       return data;
     },
 
+    async recoveryState() {
+      const { data, error } = await sb.rpc('recovery_state');
+      guard(error);
+      return data || { total: 0 };
+    },
+
+    async recoveryMake() {
+      const { data, error } = await sb.rpc('recovery_make');
+      guard(error);
+      return { codes: (data && data.codes) || [] };
+    },
+
+    async recoverAccount(login, code, password) {
+      const { data, error } = await sb.rpc('recovery_use', { login, code, fresh_password: password });
+      guard(error);
+      const handle = (data && data.login) || login;
+      const answer = await sb.auth.signInWithPassword({ email: emailFor(handle), password });
+      guard(answer.error);
+      uid = answer.data.user.id;
+      listen();
+      return { user: await profileById(uid) };
+    },
+
     async summerRecap() {
       const { data, error } = await sb.rpc('summer_recap');
       guard(error);

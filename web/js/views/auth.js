@@ -1,7 +1,42 @@
 import { api, setUser } from '../store.js';
 import { el, esc, initials } from '../util.js';
 import { icon, logoMark } from '../icons.js';
-import { toast, pickImage } from '../ui.js';
+import { toast, pickImage, openSheet } from '../ui.js';
+
+
+async function openRecovery(login, done) {
+  if (!api.recoverAccount) return toast('Восстановление появится, когда база будет обновлена', 'err');
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Введите юзернейм, один из кодов восстановления и новый пароль. Код сработает один раз.</p>
+    <input class="input" data-who placeholder="Юзернейм" value="${esc(login || '')}" autocomplete="username">
+    <input class="input" data-code placeholder="Код вида ABCD-EFGH-IJKL" autocomplete="one-time-code">
+    <input class="input" type="password" data-fresh placeholder="Новый пароль" autocomplete="new-password">
+    <button class="btn btn-primary" data-go>${icon('key', 17)} Войти по коду</button>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Коды создаются заранее в настройках, раздел Безопасность. Если кодов нет и пароль забыт, помочь может только администрация.</p>
+  </div>`);
+  const sheet = openSheet('Вход по коду', body);
+  const go = body.querySelector('[data-go]');
+  go.onclick = async () => {
+    const who = body.querySelector('[data-who]').value.trim();
+    const code = body.querySelector('[data-code]').value.trim();
+    const fresh = body.querySelector('[data-fresh]').value;
+    if (!who || !code) return toast('Впишите юзернейм и код', 'err');
+    if (fresh.length < 8) return toast('Новый пароль минимум 8 символов', 'err');
+    go.disabled = true;
+    go.textContent = 'Проверяем';
+    try {
+      const { user } = await api.recoverAccount(who, code, fresh);
+      setUser(user);
+      sheet.close();
+      toast('Пароль сменён, вы вошли');
+      done?.();
+    } catch (error) {
+      go.disabled = false;
+      go.innerHTML = `${icon('key', 17)} Войти по коду`;
+      toast(error.message, 'err');
+    }
+  };
+}
 
 function humanError(message) {
   const text = String(message || '');
@@ -112,6 +147,7 @@ export function renderAuth(root, done) {
       ${mode === 'register' ? '<input class="input" data-name placeholder="Как тебя называть" autocomplete="nickname">' : ''}
       <input class="input" type="password" data-password placeholder="Пароль" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}">
       <button class="btn btn-primary" data-submit>${mode === 'login' ? 'Войти' : 'Создать аккаунт'}</button>
+      ${mode === 'login' ? '<button type="button" class="btn btn-ghost btn-sm" data-forgot>Забыли пароль?</button>' : ''}
       <p class="tiny muted center" style="margin:0;line-height:1.5">${mode === 'login' ? 'Нет аккаунта? Переключись на регистрацию' : 'Минимум 8 символов в пароле. Данные остаются приватными'}</p>
       ${mode === 'register' ? '<p class="tiny muted center" style="margin:0;line-height:1.5">Создавая аккаунт, вы соглашаетесь с <button type="button" class="link-btn" data-rules>правилами СпокУма</button></p>' : ''}`;
 
@@ -186,6 +222,7 @@ export function renderAuth(root, done) {
       }
     };
 
+    form.querySelector('[data-forgot]')?.addEventListener('click', () => openRecovery(form.querySelector('[data-username]').value.trim(), done));
     form.querySelector('[data-submit]').onclick = submit;
     form.querySelectorAll('input').forEach((input) => {
       input.addEventListener('keydown', (event) => {

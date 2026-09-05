@@ -3254,3 +3254,105 @@ returns jsonb language sql security definer stable set search_path = public as $
 $$;
 
 grant execute on function public.summer_recap() to authenticated;
+
+create table if not exists public.recovery_codes (
+  id bigserial primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  code_hash text not null,
+  created_at timestamptz not null default now(),
+  used_at timestamptz
+);
+
+create index if not exists recovery_codes_user on public.recovery_codes (user_id);
+
+alter table public.recovery_codes enable row level security;
+
+drop policy if exists recovery_codes_own on public.recovery_codes;
+create policy recovery_codes_own on public.recovery_codes for select using (user_id = auth.uid());
+
+create table if not exists public.recovery_tries (
+  id bigserial primary key,
+  user_id uuid references public.profiles on delete cascade,
+  at timestamptz not null default now()
+);
+
+create index if not exists recovery_tries_when on public.recovery_tries (user_id, at desc);
+
+alter table public.recovery_tries enable row level security;
+
+create or replace function public.recovery_state()
+returns jsonb language sql security definer stable set search_path = public, extensions as $$
+  select jsonb_build_object(
+    'total', count(*) filter (where used_at is null),
+    'madeAt', coalesce(max(created_at), null)
+  )
+  from public.recovery_codes where user_id = auth.uid();
+$$;
+
+create or replace function public.recovery_make()
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare
+  fresh text;
+  codes text[] := '{}';
+  i integer;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  delete from public.recovery_codes where user_id = auth.uid();
+  for i in 1..3 loop
+    fresh := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12));
+    fresh := substr(fresh, 1, 4) || '-' || substr(fresh, 5, 4) || '-' || substr(fresh, 9, 4);
+    codes := array_append(codes, fresh);
+    insert into public.recovery_codes (user_id, code_hash)
+    values (auth.uid(), encode(digest(fresh, 'sha256'), 'hex'));
+  end loop;
+  return jsonb_build_object('codes', to_jsonb(codes));
+end;
+$$;
+
+create or replace function public.recovery_use(login text, code text, fresh_password text)
+returns jsonb language plpgsql security definer set search_path = public, extensions, auth as $$
+declare
+  target uuid;
+  handle text;
+  clean text;
+  tries integer;
+  hit bigint;
+begin
+  clean := upper(regexp_replace(coalesce(code, ''), '[^A-Za-z0-9]', '', 'g'));
+  if length(clean) <> 12 then raise exception 'Код не подходит'; end if;
+  if length(coalesce(fresh_password, '')) < 8 then raise exception 'Пароль минимум 8 символов'; end if;
+
+  select p.id, coalesce(p.login_name, p.username) into target, handle
+    from public.usernames u
+    join public.profiles p on p.id = u.user_id
+   where u.username = lower(regexp_replace(coalesce(login, ''), '^@', ''))
+   limit 1;
+  if target is null then raise exception 'Такого аккаунта нет'; end if;
+
+  select count(*) into tries from public.recovery_tries
+   where user_id = target and at > now() - interval '1 hour';
+  if tries >= 8 then raise exception 'Слишком много попыток, подождите час'; end if;
+  insert into public.recovery_tries (user_id) values (target);
+
+  select id into hit from public.recovery_codes
+   where user_id = target
+     and used_at is null
+     and code_hash = encode(digest(substr(clean, 1, 4) || '-' || substr(clean, 5, 4) || '-' || substr(clean, 9, 4), 'sha256'), 'hex')
+   limit 1;
+  if hit is null then raise exception 'Код не подходит'; end if;
+
+  update public.recovery_codes set used_at = now() where id = hit;
+  update auth.users
+     set encrypted_password = crypt(fresh_password, gen_salt('bf')),
+         updated_at = now()
+   where id = target;
+  delete from public.recovery_tries where user_id = target;
+
+  return jsonb_build_object('ok', true, 'login', handle);
+end;
+$$;
+
+revoke all on function public.recovery_make() from public, anon;
+grant execute on function public.recovery_make() to authenticated;
+grant execute on function public.recovery_state() to authenticated;
+grant execute on function public.recovery_use(text, text, text) to anon, authenticated;

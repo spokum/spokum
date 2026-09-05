@@ -29,6 +29,7 @@ function blank() {
     deviceBans: [],
     coinLog: [],
     eventClaims: [],
+    recoveryCodes: [],
     follows: [],
     thanks: [],
     gifts: [],
@@ -1885,6 +1886,44 @@ export const local = {
     });
     save();
     return { ok: true, mode: 'removed' };
+  },
+
+  async recoveryState() {
+    const user = need();
+    const rows = (state.recoveryCodes || []).filter((row) => row.userId === user.id && !row.usedAt);
+    return { total: rows.length, madeAt: rows.length ? rows[0].createdAt : null };
+  },
+
+  async recoveryMake() {
+    const user = need();
+    state.recoveryCodes = (state.recoveryCodes || []).filter((row) => row.userId !== user.id);
+    const codes = [];
+    for (let i = 0; i < 3; i++) {
+      const pool = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const bytes = crypto.getRandomValues(new Uint8Array(12));
+      const raw = [...bytes].map((byte) => pool[byte % pool.length]).join('');
+      const code = `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+      codes.push(code);
+      state.recoveryCodes.push({ userId: user.id, code, createdAt: Date.now(), usedAt: null });
+    }
+    save();
+    return { codes };
+  },
+
+  async recoverAccount(login, code, password) {
+    const clean = String(code || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+    if (clean.length !== 12) fail('Код не подходит');
+    if (String(password || '').length < 8) fail('Пароль минимум 8 символов');
+    const owner = ownerOf(String(login || '').toLowerCase().replace(/^@/, ''));
+    if (!owner) fail('Такого аккаунта нет');
+    const shaped = `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
+    const row = (state.recoveryCodes || []).find((item) => item.userId === owner.id && !item.usedAt && item.code === shaped);
+    if (!row) fail('Код не подходит');
+    row.usedAt = Date.now();
+    owner.salt = uid();
+    owner.passwordHash = await hash(password, owner.salt);
+    save();
+    return local.login({ username: login, password });
   },
 
   async summerRecap() {
