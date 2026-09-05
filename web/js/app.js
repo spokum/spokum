@@ -445,21 +445,39 @@ window.addEventListener('spokum:message', () => refreshUnread());
 
 window.addEventListener('spokum:notify', async (event) => {
   const bell = await import('./views/notifications.js');
-  bell.bumpBell();
   const item = event.detail || {};
+  if (!bell.markShown(item.id)) return;
+  bell.bumpBell();
   if (state.quiet) return;
   if (document.hidden) bell.systemNotify(item);
   else if (item.kind !== 'message' && item.kind !== 'newpost') toast(item.title || 'Новое уведомление');
 });
 
-setInterval(async () => {
+async function pullNews() {
   if (!state.user) return;
+  api.wake?.();
   try {
     const bell = await import('./views/notifications.js');
-    bell.refreshBell();
+    await bell.pullNotifications();
   } catch {}
-}, 20000);
-setInterval(refreshUnread, 15000);
+  refreshUnread();
+}
+
+let newsTimer = null;
+
+function paceNews() {
+  clearInterval(newsTimer);
+  const gap = document.hidden ? 25000 : 7000;
+  newsTimer = setInterval(pullNews, gap);
+}
+
+paceNews();
+document.addEventListener('visibilitychange', () => {
+  paceNews();
+  if (!document.hidden) pullNews();
+});
+window.addEventListener('online', pullNews);
+window.addEventListener('focus', pullNews);
 setInterval(refreshUser, 30000);
 subscribe((event) => {
   if (event === 'user') applyAppearance(state.user);

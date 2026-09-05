@@ -350,6 +350,7 @@ public class MainActivity extends AppCompatActivity {
     if (getSharedPreferences("spokum", MODE_PRIVATE).getString("refresh", "").isEmpty()) {
       return;
     }
+    NotifyWorker.chain(this);
     WorkManager manager = WorkManager.getInstance(this);
     int[] minutes = { 1, 3, 6, 10 };
     for (int i = 0; i < minutes.length; i++) {

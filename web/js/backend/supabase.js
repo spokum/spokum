@@ -239,6 +239,22 @@ export async function createSupabase(url, key) {
   };
   const missingColumn = (error) => !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message || ''));
 
+  const wake = () => {
+    if (!uid) return;
+    const state = channel?.state;
+    if (state === 'joined' || state === 'joining') return;
+    if (channel) {
+      try {
+        sb.removeChannel(channel);
+      } catch {}
+      channel = null;
+    }
+    try {
+      sb.realtime?.connect?.();
+    } catch {}
+    listen();
+  };
+
   const listen = () => {
     if (channel || !uid) return;
     channel = sb
@@ -258,7 +274,18 @@ export async function createSupabase(url, key) {
           detail: { id: row.id, chatId: row.chat_id, fromId: row.from_id, kind: row.kind, payload: row.payload || {} }
         }));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setTimeout(() => {
+            if (channel?.state === 'joined') return;
+            try {
+              sb.removeChannel(channel);
+            } catch {}
+            channel = null;
+            listen();
+          }, 2500);
+        }
+      });
   };
 
   const sessionResult = await withTimeout(sb.auth.getSession(), 8000, { data: { session: null } });
@@ -272,6 +299,8 @@ export async function createSupabase(url, key) {
 
   return {
     mode: 'supabase',
+
+    wake,
 
     async register({ username, displayName, password }) {
       const name = String(username || '').toLowerCase().replace(/^@/, '');

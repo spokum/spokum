@@ -152,6 +152,42 @@ function paint() {
   });
 }
 
+const shown = new Set();
+let primed = false;
+
+export function markShown(id) {
+  if (id === undefined || id === null) return false;
+  const key = String(id);
+  if (shown.has(key)) return false;
+  shown.add(key);
+  if (shown.size > 200) shown.delete(shown.values().next().value);
+  return true;
+}
+
+export async function pullNotifications() {
+  if (!state.user || !api.notifications) return;
+  let rows = [];
+  try {
+    const answer = await api.notifications(12);
+    rows = answer.notifications || [];
+  } catch {
+    return;
+  }
+  const first = !primed;
+  primed = true;
+  rows
+    .slice()
+    .reverse()
+    .forEach((row) => {
+      const isNew = markShown(row.id);
+      if (!isNew || first || row.read) return;
+      if (state.quiet) return;
+      systemNotify(row);
+      if (!document.hidden && row.kind !== 'message' && row.kind !== 'newpost') toast(row.title || 'Новое уведомление');
+    });
+  await refreshBell();
+}
+
 export async function refreshBell() {
   if (!state.user || !api.unreadNotifications) return;
   try {

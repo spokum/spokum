@@ -87,6 +87,19 @@ function pauseOverlay(ctx, size) {
   ctx.textAlign = 'start';
 }
 
+function tapOnce(handler) {
+  let last = 0;
+  return (event) => {
+    const now = performance.now();
+    if (now - last < 350) {
+      event.preventDefault();
+      return;
+    }
+    last = now;
+    handler(event);
+  };
+}
+
 function pointerX(canvas, event) {
   const rect = canvas.getBoundingClientRect();
   const point = event.touches?.[0] || event;
@@ -3075,7 +3088,7 @@ function tower(canvas, report) {
         const base = h - 40;
         const shown = state.stack.slice(-Math.floor((h - 120) / bh));
         shown.forEach((block, i) => {
-          const y = base - (shown.length - i) * bh;
+          const y = base - (i + 1) * bh;
           ctx.fillStyle = `hsl(${(state.stack.length - shown.length + i) * 12 % 360} 45% 58%)`;
           ctx.beginPath();
           ctx.roundRect((block.x - block.w / 2) * w, y, block.w * w, bh - 3, 4);
@@ -3533,9 +3546,10 @@ function jumper(canvas, report) {
       },
       update(dt) {
         if (state.over) return;
+        const wasY = state.y;
         state.vy += dt * 1.5;
         state.y += state.vy * dt;
-        state.x += tilt * dt * 0.75;
+        state.x += tilt * dt * 0.8;
         if (state.x < 0) state.x = 1;
         if (state.x > 1) state.x = 0;
 
@@ -3549,15 +3563,19 @@ function jumper(canvas, report) {
           state.plates = state.plates.filter((plate) => plate.y < 1.1);
           while (state.plates.length < 14) {
             const top = Math.min(...state.plates.map((plate) => plate.y));
-            state.plates.push({ x: 0.12 + Math.random() * 0.76, y: top - 0.06 - Math.random() * 0.045, kind: Math.random() < 0.16 ? 'weak' : 'solid' });
+            state.plates.push({ x: 0.12 + Math.random() * 0.76, y: top - 0.055 - Math.random() * 0.035, kind: Math.random() < 0.16 ? 'weak' : 'solid' });
           }
         }
 
         if (state.vy > 0) {
+          const wasFoot = wasY + 0.02;
+          const foot = state.y + 0.02;
           for (const plate of state.plates) {
             if (plate.gone) continue;
-            if (Math.abs(state.x - plate.x) < 0.1 && Math.abs(state.y + 0.02 - plate.y) < 0.022) {
-              state.vy = -0.66;
+            const crossed = wasFoot <= plate.y + 0.012 && foot >= plate.y - 0.012;
+            if (Math.abs(state.x - plate.x) < 0.115 && crossed) {
+              state.y = plate.y - 0.02;
+              state.vy = -0.72;
               state.springs.push({ x: plate.x, y: plate.y, life: 1 });
               if (plate.kind === 'weak') plate.gone = true;
               break;
@@ -4172,8 +4190,9 @@ function flasks(canvas, report) {
             start(S.level + 1, S.score);
           }
         };
-        bind('pointerdown', tap);
-        bind('touchstart', tap);
+        const once = tapOnce(tap);
+        bind('pointerdown', once);
+        bind('touchstart', once);
       },
       update() {},
       draw(ctx) {
@@ -4293,8 +4312,9 @@ function trace(canvas, report) {
           event.preventDefault();
           S.drawing = false;
         };
-        bind('pointerdown', down);
-        bind('touchstart', down);
+        const once = tapOnce(down);
+        bind('pointerdown', once);
+        bind('touchstart', once);
         bind('pointermove', move);
         bind('touchmove', move);
         bind('pointerup', up);

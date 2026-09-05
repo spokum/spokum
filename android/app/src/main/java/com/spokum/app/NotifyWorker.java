@@ -12,6 +12,9 @@ import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.work.ExistingWorkPolicy;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
@@ -23,6 +26,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.concurrent.TimeUnit;
 
 public class NotifyWorker extends Worker {
 
@@ -96,6 +100,7 @@ public class NotifyWorker extends Worker {
   public Result doWork() {
     Context context = getApplicationContext();
     SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    chain(context);
 
     String base = prefs.getString("sb_url", "");
     String key = prefs.getString("sb_key", "");
@@ -146,6 +151,16 @@ public class NotifyWorker extends Worker {
       }
     }
     return Result.success();
+  }
+
+  static void chain(Context context) {
+    if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("refresh", "").isEmpty()) {
+      return;
+    }
+    OneTimeWorkRequest next = new OneTimeWorkRequest.Builder(NotifyWorker.class)
+        .setInitialDelay(5, TimeUnit.MINUTES)
+        .build();
+    WorkManager.getInstance(context).enqueueUniqueWork("spokum-chain", ExistingWorkPolicy.REPLACE, next);
   }
 
   static void show(Context context, int id, String title, String body) {

@@ -452,26 +452,75 @@ async function recordVoice(send) {
 
 export async function sendPostToChat(post) {
   const { chats } = await api.chats();
-  if (!chats.length) return toast('Сначала заведите чат', 'err');
+  let people = [];
+  try {
+    const answer = await api.contacts();
+    people = answer.contacts || [];
+  } catch {}
+  const known = new Set(chats.map((chat) => chat.peer?.id).filter(Boolean));
+  const fresh = people.filter((person) => !known.has(person.id));
+  if (!chats.length && !fresh.length) return toast('Сначала добавьте кого-нибудь в контакты', 'err');
+
   const body = el(`<div class="col" style="gap:6px">
-    <p class="tiny muted" style="margin:0 0 4px">Кому отправить</p>
+    <input class="input" data-find placeholder="Кому отправить">
+    <textarea class="textarea" data-note placeholder="Подпись, если хотите" style="min-height:54px"></textarea>
     <div class="col" data-list style="gap:6px"></div>
   </div>`);
   const sheet = openSheet('Отправить в чат', body);
   const list = body.querySelector('[data-list]');
-  chats.forEach((chat) => {
-    const row = el(`<button class="list-item">${avatar(chat.peer || chat, 34)}<span class="grow" style="text-align:left"><span class="small strong">${esc(chat.title || chat.peer?.displayName || 'Чат')}</span></span>${icon('forward', 15)}</button>`);
-    row.onclick = async () => {
-      try {
-        await api.sendPost(chat.id, post.id, '');
-        sheet.close();
-        toast('Отправлено');
-      } catch (error) {
-        toast(error.message, 'err');
+  const note = body.querySelector('[data-note]');
+  let busy = false;
+
+  const rows = [
+    ...chats.map((chat) => ({
+      id: 'chat-' + chat.id,
+      who: chat.peer || chat,
+      title: chat.title || chat.peer?.displayName || 'Чат',
+      hint: chat.peer ? '@' + chat.peer.username : 'беседа',
+      open: async () => chat.id
+    })),
+    ...fresh.map((person) => ({
+      id: 'user-' + person.id,
+      who: person,
+      title: person.displayName,
+      hint: '@' + person.username,
+      open: async () => {
+        const { chat } = await api.createChat({ kind: 'dm', members: [person.id] });
+        return chat.id;
       }
-    };
-    list.appendChild(row);
-  });
+    }))
+  ];
+
+  const draw = (query) => {
+    const found = rows.filter((row) => !query || (row.title + ' ' + row.hint).toLowerCase().includes(query));
+    list.innerHTML = '';
+    if (!found.length) {
+      list.appendChild(el('<div class="tiny muted" style="padding:10px 4px">Никого не нашлось</div>'));
+      return;
+    }
+    found.forEach((row) => {
+      const node = el(`<button class="list-item">${avatar(row.who, 34)}<span class="grow" style="text-align:left"><span class="small strong truncate">${esc(row.title)}</span><span class="tiny muted"> ${esc(row.hint)}</span></span>${icon('forward', 15)}</button>`);
+      node.onclick = async () => {
+        if (busy) return;
+        busy = true;
+        node.disabled = true;
+        try {
+          const chatId = await row.open();
+          await api.sendPost(chatId, post.id, note.value.trim());
+          sheet.close();
+          toast('Отправлено');
+        } catch (error) {
+          busy = false;
+          node.disabled = false;
+          toast(error.message, 'err');
+        }
+      };
+      list.appendChild(node);
+    });
+  };
+
+  draw('');
+  body.querySelector('[data-find]').addEventListener('input', (event) => draw(event.target.value.trim().toLowerCase()));
   return sheet;
 }
 

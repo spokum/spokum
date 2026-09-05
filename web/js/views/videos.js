@@ -124,21 +124,34 @@ async function more(stage) {
 
 let observer = null;
 
+function hushOthers(stage) {
+  stage.querySelectorAll('.shorts-slide').forEach((slide) => {
+    if (slide.dataset.visible === '1') return;
+    if (slide.stop) {
+      slide.stop();
+      return;
+    }
+    const video = slide.querySelector('video');
+    if (video) {
+      video.pause();
+      video.muted = true;
+    }
+    slide.querySelector('[data-tune]')?.pause();
+  });
+}
+
 function watch(stage) {
   observer?.disconnect();
   observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
-        const video = entry.target.querySelector('video');
         const visible = entry.isIntersecting && entry.intersectionRatio > 0.6;
         entry.target.dataset.visible = visible ? '1' : '0';
-        if (video) {
-          if (visible) entry.target.play?.();
-          else video.pause();
-        } else if (entry.target.querySelector('[data-tune]')) {
-          if (visible) entry.target.play?.();
-          else entry.target.stop?.();
-        }
+      }
+      hushOthers(stage);
+      for (const entry of entries) {
+        const visible = entry.target.dataset.visible === '1';
+        if (visible) entry.target.play?.();
         if (!visible) continue;
         if (!entry.target.dataset.counted) {
           entry.target.dataset.counted = '1';
@@ -150,6 +163,25 @@ function watch(stage) {
     { threshold: [0, 0.61, 1] }
   );
   [...stage.querySelectorAll('.shorts-slide')].forEach((node) => observer.observe(node));
+  if (!stage.dataset.hushing) {
+    stage.dataset.hushing = '1';
+    let queued = false;
+    stage.addEventListener('scroll', () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        const box = stage.getBoundingClientRect();
+        const middle = box.top + box.height / 2;
+        stage.querySelectorAll('.shorts-slide').forEach((slide) => {
+          const rect = slide.getBoundingClientRect();
+          const here = rect.top <= middle && rect.bottom >= middle;
+          slide.dataset.visible = here ? '1' : '0';
+        });
+        hushOthers(stage);
+      });
+    }, { passive: true });
+  }
 }
 
 function albumBody(post) {
@@ -208,6 +240,7 @@ function slide(post, stage) {
     };
     node.stop = () => {
       tune.pause();
+      tune.currentTime = 0;
       drawTune();
     };
     button.onclick = (event) => {
@@ -236,14 +269,25 @@ function slide(post, stage) {
       sound.classList.toggle('on', !video.muted);
     };
 
+    node.stop = () => {
+      video.pause();
+      video.muted = true;
+      drawSound();
+    };
+
     node.play = () => {
       if (fault.hidden === false) return;
+      if (node.dataset.visible !== '1') return;
       video.muted = !(soundWanted() && canUnmute());
       drawSound();
       const attempt = video.play();
       if (!attempt?.then) return;
       attempt
         .then(() => {
+          if (node.dataset.visible !== '1') {
+            node.stop();
+            return;
+          }
           playHint.hidden = true;
         })
         .catch(() => {
