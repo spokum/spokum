@@ -5,12 +5,285 @@ import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, 
 import { openStories, publishStory } from './stories.js';
 
 
-async function openRecap() {
+
+function moodCanvas(user, data) {
+  const canvas = document.createElement('canvas');
+  const scale = 2;
+  canvas.width = 640 * scale;
+  canvas.height = 800 * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const hue = Number(user.hue) || 200;
+  const sky = ctx.createLinearGradient(0, 0, 640, 800);
+  sky.addColorStop(0, `hsl(${hue} 38% 16%)`);
+  sky.addColorStop(1, `hsl(${(hue + 40) % 360} 34% 9%)`);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, 640, 800);
+
+  for (let i = 0; i < 26; i++) {
+    ctx.fillStyle = `hsla(${(hue + i * 9) % 360}, 60%, 70%, .07)`;
+    ctx.beginPath();
+    ctx.arc(40 + ((i * 97) % 560), 90 + ((i * 173) % 640), 30 + ((i * 37) % 90), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.font = '700 40px Inter, system-ui, sans-serif';
+  ctx.fillText('Моя неделя', 54, 120);
+
+  ctx.font = '500 21px Inter, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,.6)';
+  ctx.fillText('@' + (user.username || ''), 54, 158);
+
+  const rows = [
+    ['Настроение', (MOODS[user.mood] || MOODS.calm).label],
+    ['Записей', String(data.posts ?? 0)],
+    ['Лайков собрано', String(data.likes ?? 0)],
+    ['Ответов написано', String(data.answers ?? 0)],
+    ['Полоса дней', String(data.streak ?? 0)]
+  ];
+  rows.forEach(([label, value], index) => {
+    const y = 250 + index * 84;
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    ctx.beginPath();
+    ctx.roundRect(54, y - 40, 532, 64, 18);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.62)';
+    ctx.font = '500 20px Inter, system-ui, sans-serif';
+    ctx.fillText(label, 78, y);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 24px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(value, 562, y);
+    ctx.textAlign = 'left';
+  });
+
+  if (user.dayWord) {
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    ctx.font = 'italic 500 22px Inter, system-ui, sans-serif';
+    ctx.fillText('«' + String(user.dayWord).slice(0, 40) + '»', 54, 700);
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.font = '600 20px Inter, system-ui, sans-serif';
+  ctx.fillText('СпокУм', 54, 752);
+  return canvas;
+}
+
+async function openMoodCard(user) {
+  const body = el('<div class="col"><div class="card" style="height:220px;opacity:.35"></div></div>');
+  const sheet = openSheet('Открытка настроения', body);
+  let data = {};
+  try {
+    data = api.monthRecap ? await api.monthRecap() : {};
+  } catch {}
+  const canvas = moodCanvas(user, data);
+  const url = canvas.toDataURL('image/png');
+  body.innerHTML = `<div class="col">
+    <div class="post-image"><img src="${url}" alt="Открытка"></div>
+    <button class="btn btn-primary" data-share>${icon('share', 17)} Поделиться</button>
+    <button class="btn" data-save>${icon('download', 17)} Сохранить картинку</button>
+    <p class="tiny muted" style="margin:0;line-height:1.5">Открытку можно отправить в чат или сохранить и выложить куда угодно.</p>
+  </div>`;
+  body.querySelector('[data-share]').onclick = async () => {
+    try {
+      const blob = await new Promise((done) => canvas.toBlob(done, 'image/png'));
+      const file = new File([blob], 'spokum.png', { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Моя неделя в СпокУме' });
+        return;
+      }
+    } catch {}
+    toast('Телефон не умеет делиться картинкой, сохраните её');
+  };
+  body.querySelector('[data-save]').onclick = () => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'spokum-nedelya.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    toast('Открытка сохранена');
+  };
+  void sheet;
+}
+
+async function openAppeals() {
+  if (!api.myAppeals) return toast('Споры появятся, когда база будет обновлена', 'err');
+  const body = el('<div class="col"><div class="card" style="height:120px;opacity:.35"></div></div>');
+  const sheet = openSheet('Мои споры', body);
+  let rows = [];
+  let punishments = [];
+  try {
+    const answer = await api.myAppeals();
+    rows = answer.appeals || [];
+    const mine = api.myPunishments ? await api.myPunishments() : { punishments: [] };
+    punishments = (mine.punishments || []).filter((row) => !row.reverted);
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+  const known = new Set(rows.map((row) => row.punishment));
+  const KINDS = { mute: 'Мут', ban: 'Блокировка', warn: 'Предупреждение', comment_removed: 'Снятый комментарий' };
+  const STATUS = { open: 'на рассмотрении', accepted: 'наказание снято', kept: 'решение оставлено' };
+
+  body.innerHTML = `<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Если наказание кажется несправедливым, напишите об этом. Спор посмотрит админ, а не тот, кто наказал.</p>
+    ${punishments.filter((row) => !known.has(row.id)).length
+      ? `<div class="tiny muted">Можно оспорить</div>${punishments
+          .filter((row) => !known.has(row.id))
+          .map((row) => `<button class="list-item" data-new="${row.id}">${icon('warn', 17)}
+            <span class="grow" style="text-align:left"><span class="small strong">${esc(KINDS[row.kind] || row.kind)}</span>
+            <span class="tiny muted"> ${esc(row.reason || 'без причины')}</span></span>${icon('forward', 15)}</button>`)
+          .join('')}`
+      : ''}
+    ${rows.length
+      ? `<div class="divider"></div><div class="tiny muted">Отправленные</div>${rows
+          .map((row) => `<div class="card" style="padding:12px">
+            <div class="row between"><span class="small strong">${esc(KINDS[row.kind] || row.kind)}</span>
+            <span class="pill ${row.status === 'accepted' ? 'good' : row.status === 'kept' ? 'bad' : 'warn'}">${esc(STATUS[row.status] || row.status)}</span></div>
+            <div class="tiny muted" style="margin-top:6px;line-height:1.5">${esc(row.body)}</div>
+            ${row.answer ? `<div class="small" style="margin-top:8px;line-height:1.5">Ответ: ${esc(row.answer)}</div>` : ''}
+          </div>`)
+          .join('')}`
+      : '<div class="tiny muted">Споров пока нет</div>'}
+  </div>`;
+
+  body.querySelectorAll('[data-new]').forEach((button) => {
+    button.onclick = async () => {
+      const { promptSheet } = await import('../ui.js');
+      const text = await promptSheet({
+        title: 'Спор о наказании',
+        label: 'Расскажите, что произошло на самом деле',
+        placeholder: 'Хотя бы пара предложений',
+        multiline: true,
+        confirm: 'Отправить'
+      });
+      if (!text) return;
+      try {
+        await api.appealSend(Number(button.dataset.new), text);
+        sheet.close();
+        toast('Спор отправлен, ответ придёт уведомлением');
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+}
+
+
+const SHELF_KINDS = [
+  ['music', 'Музыка', 'volume'],
+  ['book', 'Книга', 'feed'],
+  ['film', 'Фильм', 'video'],
+  ['place', 'Место', 'compass']
+];
+
+export function drawShelf(host, user, mine, done) {
+  const slot = host.querySelector('[data-likes]');
+  if (!slot) return;
+  const rows = Array.isArray(user.shelf) ? user.shelf : [];
+  if (!rows.length && !mine) {
+    slot.innerHTML = '';
+    return;
+  }
+  slot.innerHTML = `<div class="shelf-box">
+    <div class="row between" style="margin-bottom:8px">
+      <span class="tiny muted">Любимое</span>
+      ${mine ? `<button class="btn btn-sm btn-ghost" data-shelf-edit>${icon('edit', 14)} Изменить</button>` : ''}
+    </div>
+    ${rows.length
+      ? `<div class="chips">${rows
+          .map((row) => {
+            const kind = SHELF_KINDS.find((item) => item[0] === row.kind) || SHELF_KINDS[0];
+            return `<span class="chip">${icon(kind[2], 13)} ${esc(String(row.title || '').slice(0, 40))}</span>`;
+          })
+          .join('')}</div>`
+      : '<div class="tiny muted">Пока пусто. Расскажите, что любите слушать, читать и смотреть</div>'}
+  </div>`;
+  slot.querySelector('[data-shelf-edit]')?.addEventListener('click', () => openShelfEditor(user, done));
+}
+
+function openShelfEditor(user, done) {
+  let rows = Array.isArray(user.shelf) ? [...user.shelf] : [];
+  const body = el(`<div class="col">
+    <p class="small" style="margin:0;line-height:1.55">Любимая музыка, книги, фильмы и места. До двенадцати штук, видно всем, кто зайдёт в профиль.</p>
+    <div class="chips" data-kinds></div>
+    <div class="row" style="gap:8px">
+      <input class="input grow" data-title placeholder="Название">
+      <button class="btn btn-primary" data-add>${icon('plus', 16)}</button>
+    </div>
+    <div class="col" data-rows style="gap:6px"></div>
+    <button class="btn btn-primary" data-save>${icon('check', 17)} Сохранить</button>
+  </div>`);
+  const sheet = openSheet('Любимое', body);
+  let kind = 'music';
+
+  const drawKinds = () => {
+    body.querySelector('[data-kinds]').innerHTML = SHELF_KINDS.map(
+      ([key, label, glyph]) => `<button class="chip" data-kind="${key}" aria-pressed="${kind === key}">${icon(glyph, 13)} ${label}</button>`
+    ).join('');
+    body.querySelectorAll('[data-kind]').forEach((button) => {
+      button.onclick = () => {
+        kind = button.dataset.kind;
+        drawKinds();
+      };
+    });
+  };
+
+  const drawRows = () => {
+    const list = body.querySelector('[data-rows]');
+    list.innerHTML = rows.length
+      ? rows
+          .map((row, index) => {
+            const meta = SHELF_KINDS.find((item) => item[0] === row.kind) || SHELF_KINDS[0];
+            return `<div class="row between list-item" style="padding:8px 10px">
+              <span class="row" style="gap:8px;min-width:0"><span class="muted">${icon(meta[2], 15)}</span><span class="small truncate">${esc(row.title)}</span></span>
+              <button class="btn btn-icon btn-ghost" data-kill="${index}">${icon('close', 15)}</button>
+            </div>`;
+          })
+          .join('')
+      : '<div class="tiny muted">Список пуст</div>';
+    list.querySelectorAll('[data-kill]').forEach((button) => {
+      button.onclick = () => {
+        rows.splice(Number(button.dataset.kill), 1);
+        drawRows();
+      };
+    });
+  };
+
+  body.querySelector('[data-add]').onclick = () => {
+    const input = body.querySelector('[data-title]');
+    const title = input.value.trim().slice(0, 40);
+    if (!title) return;
+    if (rows.length >= 12) return toast('Больше двенадцати не поместится', 'err');
+    rows.push({ kind, title });
+    input.value = '';
+    drawRows();
+  };
+  body.querySelector('[data-save]').onclick = async () => {
+    try {
+      await api.setShelf(rows);
+      setUser({ ...state.user, shelf: rows });
+      sheet.close();
+      toast('Сохранено');
+      done?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+  drawKinds();
+  drawRows();
+}
+
+const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+
+async function openRecap(period = 'month') {
   const body = el('<div class="col"><div class="card" style="height:150px;opacity:.35"></div></div>');
-  const sheet = openSheet('Итоги лета', body);
+  const sheet = openSheet(period === 'month' ? 'Итоги месяца' : 'Итоги лета', body);
   let data;
   try {
-    data = await api.summerRecap();
+    data = period === 'month' && api.monthRecap ? await api.monthRecap() : await api.summerRecap();
   } catch (error) {
     body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
     return;
@@ -24,20 +297,32 @@ async function openRecap() {
     ['flame', 'Лучшая полоса дней', data.streak || 0],
     ['coin', 'Монет в кошельке', data.coins || 0]
   ];
+  const monthName = MONTHS[(Number(data.month) || new Date().getMonth() + 1) - 1];
   body.innerHTML = `<div class="col">
+    <div class="row" style="gap:8px">
+      <button class="btn btn-sm grow ${period === 'month' ? 'btn-primary' : ''}" data-period="month">Месяц</button>
+      <button class="btn btn-sm grow ${period === 'summer' ? 'btn-primary' : ''}" data-period="summer">Лето</button>
+    </div>
     <div class="card recap-head">
-      <div class="event-rose">${icon('rose', 26)}</div>
-      <div class="grow"><div class="strong">Лето 2026</div>
-      <div class="tiny muted" style="margin-top:3px">${data.rose ? 'Розочка лета осталась у вас на память' : 'Розочку лета вы не забрали'}</div></div>
+      <div class="event-rose">${icon(period === 'month' ? 'chart' : 'rose', 26)}</div>
+      <div class="grow"><div class="strong">${period === 'month' ? esc(monthName) + ' 2026' : 'Лето 2026'}</div>
+      <div class="tiny muted" style="margin-top:3px">${period === 'month'
+        ? 'Что накопилось с первого числа'
+        : (data.rose ? 'Розочка лета осталась у вас на память' : 'Розочку лета вы не забрали')}</div></div>
     </div>
     <div class="card">
       ${rows.map(([glyph, label, value]) => `<div class="row between" style="padding:7px 0">
         <span class="row" style="gap:9px"><span class="muted">${icon(glyph, 17)}</span><span class="small">${esc(label)}</span></span>
         <span class="strong">${value}</span></div>`).join('')}
     </div>
-    <p class="tiny muted" style="margin:0;line-height:1.5">Итоги считаются с первого июня. Осень начнём с чистой полосы.</p>
+    <p class="tiny muted" style="margin:0;line-height:1.5">${period === 'month' ? 'Месяц закончится, и счёт начнётся заново.' : 'Итоги лета считаются с первого июня.'}</p>
   </div>`;
-  void sheet;
+  body.querySelectorAll('[data-period]').forEach((button) => {
+    button.onclick = () => {
+      sheet.close();
+      openRecap(button.dataset.period);
+    };
+  });
 }
 
 function dayWordChip(user) {
@@ -98,6 +383,7 @@ export async function render(root) {
         <button class="btn grow" data-journal>${icon('edit', 17)} Дневник</button>
       </div>
       <div data-my-shelf></div>
+      <div data-likes></div>
       ${isPremium(fresh) ? `<div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-story>${icon('play', 17)} Добавить историю</button>
         ${hasStory(fresh) ? `<button class="btn grow" data-my-story>${icon('eye', 17)} Моя история</button>` : ''}
@@ -113,7 +399,9 @@ export async function render(root) {
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-recap>${icon('rose', 20)}<div class="grow"><div class="strong small">Итоги лета</div><div class="tiny muted">Каким было ваше лето в СпокУме</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-card>${icon('image', 20)}<div class="grow"><div class="strong small">Открытка настроения</div><div class="tiny muted">Карточка недели, которой можно поделиться</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
@@ -134,7 +422,10 @@ export async function render(root) {
   const { postCard } = await import('./feed.js');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
-  body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap());
+  body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
+  drawShelf(body, fresh, true, () => render(root));
+  body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
+  body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
@@ -737,6 +1028,7 @@ export async function openProfile(username) {
         <div class="small muted">@${esc(user.username)}</div>
         ${user.isModerator ? `<div style="display:flex;justify-content:center;margin-top:8px"><span class="rank-pill">${icon('shield', 13)}<span>${esc(rankName(user))}</span></span></div>` : ''}
         <div data-shelf></div>
+        <div data-likes></div>
         ${dayWordChip(user)}
         ${user.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(user.bio)}</p>` : ''}
         <div style="display:flex;justify-content:center;margin-top:12px"><span class="mood-tag" style="${moodStyle(user.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span></div>
@@ -779,6 +1071,7 @@ export async function openProfile(username) {
         const shelf = body.querySelector('[data-shelf]');
         if (shelf) shelf.innerHTML = giftShelf(gifts);
       } catch {}
+      drawShelf(body, user, false);
     }
 
     const list = body.querySelector('[data-posts]');

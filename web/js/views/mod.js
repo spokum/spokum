@@ -11,6 +11,7 @@ const TABS = [
   ['queue', 'Публикации'],
   ['reels', 'Видео'],
   ['reports', 'Жалобы'],
+  ['appeals', 'Споры'],
   ['school', 'Наставник'],
   ['strikes', 'Мой статус']
 ];
@@ -59,6 +60,7 @@ export async function openMod() {
       if (active === 'queue') await drawQueue(body);
       if (active === 'reels') await drawReels(body);
       if (active === 'reports') await drawReports(body);
+      if (active === 'appeals') await drawAppeals(body);
       if (active === 'school') await drawSchool(body);
       if (active === 'strikes') await drawStrikes(body);
     } catch (error) {
@@ -409,6 +411,72 @@ async function drawReports(body) {
       toast('Жалоба отклонена');
       drawReports(body);
     });
+    list.appendChild(card);
+  });
+}
+
+
+async function drawAppeals(body) {
+  if (!api.appealQueue) {
+    body.innerHTML = emptyState('warn', 'Споры недоступны', 'Обновите базу, и раздел заработает');
+    return;
+  }
+  let rows = [];
+  try {
+    const answer = await api.appealQueue();
+    rows = answer.appeals || [];
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+  if (!rows.length) {
+    body.innerHTML = emptyState('shield', 'Споров нет', 'Никто не жалуется на решения');
+    return;
+  }
+  const KINDS = { mute: 'Мут', ban: 'Блокировка', warn: 'Предупреждение', comment_removed: 'Снятый комментарий' };
+  body.innerHTML = '<div class="col" data-list></div>';
+  const list = body.querySelector('[data-list]');
+  const admin = !!state.user?.isAdmin;
+
+  rows.forEach((row) => {
+    const card = el(`<div class="card appear" style="padding:14px">
+      <div class="row">
+        ${avatar(row.who, 40)}
+        <div class="grow" style="min-width:0">
+          <div class="small"><span class="strong">${esc(row.who?.displayName || '')}</span> спорит о наказании</div>
+          <div class="tiny muted">${esc(KINDS[row.kind] || row.kind)}${row.minutes ? ' на ' + row.minutes + ' минут' : ''} · ${timeAgo(row.createdAt)}</div>
+        </div>
+      </div>
+      <div class="tiny muted" style="margin-top:8px">Причина наказания: ${esc(row.reason || 'без причины')}</div>
+      <p class="post-text">${esc(row.body)}</p>
+      ${admin
+        ? `<div class="row" style="margin-top:10px;gap:8px">
+            <button class="btn btn-sm grow" data-accept>${icon('check', 15)} Снять наказание</button>
+            <button class="btn btn-sm grow" data-keep>${icon('close', 15)} Оставить</button>
+          </div>`
+        : '<div class="tiny muted" style="margin-top:10px">Решение принимает админ. Вы видите спор, чтобы понимать, как работают наказания</div>'}
+    </div>`);
+
+    const judge = async (verdict) => {
+      const { promptSheet } = await import('../ui.js');
+      const note = await promptSheet({
+        title: verdict === 'accept' ? 'Снять наказание' : 'Оставить наказание',
+        label: 'Что написать человеку',
+        placeholder: 'Пара слов, их увидит автор спора',
+        multiline: true,
+        confirm: 'Отправить'
+      });
+      if (note === null) return;
+      try {
+        await api.appealJudge(row.id, verdict, note);
+        toast(verdict === 'accept' ? 'Наказание снято' : 'Решение оставлено');
+        drawAppeals(body);
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+    card.querySelector('[data-accept]')?.addEventListener('click', () => judge('accept'));
+    card.querySelector('[data-keep]')?.addEventListener('click', () => judge('keep'));
     list.appendChild(card);
   });
 }

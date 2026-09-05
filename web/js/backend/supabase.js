@@ -51,6 +51,7 @@ function shapeProfile(row, extra = {}) {
     createdAt: ms(row.created_at),
     lastSeen: ms(row.last_seen),
     pins: normalizePins(row.pins),
+    shelf: Array.isArray(row.shelf) ? row.shelf : [],
     banner: row.banner || null,
     dayWord: row.day_word || null,
     dayWordAt: ms(row.day_word_at),
@@ -1397,6 +1398,26 @@ export async function createSupabase(url, key) {
       const { error } = await sb.rpc('set_shelf', { rows });
       guard(error);
       return { ok: true };
+    },
+
+    async myPunishments() {
+      const { data, error } = await sb
+        .from('punishments')
+        .select('id, kind, minutes, reason, created_at, reverted')
+        .eq('user_id', requireUid())
+        .order('created_at', { ascending: false })
+        .limit(20);
+      guard(error);
+      return {
+        punishments: (data || []).map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          minutes: row.minutes,
+          reason: row.reason || '',
+          createdAt: ms(row.created_at),
+          reverted: !!row.reverted
+        }))
+      };
     },
 
     async appealSend(punishmentId, body) {

@@ -260,6 +260,7 @@ function pub(user) {
     createdAt: user.createdAt,
     lastSeen: user.lastSeen,
     pins: normalizePins(user.pins),
+    shelf: Array.isArray(user.shelf) ? user.shelf : [],
     banner: user.banner || null,
     dayWord: user.dayWord || null,
     dayWordAt: user.dayWordAt || 0,
@@ -402,6 +403,7 @@ export const local = {
       premiumReason: '',
       premiumGrantedAt: 0,
       pins: [],
+      shelf: [],
       statusIcon: null,
       banner: null,
       dayWord: null,
@@ -1930,6 +1932,17 @@ export const local = {
     user.shelf = Array.isArray(rows) ? rows.slice(0, 12) : [];
     save();
     return { ok: true };
+  },
+
+  async myPunishments() {
+    const user = need();
+    return {
+      punishments: (state.punishments || [])
+        .filter((row) => row.userId === user.id)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 20)
+        .map((row) => ({ ...row, reverted: !!row.reverted }))
+    };
   },
 
   async appealSend(punishmentId, body) {
