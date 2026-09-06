@@ -1,0 +1,58 @@
+name: Publish to hosting
+
+on:
+  push:
+    branches:
+      - main
+      - Main
+    paths:
+      - 'web/**'
+      - 'tools/**'
+      - '.github/workflows/host.yml'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check secrets
+        env:
+          HOST: ${{ secrets.HOST_SFTP_HOST }}
+        run: |
+          if [ -z "$HOST" ]; then
+            echo "Секреты хостинга не заданы, выкладка пропущена"
+            echo "skip=yes" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build site
+        if: env.skip != 'yes'
+        run: |
+          for candidate in logo.png logo.jpg logo.jpeg logo.webp logo.svg; do
+            if [ -f "$candidate" ] && [ ! -f "web/$candidate" ]; then cp "$candidate" "web/$candidate"; fi
+          done
+          node tools/build.mjs dist
+          ls -la dist | head
+
+      - name: Upload over SFTP
+        if: env.skip != 'yes'
+        env:
+          HOST: ${{ secrets.HOST_SFTP_HOST }}
+          USER: ${{ secrets.HOST_SFTP_USER }}
+          PASS: ${{ secrets.HOST_SFTP_PASSWORD }}
+          DIR: ${{ secrets.HOST_SFTP_DIR }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp
+          lftp -c "
+            set sftp:auto-confirm yes;
+            set net:max-retries 3;
+            set net:timeout 20;
+            open -u \"$USER\",\"$PASS\" sftp://$HOST;
+            mirror --reverse --delete --parallel=4 --verbose=1 dist/ \"$DIR\";
+          "
