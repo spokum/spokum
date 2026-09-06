@@ -55,7 +55,7 @@ async function probe(label, run) {
   }
 }
 
-async function runDiagnostics() {
+export async function runDiagnostics() {
   const { openSheet } = await import('../ui.js');
   const body = el('<div class="col"><div class="small muted center">Проверяем</div></div>');
   openSheet('Проверка связи', body);
@@ -94,6 +94,30 @@ async function runDiagnostics() {
       });
       if (!response.ok) throw new Error(`недоступны, код ${response.status}`);
       return 'читаются';
+    }));
+
+    results.push(await probe('Скорость', async () => {
+      const times = [];
+      for (let i = 0; i < 4; i++) {
+        const started = performance.now();
+        const response = await fetch(`${url}/rest/v1/profiles?select=id&limit=1&t=${Date.now()}-${i}`, {
+          headers: { apikey: key, Authorization: `Bearer ${key}` },
+          cache: 'no-store'
+        });
+        if (!response.ok) throw new Error(`не измерить, код ${response.status}`);
+        await response.text();
+        if (i > 0) times.push(performance.now() - started);
+      }
+      const best = Math.round(Math.min(...times));
+      const average = Math.round(times.reduce((sum, value) => sum + value, 0) / times.length);
+      const verdict = average < 150
+        ? 'близко, задержка почти не чувствуется'
+        : average < 300
+          ? 'терпимо, но заметно'
+          : average < 600
+            ? 'далеко, приложение будет подтормаживать'
+            : 'очень далеко или связь плохая';
+      return `${average} мс в среднем, лучший ответ ${best} мс. ${verdict}`;
     }));
   }
 

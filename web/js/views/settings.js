@@ -146,6 +146,7 @@ export async function render(root) {
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('compass', 18)}<span class="strong small">Данные</span></div>
       <div class="small muted" style="line-height:1.5">Режим работы: <span class="strong">${api.mode === 'local' ? 'локальный, всё хранится только в этом браузере' : 'сервер СпокУм'}</span></div>
+      <button class="btn" data-ping style="margin-top:12px">${icon('compass', 16)} Проверить скорость связи</button>
       ${api.mode === 'local' ? '<button class="btn btn-danger" data-reset style="margin-top:12px">Стереть локальные данные</button>' : ''}
     </div>
 
@@ -303,6 +304,11 @@ export async function render(root) {
       toast('Сохранено');
     };
   });
+
+  root.querySelector('[data-ping]').onclick = async () => {
+    const { runDiagnostics } = await import('./auth.js');
+    runDiagnostics();
+  };
 
   root.querySelector('[data-password]').onclick = openPassword;
   root.querySelector('[data-sessions]').onclick = openSessions;
