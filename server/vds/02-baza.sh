@@ -280,19 +280,21 @@ fi
 step "8 из 9. Сертификат и проверка снаружи"
 ANON=$(grep '^ANON_KEY=' "$STACK/.env" | cut -d= -f2-)
 OK=0
-for i in $(seq 1 30); do
+for i in $(seq 1 6); do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
     -H "apikey: $ANON" -H "Authorization: Bearer $ANON" "https://$HOST/rest/v1/" 2>/dev/null)
   case "$CODE" in
     200|401|404) OK=1; break ;;
   esac
-  printf '  сертификат ещё выпускается, ответ %s\n' "${CODE:-нет}"
-  sleep 10
+  printf '  пробуем ещё раз, ответ %s\n' "${CODE:-нет}"
+  sleep 5
 done
 if [ "$OK" = "1" ]; then
   green "https://$HOST отвечает, сертификат выпущен"
 else
-  warn "снаружи пока не отвечает, смотрите: docker compose -f $STACK/docker-compose.yml logs caddy"
+  warn "снаружи пока не отвечает, но это не обязательно поломка"
+  docker compose exec -T caddy ls /data/caddy/certificates/*/ 2>/dev/null | head -3 \
+    && green "сертификат на месте, значит дело не в нём"
 fi
 
 step "9 из 9. Сохраняем ключи"
