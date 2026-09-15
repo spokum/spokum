@@ -47,7 +47,7 @@ import androidx.webkit.WebViewFeature;
 
 public class MainActivity extends AppCompatActivity {
 
-  private static final String UPDATE_BASE = "https://spokum.github.io/spokum/";
+  private static final String UPDATE_BASE = "https://spokum.ru/";
 
   private WebView webView;
   private long lastUpdateCheck = System.currentTimeMillis();
