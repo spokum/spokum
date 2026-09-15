@@ -5004,6 +5004,296 @@ function mine(canvas, report) {
   });
 }
 
+
+function lights(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    const size = 5;
+    let state = null;
+
+    const reset = () => {
+      const cells = new Array(size * size).fill(false);
+      for (let i = 0; i < 6 + Math.floor(Math.random() * 4); i += 1) {
+        flip(cells, Math.floor(Math.random() * size), Math.floor(Math.random() * size));
+      }
+      state = { cells, moves: 0, best: 0, over: false, win: false };
+    };
+
+    function flip(cells, cx, cy) {
+      const spots = [[cx, cy], [cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
+      spots.forEach(([x, y]) => {
+        if (x < 0 || y < 0 || x >= size || y >= size) return;
+        cells[y * size + x] = !cells[y * size + x];
+      });
+    }
+
+    const metrics = () => {
+      const side = Math.min(width, height) * 0.82;
+      const cell = side / size;
+      return { side, cell, left: (width - side) / 2, top: (height - side) / 2 };
+    };
+
+    reset();
+
+    return {
+      score: () => Math.max(0, 120 - state.moves * 4),
+      resize(next) {
+        width = next.w;
+        height = next.h;
+      },
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) {
+            reset();
+            return;
+          }
+          const box = node.getBoundingClientRect();
+          const { cell, left, top } = metrics();
+          const cx = Math.floor((event.clientX - box.left - left) / cell);
+          const cy = Math.floor((event.clientY - box.top - top) / cell);
+          if (cx < 0 || cy < 0 || cx >= size || cy >= size) return;
+          flip(state.cells, cx, cy);
+          state.moves += 1;
+          if (state.cells.every((one) => !one)) {
+            state.over = true;
+            state.win = true;
+            report(Math.max(10, 120 - state.moves * 4));
+          }
+        }, node);
+      },
+      update() {},
+      draw(ctx, next) {
+        const { w: cw, h: ch } = next;
+        backdrop(ctx, cw, ch, ['#0d1420', '#16233a']);
+        const { cell, left, top } = metrics();
+        for (let y = 0; y < size; y += 1) {
+          for (let x = 0; x < size; x += 1) {
+            const on = state.cells[y * size + x];
+            const px = left + x * cell + 4;
+            const py = top + y * cell + 4;
+            const side = cell - 8;
+            ctx.fillStyle = on ? '#ffcb6b' : 'rgba(238,242,251,.08)';
+            ctx.beginPath();
+            ctx.roundRect(px, py, side, side, 12);
+            ctx.fill();
+            if (on) {
+              ctx.fillStyle = 'rgba(255,203,107,.18)';
+              ctx.beginPath();
+              ctx.roundRect(px - 3, py - 3, side + 6, side + 6, 15);
+              ctx.fill();
+            }
+          }
+        }
+        hud(ctx, cw, [`Ходов ${state.moves}`, 'Гасите все огоньки', 'Тап меняет клетку и соседей']);
+        if (state.over) overText(ctx, cw, ch, state.win ? `Погасили за ${state.moves}` : 'Конец', 'Нажмите для нового поля');
+      }
+    };
+  });
+}
+
+function drops(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    let state = null;
+    let aim = null;
+
+    const reset = () => {
+      state = { x: width / 2, items: [], score: 0, lives: 3, timer: 0, speed: 130, over: false };
+    };
+
+    reset();
+
+    return {
+      score: () => state.score,
+      resize(next) {
+        width = next.w;
+        height = next.h;
+        state.x = Math.min(state.x, width - 30);
+      },
+      bind(bind, node) {
+        const move = (event) => {
+          event.preventDefault();
+          const box = node.getBoundingClientRect();
+          aim = event.clientX - box.left;
+          if (state.over) {
+            reset();
+            aim = null;
+          }
+        };
+        bind('pointerdown', move, node);
+        bind('pointermove', (event) => {
+          if (event.buttons || event.pointerType === 'touch') move(event);
+        }, node);
+      },
+      update(dt) {
+        if (state.over) return;
+        if (aim !== null) {
+          state.x += (aim - state.x) * Math.min(1, dt * 12);
+        }
+        state.x = Math.max(28, Math.min(width - 28, state.x));
+        state.timer -= dt;
+        if (state.timer <= 0) {
+          state.timer = Math.max(0.28, 0.9 - state.score / 600);
+          state.items.push({
+            x: 30 + Math.random() * Math.max(10, width - 60),
+            y: -20,
+            bad: Math.random() < 0.22
+          });
+        }
+        state.speed = 130 + state.score / 4;
+        state.items.forEach((item) => {
+          item.y += state.speed * dt;
+        });
+        const floor = height - 46;
+        state.items = state.items.filter((item) => {
+          if (item.y > floor - 16 && item.y < floor + 16 && Math.abs(item.x - state.x) < 36) {
+            if (item.bad) {
+              state.lives -= 1;
+            } else {
+              state.score += 10;
+            }
+            return false;
+          }
+          if (item.y > height + 30) {
+            if (!item.bad) state.lives -= 1;
+            return false;
+          }
+          return true;
+        });
+        if (state.lives <= 0) {
+          state.over = true;
+          report(state.score);
+        }
+      },
+      draw(ctx, next) {
+        const { w: cw, h: ch } = next;
+        backdrop(ctx, cw, ch, ['#081b22', '#0d3038']);
+        const floor = ch - 46;
+        state.items.forEach((item) => {
+          ctx.fillStyle = item.bad ? '#e4736f' : '#6fd6ff';
+          ctx.beginPath();
+          ctx.ellipse(item.x, item.y, 8, 11, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.fillStyle = '#eef2fb';
+        ctx.beginPath();
+        ctx.roundRect(state.x - 34, floor, 68, 13, 7);
+        ctx.fill();
+        hud(ctx, cw, [`Очки ${state.score}`, `Жизни ${'|'.repeat(Math.max(0, state.lives))}`, 'Ловите синие, пропускайте красные']);
+        if (state.over) overText(ctx, cw, ch, `Итог ${state.score}`, 'Нажмите, чтобы повторить');
+      }
+    };
+  });
+}
+
+function chain(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w;
+    let height = h;
+    const cols = 6;
+    const rows = 8;
+    const colors = ['#5be6c7', '#a58bff', '#ffcb6b', '#6fc5ff'];
+    let state = null;
+
+    const make = () => Math.floor(Math.random() * colors.length);
+
+    const reset = () => {
+      state = { cells: new Array(cols * rows).fill(0).map(make), score: 0, over: false, left: 30 };
+    };
+
+    const metrics = () => {
+      const cell = Math.min(width / cols, (height - 60) / rows) * 0.94;
+      return { cell, left: (width - cell * cols) / 2, top: 44 };
+    };
+
+    const gather = (start) => {
+      const want = state.cells[start];
+      const seen = new Set([start]);
+      const queue = [start];
+      while (queue.length) {
+        const at = queue.pop();
+        const x = at % cols;
+        const y = Math.floor(at / cols);
+        [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].forEach(([nx, ny]) => {
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) return;
+          const next = ny * cols + nx;
+          if (seen.has(next) || state.cells[next] !== want) return;
+          seen.add(next);
+          queue.push(next);
+        });
+      }
+      return [...seen];
+    };
+
+    reset();
+
+    return {
+      score: () => state.score,
+      resize(next) {
+        width = next.w;
+        height = next.h;
+      },
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) {
+            reset();
+            return;
+          }
+          const box = node.getBoundingClientRect();
+          const { cell, left, top } = metrics();
+          const cx = Math.floor((event.clientX - box.left - left) / cell);
+          const cy = Math.floor((event.clientY - box.top - top) / cell);
+          if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return;
+          const group = gather(cy * cols + cx);
+          if (group.length < 3) return;
+          state.score += group.length * group.length;
+          group.forEach((at) => {
+            state.cells[at] = -1;
+          });
+          for (let x = 0; x < cols; x += 1) {
+            const column = [];
+            for (let y = rows - 1; y >= 0; y -= 1) {
+              const value = state.cells[y * cols + x];
+              if (value >= 0) column.push(value);
+            }
+            while (column.length < rows) column.push(make());
+            for (let y = rows - 1, i = 0; y >= 0; y -= 1, i += 1) {
+              state.cells[y * cols + x] = column[i];
+            }
+          }
+          state.left -= 1;
+          if (state.left <= 0) {
+            state.over = true;
+            report(state.score);
+          }
+        }, node);
+      },
+      update() {},
+      draw(ctx, next) {
+        const { w: cw, h: ch } = next;
+        backdrop(ctx, cw, ch, ['#10121c', '#1c2138']);
+        const { cell, left, top } = metrics();
+        for (let y = 0; y < rows; y += 1) {
+          for (let x = 0; x < cols; x += 1) {
+            const value = state.cells[y * cols + x];
+            if (value < 0) continue;
+            ctx.fillStyle = colors[value];
+            ctx.beginPath();
+            ctx.roundRect(left + x * cell + 3, top + y * cell + 3, cell - 6, cell - 6, 10);
+            ctx.fill();
+          }
+        }
+        hud(ctx, cw, [`Очки ${state.score}`, `Ходов ${state.left}`, 'Тап по группе от трёх одинаковых']);
+        if (state.over) overText(ctx, cw, ch, `Итог ${state.score}`, 'Нажмите, чтобы повторить');
+      }
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -5202,5 +5492,26 @@ export const GAMES = [
     desc: 'Дыхание в ритме',
     tint: ['#0a1f2a', '#0f3040'],
     mount: flow
+  },
+  {
+    id: 'lights',
+    title: 'Огоньки',
+    desc: 'Погасить всё поле',
+    tint: ['#0d1420', '#1d3252'],
+    mount: lights
+  },
+  {
+    id: 'drops',
+    title: 'Капли',
+    desc: 'Ловить и уворачиваться',
+    tint: ['#081b22', '#0f3a45'],
+    mount: drops
+  },
+  {
+    id: 'chain',
+    title: 'Цепочка',
+    desc: 'Собирать одинаковые',
+    tint: ['#10121c', '#262d4d'],
+    mount: chain
   }
 ];

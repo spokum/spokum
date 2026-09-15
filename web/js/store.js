@@ -101,7 +101,7 @@ export function isPremium(user) {
   return !!(user && user.premiumUntil && user.premiumUntil > Date.now());
 }
 
-export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss', 'ink', 'rose', 'gold', 'pearl', 'emerald', 'nebula', 'mine'];
+export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss', 'ink', 'rose', 'gold', 'pearl', 'emerald', 'nebula', 'plum', 'copper', 'sakura', 'mine'];
 export const PREMIUM_ACCENTS = ['gold', 'rose', 'ice'];
 
 export const PREMIUM_PERKS = [
@@ -219,6 +219,9 @@ export function applyAppearance(user) {
   if (theme === 'mine') paintMyTheme();
   root.dataset.theme = theme;
   root.dataset.accent = accent;
+  const skin = localStorage.getItem('spokum.skin') || 'classic';
+  if (skin === 'soft') root.dataset.skin = 'soft';
+  else delete root.dataset.skin;
   localStorage.setItem('spokum.theme', theme);
   localStorage.setItem('spokum.accent', accent);
   localStorage.setItem('spokum.premium', premium ? '1' : '0');
@@ -226,6 +229,18 @@ export function applyAppearance(user) {
     Object.assign(user, patch);
     api.updateMe(patch).catch(() => {});
   }
+}
+
+export function setSkin(name) {
+  const skin = name === 'soft' ? 'soft' : 'classic';
+  localStorage.setItem('spokum.skin', skin);
+  if (skin === 'soft') document.documentElement.dataset.skin = 'soft';
+  else delete document.documentElement.dataset.skin;
+  return skin;
+}
+
+export function currentSkin() {
+  return localStorage.getItem('spokum.skin') === 'soft' ? 'soft' : 'classic';
 }
 
 export const MOODS = {

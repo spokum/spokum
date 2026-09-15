@@ -1,4 +1,4 @@
-import { api, state, setUser, applyAppearance, isPremium, myTheme, saveMyTheme, PREMIUM_PERKS } from '../store.js';
+import { api, state, setUser, applyAppearance, isPremium, myTheme, saveMyTheme, setSkin, currentSkin, PREMIUM_PERKS } from '../store.js';
 import { el, esc, fullDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, confirmSheet, emptyState } from '../ui.js';
@@ -28,7 +28,13 @@ const THEMES = [
   ['carbon', 'Карбон', 'linear-gradient(140deg,#0c0d0f,#1b1e22)', '#dcdfe4', false],
   ['pearl', 'Жемчуг', 'linear-gradient(140deg,#eef1f4,#ffffff)', '#1f2933', true],
   ['emerald', 'Изумруд', 'linear-gradient(140deg,#071411,#134034)', '#d6ece4', true],
-  ['nebula', 'Туманность', 'linear-gradient(140deg,#0a0817,#2a1d5c)', '#e2ddf5', true]
+  ['nebula', 'Туманность', 'linear-gradient(140deg,#0a0817,#2a1d5c)', '#e2ddf5', true],
+  ['ice', 'Лёд', 'linear-gradient(140deg,#ffffff,#dce9f2)', '#16324a', false],
+  ['moss', 'Мох', 'linear-gradient(140deg,#0f1410,#1e2b20)', '#d9e4d6', false],
+  ['noir', 'Нуар', 'linear-gradient(140deg,#0b0b0c,#1e1e21)', '#ececed', false],
+  ['plum', 'Слива', 'linear-gradient(140deg,#17101a,#35234a)', '#ead9f0', true],
+  ['copper', 'Медь', 'linear-gradient(140deg,#16110d,#3d2a1b)', '#f0dfd0', true],
+  ['sakura', 'Сакура', 'linear-gradient(140deg,#fffbfc,#f6dde3)', '#3d2730', true]
 ];
 
 const ACCENTS = [
@@ -96,6 +102,23 @@ export async function render(root) {
     </div>
 
     ${premiumCard()}
+
+    <div class="card appear">
+      <div class="row" style="margin-bottom:4px">${icon('palette', 18)}<span class="strong small">Внешний вид</span></div>
+      <p class="tiny muted" style="margin:0 0 12px;line-height:1.5">Новый вид просторнее: крупнее текст, мягкие карточки без рамок, меню только из значков. Переключается в любой момент.</p>
+      <div class="skin-pick" data-skins>
+        <button class="skin-card" data-skin-pick="classic">
+          <span class="skin-demo classic"><i></i><i></i><b></b></span>
+          <span class="small strong">Классический</span>
+          <span class="tiny muted">Как было</span>
+        </button>
+        <button class="skin-card" data-skin-pick="soft">
+          <span class="skin-demo soft"><i></i><i></i><b></b></span>
+          <span class="small strong">Просторный</span>
+          <span class="tiny muted">Новый</span>
+        </button>
+      </div>
+    </div>
 
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('spark', 18)}<span class="strong small">Интерфейс</span></div>
@@ -292,6 +315,21 @@ export async function render(root) {
     }
     toast('Сайт обновляется сам при перезагрузке');
   };
+
+  const paintSkins = () => {
+    const now = currentSkin();
+    root.querySelectorAll('[data-skin-pick]').forEach((button) => {
+      button.classList.toggle('on', button.dataset.skinPick === now);
+    });
+  };
+  root.querySelectorAll('[data-skin-pick]').forEach((button) => {
+    button.onclick = () => {
+      setSkin(button.dataset.skinPick);
+      paintSkins();
+      toast(button.dataset.skinPick === 'soft' ? 'Просторный вид включён' : 'Вернули классический вид');
+    };
+  });
+  paintSkins();
 
   root.querySelectorAll('[data-pref]').forEach((box) => {
     box.onchange = () => {
