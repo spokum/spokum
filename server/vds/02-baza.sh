@@ -19,10 +19,17 @@ command -v docker >/dev/null 2>&1 || die "Docker не найден, сначал
 if [ "${SPOKUM_INSIDE:-}" != "1" ]; then
   printf '\n\033[1m=== СпокУм · база на своём сервере ===\033[0m\n\n'
   if [ "${SPOKUM_ZANOVO:-}" = "1" ] && [ -d "$STACK" ]; then
+    case "$STACK" in
+      /opt/spokum/*) ;;
+      *) die "Странный путь установки, стирать не буду" ;;
+    esac
     echo "Стираем прежнюю установку вместе с данными и ставим заново."
-    ( cd "$STACK" && docker compose down -v >/dev/null 2>&1 )
+    ( cd "$STACK" && docker compose down -v --remove-orphans >/dev/null 2>&1 )
+    rm -rf "$STACK/volumes/db/data"
+    rm -rf "$STACK/volumes/storage"
+    mkdir -p "$STACK/volumes/storage"
     rm -f "$STACK/.env"
-    green "стёрто"
+    green "стёрто начисто"
     echo
   fi
   echo "Адрес базы будет: https://$HOST"
@@ -253,12 +260,22 @@ docker compose up -d 2>&1 | tail -20
 
 step "7 из 9. Ждём, пока всё поднимется"
 for i in $(seq 1 60); do
-  BAD=$(docker compose ps --format '{{.Service}} {{.Health}}' 2>/dev/null | awk '$2=="unhealthy" || $2=="starting" {print $1}' | tr '\n' ' ')
+  BAD=$(docker compose ps --format '{{.Service}} {{.Health}} {{.State}}' 2>/dev/null \
+    | awk '$2=="unhealthy" || $2=="starting" || $3=="restarting" {print $1}' | tr '\n' ' ')
   if [ -z "$BAD" ]; then break; fi
   printf '  ждём: %s\n' "$BAD"
   sleep 10
 done
 docker compose ps --format 'table {{.Service}}\t{{.Status}}'
+
+SICK=$(docker compose ps --format '{{.Service}} {{.State}}' 2>/dev/null | awk '$2=="restarting" {print $1}')
+if [ -n "$SICK" ]; then
+  warn "не поднялись: $SICK"
+  for one in $SICK; do
+    printf '\n  --- %s, последние строки ---\n' "$one"
+    docker compose logs --tail 12 --no-log-prefix "$one" 2>&1 | tail -12 | sed 's/^/  /'
+  done
+fi
 
 step "8 из 9. Сертификат и проверка снаружи"
 ANON=$(grep '^ANON_KEY=' "$STACK/.env" | cut -d= -f2-)
