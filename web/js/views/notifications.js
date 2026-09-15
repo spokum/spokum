@@ -14,6 +14,7 @@ const LOOK = {
   payment: { icon: 'crown', tone: 'good' },
   modaction: { icon: 'shield', tone: 'warn' },
   gift: { icon: 'gift', tone: 'good' },
+  reminder: { icon: 'clock', tone: '' },
   letter: { icon: 'mail', tone: '' },
   capsule: { icon: 'hourglass', tone: '' }
 };

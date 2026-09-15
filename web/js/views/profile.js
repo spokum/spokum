@@ -1225,7 +1225,9 @@ export async function openProfile(username) {
         </div>
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-contact>${icon('add_user', 17)} В контакты</button>
+          <button class="btn grow" data-note>${icon('edit', 17)} Заметка</button>
         </div>
+        <div class="tiny muted" data-note-text style="margin-top:8px;text-align:left;line-height:1.5;display:none"></div>
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-gift>${icon('gift', 17)} Подарить</button>
           <button class="btn grow" data-their-gifts>${icon('star', 17)} Подарки</button>
@@ -1317,6 +1319,47 @@ export async function openProfile(username) {
       const { openPunish } = await import('./mod.js');
       openPunish(user, () => openProfile(username));
     });
+    const noteBox = body.querySelector('[data-note-text]');
+    const paintNote = (text) => {
+      if (!noteBox) return;
+      if (text) {
+        noteBox.style.display = 'block';
+        noteBox.innerHTML = `${icon('edit', 12)} <span style="opacity:.85">${esc(text)}</span><br><span style="opacity:.55">видно только вам</span>`;
+      } else {
+        noteBox.style.display = 'none';
+        noteBox.innerHTML = '';
+      }
+    };
+    if (api.noteAbout) {
+      api.noteAbout(user.id).then((row) => paintNote(row.note)).catch(() => {});
+    }
+    const noteButton = body.querySelector('[data-note]');
+    if (noteButton) {
+      noteButton.onclick = async () => {
+        let current = '';
+        try {
+          current = (await api.noteAbout(user.id)).note || '';
+        } catch {}
+        const { promptSheet } = await import('../ui.js');
+        const text = await promptSheet({
+          title: 'Заметка о человеке',
+          label: 'Подсказка для себя: где познакомились, о чём говорили. Видно только вам, человек не узнает',
+          placeholder: 'познакомились у костра',
+          value: current,
+          multiline: true,
+          confirm: 'Сохранить'
+        });
+        if (text === null) return;
+        try {
+          const saved = await api.noteSave(user.id, text);
+          paintNote(saved.note || '');
+          toast(saved.note ? 'Заметка сохранена' : 'Заметка убрана', 'ok');
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    }
+
     body.querySelector('[data-report]').onclick = async () => {
       const { openReport } = await import('./feed.js');
       openReport('user', user.id);

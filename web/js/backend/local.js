@@ -2186,6 +2186,78 @@ export const local = {
     return { ok: true, coins: 150 };
   },
 
+  async noteAbout(id) {
+    const user = need();
+    state.peopleNotes = state.peopleNotes || [];
+    const row = state.peopleNotes.find((item) => item.ownerId === user.id && String(item.targetId) === String(id));
+    return { note: row?.note || '', at: row?.at || null };
+  },
+
+  async noteSave(id, body) {
+    const user = need();
+    if (String(id) === String(user.id)) fail('Это ваш профиль');
+    state.peopleNotes = state.peopleNotes || [];
+    const clean = String(body || '').slice(0, 400);
+    state.peopleNotes = state.peopleNotes.filter((item) => !(item.ownerId === user.id && String(item.targetId) === String(id)));
+    if (clean.trim()) {
+      state.peopleNotes.push({ ownerId: user.id, targetId: id, note: clean, at: Date.now() });
+    }
+    save();
+    return { ok: true, note: clean.trim() ? clean : '' };
+  },
+
+  async reminderMake(body, minutes) {
+    const user = need();
+    const clean = String(body || '').trim().slice(0, 200);
+    if (!clean) fail('Напишите, о чём напомнить');
+    state.reminders = state.reminders || [];
+    if (state.reminders.filter((row) => row.userId === user.id && !row.done).length >= 20) {
+      fail('Больше двадцати напоминаний сразу не получится');
+    }
+    const wait = Math.min(43200, Math.max(5, Number(minutes) || 60));
+    const row = {
+      id: next('reminders'),
+      userId: user.id,
+      body: clean,
+      ringAt: Date.now() + wait * 60000,
+      done: false,
+      createdAt: Date.now()
+    };
+    state.reminders.push(row);
+    save();
+    return { ok: true, id: row.id, at: new Date(row.ringAt).toISOString() };
+  },
+
+  async reminderDrop(id) {
+    const user = need();
+    state.reminders = (state.reminders || []).filter((row) => !(row.id === id && row.userId === user.id));
+    save();
+    return { ok: true };
+  },
+
+  async remindersMine() {
+    const user = need();
+    const rows = (state.reminders || [])
+      .filter((row) => row.userId === user.id && (!row.done || row.ringAt > Date.now() - 2 * 86400000))
+      .sort((a, b) => a.ringAt - b.ringAt)
+      .map((row) => ({ id: row.id, body: row.body, at: new Date(row.ringAt).toISOString(), done: row.done }));
+    return { reminders: rows };
+  },
+
+  async remindersRing() {
+    const user = me();
+    if (!user) return { rang: 0 };
+    let rang = 0;
+    (state.reminders || []).forEach((row) => {
+      if (row.userId !== user.id || row.done || row.ringAt > Date.now()) return;
+      note_(user.id, 'reminder', 'Напоминание', row.body, { reminder: row.id });
+      row.done = true;
+      rang += 1;
+    });
+    if (rang) save();
+    return { rang };
+  },
+
   async guardQueue(mode = 'all', size = 40) {
     needMod();
     ensureGuard();

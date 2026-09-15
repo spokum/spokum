@@ -4467,3 +4467,121 @@ grant execute on function public.guard_word_add(text, text, integer) to authenti
 grant execute on function public.guard_word_drop(bigint) to authenticated;
 grant execute on function public.guard_config_read() to authenticated;
 grant execute on function public.guard_config_write(jsonb) to authenticated;
+
+create table if not exists public.people_notes (
+  owner_id uuid not null references public.profiles on delete cascade,
+  target_id uuid not null references public.profiles on delete cascade,
+  note text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (owner_id, target_id)
+);
+
+alter table public.people_notes enable row level security;
+
+drop policy if exists people_notes_own on public.people_notes;
+create policy people_notes_own on public.people_notes for select
+  using (owner_id = auth.uid());
+
+create or replace function public.note_about(target uuid)
+returns jsonb language sql security definer stable set search_path = public as $$
+  select coalesce((select jsonb_build_object('note', note, 'at', updated_at)
+                     from public.people_notes
+                    where owner_id = auth.uid() and target_id = target), '{"note":""}'::jsonb);
+$$;
+
+create or replace function public.note_save(target uuid, body text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  clean text := left(coalesce(body, ''), 400);
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  if target = auth.uid() then raise exception 'Это ваш профиль'; end if;
+  if trim(clean) = '' then
+    delete from public.people_notes where owner_id = auth.uid() and target_id = target;
+    return jsonb_build_object('ok', true, 'note', '');
+  end if;
+  insert into public.people_notes (owner_id, target_id, note, updated_at)
+  values (auth.uid(), target, clean, now())
+  on conflict (owner_id, target_id) do update set note = excluded.note, updated_at = now();
+  return jsonb_build_object('ok', true, 'note', clean);
+end;
+$$;
+
+create table if not exists public.reminders (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles on delete cascade,
+  body text not null default '',
+  ring_at timestamptz not null,
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists reminders_due_idx on public.reminders (user_id, done, ring_at);
+
+alter table public.reminders enable row level security;
+
+drop policy if exists reminders_own on public.reminders;
+create policy reminders_own on public.reminders for select
+  using (user_id = auth.uid());
+
+create or replace function public.reminder_make(body text, minutes integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  clean text := left(coalesce(body, ''), 200);
+  wait integer := least(43200, greatest(5, coalesce(minutes, 60)));
+  fresh bigint;
+begin
+  if auth.uid() is null then raise exception 'Нужен вход'; end if;
+  if trim(clean) = '' then raise exception 'Напишите, о чём напомнить'; end if;
+  if (select count(*) from public.reminders where user_id = auth.uid() and not done) >= 20 then
+    raise exception 'Больше двадцати напоминаний сразу не получится';
+  end if;
+  insert into public.reminders (user_id, body, ring_at)
+  values (auth.uid(), clean, now() + (wait || ' minutes')::interval)
+  returning id into fresh;
+  return jsonb_build_object('ok', true, 'id', fresh, 'at', now() + (wait || ' minutes')::interval);
+end;
+$$;
+
+create or replace function public.reminder_drop(target bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  delete from public.reminders where id = target and user_id = auth.uid();
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.reminders_mine()
+returns jsonb language sql security definer stable set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', id, 'body', body, 'at', ring_at, 'done', done) order by ring_at), '[]'::jsonb)
+  from public.reminders
+  where user_id = auth.uid() and (not done or ring_at > now() - interval '2 days');
+$$;
+
+create or replace function public.reminders_ring()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  rang integer := 0;
+  row record;
+begin
+  if auth.uid() is null then return jsonb_build_object('rang', 0); end if;
+  for row in
+    select id, body from public.reminders
+     where user_id = auth.uid() and not done and ring_at <= now()
+     limit 20
+  loop
+    perform public.notify_user(auth.uid(), 'reminder', 'Напоминание', row.body,
+      jsonb_build_object('reminder', row.id));
+    update public.reminders set done = true where id = row.id;
+    rang := rang + 1;
+  end loop;
+  return jsonb_build_object('rang', rang);
+end;
+$$;
+
+grant execute on function public.note_about(uuid) to authenticated;
+grant execute on function public.note_save(uuid, text) to authenticated;
+grant execute on function public.reminder_make(text, integer) to authenticated;
+grant execute on function public.reminder_drop(bigint) to authenticated;
+grant execute on function public.reminders_mine() to authenticated;
+grant execute on function public.reminders_ring() to authenticated;

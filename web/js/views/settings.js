@@ -134,6 +134,21 @@ export async function render(root) {
     </div>
 
     <div class="card appear">
+      <div class="row" style="margin-bottom:4px">${icon('clock', 18)}<span class="strong small">Напоминания себе</span></div>
+      <p class="tiny muted" style="margin:0 0 12px;line-height:1.5">Написать себе записку, которая придёт уведомлением. Никто, кроме вас, её не увидит.</p>
+      <input class="input" data-remind-text placeholder="позвонить маме" maxlength="200">
+      <div class="chips wrap" style="margin-top:8px" data-remind-when>
+        <button class="chip" aria-pressed="true" data-min="60">через час</button>
+        <button class="chip" aria-pressed="false" data-min="180">через три</button>
+        <button class="chip" aria-pressed="false" data-min="480">вечером</button>
+        <button class="chip" aria-pressed="false" data-min="1440">завтра</button>
+        <button class="chip" aria-pressed="false" data-min="10080">через неделю</button>
+      </div>
+      <button class="btn btn-sm btn-primary" style="margin-top:10px" data-remind-add>${icon('plus', 15)} Напомнить</button>
+      <div class="col" style="gap:8px;margin-top:12px" data-remind-list></div>
+    </div>
+
+    <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('eye', 18)}<span class="strong small">Что видно</span></div>
       <button class="list-item" data-mutewords>${icon('search', 18)}<div class="grow"><div class="small strong">Стоп-слова</div><div class="tiny muted" data-mute-count>Записи с этими словами будут свёрнуты</div></div>${icon('forward', 15)}</button>
       <label class="row between" style="padding:8px 0"><span class="small">Крупный текст</span><input type="checkbox" data-pref="bigtext" ${current.bigtext ? 'checked' : ''}></label>
@@ -315,6 +330,71 @@ export async function render(root) {
     }
     toast('Сайт обновляется сам при перезагрузке');
   };
+
+  let remindMin = 60;
+  root.querySelectorAll('[data-remind-when] [data-min]').forEach((button) => {
+    button.onclick = () => {
+      remindMin = Number(button.dataset.min);
+      root.querySelectorAll('[data-remind-when] [data-min]').forEach((other) => {
+        other.setAttribute('aria-pressed', String(other === button));
+      });
+    };
+  });
+
+  const remindList = root.querySelector('[data-remind-list]');
+  const paintReminders = async () => {
+    if (!remindList || !api.remindersMine) return;
+    let rows = [];
+    try {
+      rows = (await api.remindersMine()).reminders || [];
+    } catch {
+      return;
+    }
+    const waiting = rows.filter((row) => !row.done);
+    if (!waiting.length) {
+      remindList.innerHTML = '<div class="tiny muted">Пока ничего не запланировано</div>';
+      return;
+    }
+    remindList.innerHTML = '';
+    waiting.forEach((row) => {
+      const when = new Date(row.at);
+      const item = el(`
+        <div class="row between" style="gap:10px">
+          <div class="grow" style="min-width:0">
+            <div class="small truncate">${esc(row.body)}</div>
+            <div class="tiny muted">${esc(fullDate(when.getTime()))}</div>
+          </div>
+          <button class="btn btn-icon btn-ghost btn-sm" data-kill="${row.id}">${icon('close', 15)}</button>
+        </div>`);
+      item.querySelector('[data-kill]').onclick = async () => {
+        try {
+          await api.reminderDrop(row.id);
+          paintReminders();
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+      remindList.appendChild(item);
+    });
+  };
+  paintReminders();
+
+  const remindAdd = root.querySelector('[data-remind-add]');
+  if (remindAdd) {
+    remindAdd.onclick = async () => {
+      const field = root.querySelector('[data-remind-text]');
+      const text = field.value.trim();
+      if (!text) return toast('Напишите, о чём напомнить', 'err');
+      try {
+        await api.reminderMake(text, remindMin);
+        field.value = '';
+        toast('Напомним', 'ok');
+        paintReminders();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  }
 
   const paintSkins = () => {
     const now = currentSkin();

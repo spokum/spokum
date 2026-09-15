@@ -1476,6 +1476,42 @@ export async function createSupabase(url, key) {
       return data;
     },
 
+    async noteAbout(id) {
+      const { data, error } = await sb.rpc('note_about', { target: id });
+      guard(error);
+      return { note: data?.note || '', at: data?.at || null };
+    },
+
+    async noteSave(id, body) {
+      const { data, error } = await sb.rpc('note_save', { target: id, body: body || '' });
+      guard(error);
+      return data;
+    },
+
+    async reminderMake(body, minutes) {
+      const { data, error } = await sb.rpc('reminder_make', { body, minutes });
+      guard(error);
+      return data;
+    },
+
+    async reminderDrop(id) {
+      const { error } = await sb.rpc('reminder_drop', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async remindersMine() {
+      const { data, error } = await sb.rpc('reminders_mine');
+      guard(error);
+      return { reminders: data || [] };
+    },
+
+    async remindersRing() {
+      const { data, error } = await sb.rpc('reminders_ring');
+      if (error) return { rang: 0 };
+      return data || { rang: 0 };
+    },
+
     async guardQueue(mode = 'all', size = 40) {
       const { data, error } = await sb.rpc('guard_queue', { size, mode });
       guard(error);

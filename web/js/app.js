@@ -486,9 +486,17 @@ window.addEventListener('spokum:notify', async (event) => {
 let unreadAt = 0;
 let bellAt = 0;
 
+let ringAt = 0;
+
 async function pullNews() {
   if (!state.user) return;
   api.wake?.();
+  if (api.remindersRing && Date.now() - ringAt > 60000) {
+    ringAt = Date.now();
+    try {
+      await api.remindersRing();
+    } catch {}
+  }
   try {
     const bell = await import('./views/notifications.js');
     await bell.pullNotifications();
