@@ -100,8 +100,8 @@ export async function runDiagnostics() {
       const times = [];
       for (let i = 0; i < 4; i++) {
         const started = performance.now();
-        const response = await fetch(`${url}/rest/v1/profiles?select=id&limit=1&t=${Date.now()}-${i}`, {
-          headers: { apikey: key, Authorization: `Bearer ${key}` },
+        const response = await fetch(`${url}/rest/v1/profiles?select=id&limit=1`, {
+          headers: { apikey: key, Authorization: `Bearer ${key}`, 'Cache-Control': 'no-cache' },
           cache: 'no-store'
         });
         if (!response.ok) throw new Error(`не измерить, код ${response.status}`);
