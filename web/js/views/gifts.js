@@ -63,7 +63,8 @@ function askNote(kind) {
 
 export async function openGiftShop(target, done) {
   const body = el('<div class="col" style="gap:10px"><div class="card" style="height:120px;opacity:.3"></div></div>');
-  const sheet = openSheet(target ? `Подарок для ${target.displayName}` : 'Магазин подарков', body);
+  const forMe = !target;
+  const sheet = openSheet(forMe ? 'Подарок себе' : `Подарок для ${target.displayName}`, body);
 
   let types = [];
   try {
@@ -81,7 +82,9 @@ export async function openGiftShop(target, done) {
       <span class="row" style="gap:6px;color:var(--accent)">${icon('coin', 17)}<span class="strong">${purse}</span></span>
     </div>
     <div class="gift-grid" data-grid></div>
-    <p class="tiny muted" style="margin:0;line-height:1.5">Монеты зарабатываются в играх. Подарок можно оставить на витрине профиля или продать обратно за 70% цены.</p>`;
+    <p class="tiny muted" style="margin:0;line-height:1.5">${forMe
+      ? 'Купленное себе сразу ложится на витрину профиля. Монеты зарабатываются в играх, передумаете, можно продать обратно за 70% цены.'
+      : 'Монеты зарабатываются в играх. Подарок можно оставить на витрине профиля или продать обратно за 70% цены.'}</p>`;
 
   const grid = body.querySelector('[data-grid]');
   const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][new Date().getMonth()];
@@ -96,9 +99,29 @@ export async function openGiftShop(target, done) {
       <span class="row" style="gap:4px;margin-top:5px;color:var(--accent)">${icon('coin', 13)}<span class="tiny strong">${kind.price}</span></span>
     </button>`);
     card.onclick = async () => {
-      if (!target) return toast('Откройте профиль человека, чтобы подарить', 'err');
       const have = state.user?.coins || 0;
       if (have < kind.price) return toast(`Не хватает ${kind.price - have} монет`, 'err');
+
+      if (forMe) {
+        const me = state.user?.id;
+        if (!me) return toast('Нужен вход', 'err');
+        const sure = await confirmSheet({
+          title: `Купить «${kind.title}»`,
+          text: `Спишется ${kind.price} монет, подарок появится на вашей витрине`,
+          confirm: 'Купить'
+        });
+        if (!sure) return;
+        try {
+          await api.buyGift(kind.id, me, '');
+          await refreshCoins();
+          sheet.close();
+          toast('Подарок у вас на витрине', 'ok');
+          done?.();
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+        return;
+      }
 
       const note = await askNote(kind);
       if (note === null) return;

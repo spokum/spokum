@@ -492,6 +492,7 @@ export async function render(root) {
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-shop>${icon('star', 20)}<div class="grow"><div class="strong small">Купить себе подарок</div><div class="tiny muted">Сразу ляжет на вашу витрину</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-card>${icon('image', 20)}<div class="grow"><div class="strong small">Открытка настроения</div><div class="tiny muted">Карточка недели, которой можно поделиться</div></div>${icon('forward', 16)}</button>
@@ -590,6 +591,10 @@ export async function render(root) {
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');
     openMyGifts(state.user.id, true);
+  });
+  body.querySelector('[data-shop]')?.addEventListener('click', async () => {
+    const { openGiftShop } = await import('./gifts.js');
+    openGiftShop(null, () => openProfile());
   });
   body.querySelector('[data-wallet]')?.addEventListener('click', async () => {
     const { openWallet } = await import('./gifts.js');
