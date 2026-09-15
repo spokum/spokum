@@ -3874,3 +3874,596 @@ grant execute on function public.invite_use(text) to authenticated;
 grant execute on function public.mood_twins() to authenticated;
 grant execute on function public.message_react(bigint, text) to authenticated;
 grant execute on function public.chat_reactions(bigint) to authenticated;
+
+alter table public.posts add column if not exists removed_auto boolean not null default false;
+alter table public.comments add column if not exists removed_auto boolean not null default false;
+
+create table if not exists public.guard_words (
+  id bigint generated always as identity primary key,
+  word text not null unique,
+  kind text not null default 'insult',
+  weight integer not null default 3,
+  live boolean not null default true,
+  added_by uuid references public.profiles on delete set null,
+  created_at timestamptz not null default now(),
+  constraint guard_word_kind check (kind in ('insult', 'threat', 'spam', 'link'))
+);
+
+create table if not exists public.guard_config (
+  id integer primary key default 1,
+  live boolean not null default true,
+  hide_at integer not null default 4,
+  mass_at integer not null default 4,
+  watch_links boolean not null default true,
+  watch_caps boolean not null default true,
+  watch_flood boolean not null default true,
+  constraint guard_config_one check (id = 1)
+);
+
+create table if not exists public.guard_hits (
+  id bigint generated always as identity primary key,
+  source text not null default 'filter',
+  target_kind text not null,
+  target_id bigint not null,
+  user_id uuid references public.profiles on delete cascade,
+  score integer not null default 0,
+  verdict jsonb not null default '{}'::jsonb,
+  action text not null default 'flagged',
+  body text not null default '',
+  created_at timestamptz not null default now(),
+  undone boolean not null default false,
+  undone_by uuid references public.profiles on delete set null,
+  undone_at timestamptz
+);
+create index if not exists guard_hits_fresh_idx on public.guard_hits (created_at desc);
+create index if not exists guard_hits_target_idx on public.guard_hits (target_kind, target_id);
+
+alter table public.guard_words enable row level security;
+alter table public.guard_config enable row level security;
+alter table public.guard_hits enable row level security;
+
+insert into public.guard_config (id) values (1) on conflict (id) do nothing;
+
+create or replace function public.guard_norm(src text)
+returns text language sql immutable as $$
+  select trim(regexp_replace(
+    regexp_replace(
+      regexp_replace(
+        translate(lower(coalesce(src, '')), 'abcehkmoptuxy0346@ё', 'авсенкмортихуозчбае'),
+        '[^а-я ]+', ' ', 'g'),
+      '(.)\1+', '\1', 'g'),
+    ' +', ' ', 'g'));
+$$;
+
+create or replace function public.guard_scan(src text)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare
+  clean text := public.guard_norm(src);
+  squashed text;
+  hits jsonb := '[]'::jsonb;
+  total integer := 0;
+  kinds text[] := '{}';
+  item record;
+  aimed boolean;
+begin
+  if clean = '' then return jsonb_build_object('score', 0, 'hits', hits, 'kinds', kinds); end if;
+  squashed := replace(clean, ' ', '');
+
+  for item in select word, kind, weight from public.guard_words where live loop
+    if clean ~ ('(^| )' || item.word || '[а-я]{0,4}( |$)')
+      or (length(item.word) >= 5 and position(item.word in squashed) > 0) then
+      hits := hits || jsonb_build_object('word', item.word, 'kind', item.kind, 'weight', item.weight);
+      total := total + item.weight;
+      if not (item.kind = any(kinds)) then kinds := kinds || item.kind; end if;
+    end if;
+  end loop;
+
+  aimed := clean ~ '(^| )(ты|тебе|тебя|тобой|вы|вам|вас|твоя|твой|твое)( |$)';
+  if aimed and ('insult' = any(kinds) or 'threat' = any(kinds)) then
+    total := total + 2;
+    kinds := kinds || 'aimed'::text;
+  end if;
+
+  return jsonb_build_object('score', total, 'hits', hits, 'kinds', kinds);
+end;
+$$;
+
+create or replace function public.guard_look(kind text, src text, author uuid)
+returns jsonb language plpgsql stable set search_path = public as $$
+declare
+  cfg public.guard_config;
+  found jsonb;
+  total integer;
+  notes text[] := '{}';
+  born timestamptz;
+  links integer;
+  letters integer;
+  caps integer;
+  recent integer;
+begin
+  select * into cfg from public.guard_config where id = 1;
+  if cfg.id is null or not cfg.live then
+    return jsonb_build_object('score', 0, 'hits', '[]'::jsonb, 'notes', notes, 'hide', false);
+  end if;
+
+  found := public.guard_scan(src);
+  total := (found->>'score')::integer;
+
+  if jsonb_array_length(found->'hits') > 0 then
+    if (found->'kinds') ? 'threat' then notes := notes || 'угроза'::text;
+    elsif (found->'kinds') ? 'insult' then notes := notes || 'оскорбление'::text;
+    elsif (found->'kinds') ? 'spam' then notes := notes || 'спам'::text;
+    else notes := notes || 'запрещённые слова'::text;
+    end if;
+  end if;
+
+  select created_at into born from public.profiles where id = author;
+
+  if cfg.watch_links then
+    select count(*) into links from regexp_matches(lower(coalesce(src, '')),
+      '(https?://|t\.me/|www\.|vk\.com|telegram\.|@[a-z0-9_]{5,})', 'g');
+    if links > 0 and born is not null and born > now() - interval '7 days' then
+      total := total + 3;
+      notes := notes || 'ссылки с нового аккаунта'::text;
+    elsif links >= 3 then
+      total := total + 2;
+      notes := notes || 'много ссылок'::text;
+    end if;
+  end if;
+
+  if cfg.watch_caps and length(coalesce(src, '')) > 40 then
+    letters := length(regexp_replace(coalesce(src, ''), '[^А-Яа-яA-Za-zЁё]', '', 'g'));
+    caps := length(regexp_replace(coalesce(src, ''), '[^А-ЯA-ZЁ]', '', 'g'));
+    if letters > 0 and caps::numeric / letters > 0.75 then
+      total := total + 1;
+      notes := notes || 'сплошные заглавные'::text;
+    end if;
+  end if;
+
+  if cfg.watch_flood and author is not null then
+    if kind = 'post' then
+      select count(*) into recent from public.posts
+       where author_id = author and created_at > now() - interval '3 minutes';
+      if exists (select 1 from public.posts
+                  where author_id = author and created_at > now() - interval '1 hour'
+                    and public.guard_norm(body) = public.guard_norm(src)
+                    and public.guard_norm(src) <> '') then
+        total := total + 3;
+        notes := notes || 'повтор того же текста'::text;
+      end if;
+    else
+      select count(*) into recent from public.comments
+       where author_id = author and created_at > now() - interval '3 minutes';
+      if exists (select 1 from public.comments
+                  where author_id = author and created_at > now() - interval '1 hour'
+                    and public.guard_norm(body) = public.guard_norm(src)
+                    and public.guard_norm(src) <> '') then
+        total := total + 3;
+        notes := notes || 'повтор того же текста'::text;
+      end if;
+    end if;
+    if recent >= 6 then
+      total := total + 2;
+      notes := notes || 'слишком часто'::text;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'score', total,
+    'hits', found->'hits',
+    'kinds', found->'kinds',
+    'notes', notes,
+    'hide', total >= cfg.hide_at);
+end;
+$$;
+
+create or replace function public.guard_reason(verdict jsonb)
+returns text language sql immutable as $$
+  select 'Автофильтр: ' || coalesce(nullif(array_to_string(
+    array(select jsonb_array_elements_text(coalesce(verdict->'notes', '[]'::jsonb))), ', '), ''), 'подозрительная запись');
+$$;
+
+create or replace function public.guard_posts()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  verdict jsonb;
+begin
+  if public.viewer_is_moderator() then return new; end if;
+  verdict := public.guard_look('post', coalesce(new.body, ''), new.author_id);
+  perform set_config('spokum.guard', verdict::text, true);
+  if (verdict->>'hide')::boolean then
+    new.removed := true;
+    new.removed_by := null;
+    new.removed_auto := true;
+    new.removed_reason := public.guard_reason(verdict);
+    new.removed_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.guard_posts_note()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  verdict jsonb;
+  score integer;
+begin
+  begin
+    verdict := nullif(current_setting('spokum.guard', true), '')::jsonb;
+  exception when others then verdict := null;
+  end;
+  if verdict is null then return new; end if;
+  score := coalesce((verdict->>'score')::integer, 0);
+  if score <= 0 then return new; end if;
+
+  insert into public.guard_hits (target_kind, target_id, user_id, score, verdict, action, body)
+  values ('post', new.id, new.author_id, score, verdict,
+          case when new.removed_auto then 'hidden' else 'flagged' end,
+          left(coalesce(new.body, ''), 400));
+
+  if new.removed_auto then
+    perform public.notify_user(new.author_id, 'removed', 'Запись скрыта автоматически',
+      new.removed_reason || '. Модератор посмотрит и вернёт, если это ошибка',
+      jsonb_build_object('post', new.id, 'auto', true));
+    perform public.notify_staff('report', 'Автофильтр скрыл запись',
+      left(coalesce(new.body, ''), 90), jsonb_build_object('post', new.id, 'auto', true), new.author_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_guard_watch on public.posts;
+create trigger posts_guard_watch before insert on public.posts
+for each row execute function public.guard_posts();
+
+drop trigger if exists posts_guard_note on public.posts;
+create trigger posts_guard_note after insert on public.posts
+for each row execute function public.guard_posts_note();
+
+create or replace function public.guard_comments()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  verdict jsonb;
+begin
+  if public.viewer_is_moderator() then return new; end if;
+  verdict := public.guard_look('comment', coalesce(new.body, ''), new.author_id);
+  perform set_config('spokum.guard', verdict::text, true);
+  if (verdict->>'hide')::boolean then
+    new.removed := true;
+    new.removed_by := null;
+    new.removed_auto := true;
+    new.removed_reason := public.guard_reason(verdict);
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.guard_comments_note()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  verdict jsonb;
+  score integer;
+begin
+  begin
+    verdict := nullif(current_setting('spokum.guard', true), '')::jsonb;
+  exception when others then verdict := null;
+  end;
+  if verdict is null then return new; end if;
+  score := coalesce((verdict->>'score')::integer, 0);
+  if score <= 0 then return new; end if;
+
+  insert into public.guard_hits (target_kind, target_id, user_id, score, verdict, action, body)
+  values ('comment', new.id, new.author_id, score, verdict,
+          case when new.removed_auto then 'hidden' else 'flagged' end,
+          left(coalesce(new.body, ''), 400));
+
+  if new.removed_auto then
+    perform public.notify_user(new.author_id, 'removed', 'Комментарий скрыт автоматически',
+      new.removed_reason || '. Модератор посмотрит и вернёт, если это ошибка',
+      jsonb_build_object('post', new.post_id, 'auto', true));
+    perform public.notify_staff('report', 'Автофильтр скрыл комментарий',
+      left(coalesce(new.body, ''), 90), jsonb_build_object('comment', new.id, 'auto', true), new.author_id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists comments_guard_watch on public.comments;
+create trigger comments_guard_watch before insert on public.comments
+for each row execute function public.guard_comments();
+
+drop trigger if exists comments_guard_note on public.comments;
+create trigger comments_guard_note after insert on public.comments
+for each row execute function public.guard_comments_note();
+
+create or replace function public.guard_mass()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  cfg public.guard_config;
+  many integer;
+  target bigint;
+  author uuid;
+  text_body text;
+begin
+  select * into cfg from public.guard_config where id = 1;
+  if cfg.id is null or not cfg.live then return new; end if;
+  if new.target_kind not in ('post', 'comment') then return new; end if;
+
+  begin
+    target := new.target_id::bigint;
+  exception when others then return new;
+  end;
+
+  select count(distinct reporter_id) into many from public.reports
+   where target_kind = new.target_kind and target_id = new.target_id
+     and created_at > now() - interval '24 hours';
+  if many < cfg.mass_at then return new; end if;
+
+  if new.target_kind = 'post' then
+    select author_id, left(body, 400) into author, text_body from public.posts
+     where id = target and not removed;
+    if author is null then return new; end if;
+    update public.posts
+       set removed = true, removed_by = null, removed_auto = true, removed_at = now(),
+           removed_reason = 'Автофильтр: много жалоб'
+     where id = target;
+    perform public.notify_user(author, 'removed', 'Запись скрыта до проверки',
+      'На неё пожаловались несколько человек. Модератор посмотрит и вернёт, если это ошибка',
+      jsonb_build_object('post', target, 'auto', true));
+  else
+    select author_id, left(body, 400) into author, text_body from public.comments
+     where id = target and not removed;
+    if author is null then return new; end if;
+    update public.comments
+       set removed = true, removed_by = null, removed_auto = true,
+           removed_reason = 'Автофильтр: много жалоб'
+     where id = target;
+    perform public.notify_user(author, 'removed', 'Комментарий скрыт до проверки',
+      'На него пожаловались несколько человек. Модератор посмотрит и вернёт, если это ошибка',
+      jsonb_build_object('comment', target, 'auto', true));
+  end if;
+
+  insert into public.guard_hits (target_kind, target_id, user_id, score, verdict, action, body)
+  values (new.target_kind, target, author, many,
+          jsonb_build_object('notes', jsonb_build_array('много жалоб'), 'reports', many),
+          'mass', coalesce(text_body, ''));
+
+  perform public.notify_staff('report', 'Автофильтр скрыл по жалобам',
+    many || ' жалобы на одну запись', jsonb_build_object('target', target, 'auto', true), null);
+  return new;
+end;
+$$;
+
+drop trigger if exists reports_guard_mass on public.reports;
+create trigger reports_guard_mass after insert on public.reports
+for each row execute function public.guard_mass();
+
+alter table public.guard_hits add column if not exists kept boolean not null default false;
+
+create or replace function public.guard_queue(size integer default 40, mode text default 'all')
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+declare
+  result jsonb;
+  want integer := least(120, greatest(5, coalesce(size, 40)));
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  select coalesce(jsonb_agg(row), '[]'::jsonb) into result from (
+    select jsonb_build_object(
+      'id', h.id,
+      'kind', h.target_kind,
+      'target', h.target_id,
+      'score', h.score,
+      'action', h.action,
+      'body', h.body,
+      'notes', coalesce(h.verdict->'notes', '[]'::jsonb),
+      'hits', coalesce(h.verdict->'hits', '[]'::jsonb),
+      'source', h.source,
+      'at', h.created_at,
+      'undone', h.undone,
+      'kept', h.kept,
+      'author', case when p.id is null then null else jsonb_build_object(
+        'id', p.id, 'username', p.username, 'display_name', p.display_name,
+        'avatar', p.avatar, 'hue', p.hue) end
+    ) as row, h.created_at
+    from public.guard_hits h
+    left join public.profiles p on p.id = h.user_id
+    where (mode = 'all'
+       or (mode = 'hidden' and h.action in ('hidden', 'mass'))
+       or (mode = 'flagged' and h.action = 'flagged')
+       or (mode = 'open' and h.action in ('hidden', 'mass') and not h.undone and not h.kept))
+    order by h.created_at desc
+    limit want
+  ) rows;
+  return result;
+end;
+$$;
+
+create or replace function public.guard_undo(target bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  hit public.guard_hits;
+  who text;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  select * into hit from public.guard_hits where id = target;
+  if hit.id is null then raise exception 'Запись не найдена'; end if;
+  if hit.undone then return jsonb_build_object('ok', true, 'already', true); end if;
+
+  if hit.target_kind = 'post' then
+    update public.posts
+       set removed = false, removed_auto = false, removed_reason = '', removed_at = null
+     where id = hit.target_id and removed_auto;
+  else
+    update public.comments
+       set removed = false, removed_auto = false, removed_reason = ''
+     where id = hit.target_id and removed_auto;
+  end if;
+
+  update public.guard_hits
+     set undone = true, undone_by = auth.uid(), undone_at = now(), kept = false
+   where id = target;
+
+  if hit.user_id is not null then
+    perform public.notify_user(hit.user_id, 'removed', 'Автофильтр ошибся',
+      'Модератор вернул вашу запись, она снова видна всем',
+      jsonb_build_object('post', hit.target_id));
+  end if;
+
+  select display_name into who from public.profiles where id = auth.uid();
+  perform public.log_action('guard.undo', jsonb_build_object('hit', target, 'by', who));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.guard_keep(target bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  update public.guard_hits set kept = true where id = target and not undone;
+  if not found then raise exception 'Запись не найдена'; end if;
+  perform public.log_action('guard.keep', jsonb_build_object('hit', target));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.guard_stats()
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+declare
+  day_all integer;
+  day_hidden integer;
+  week_hidden integer;
+  week_undone integer;
+  top jsonb;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  select count(*) into day_all from public.guard_hits where created_at > now() - interval '1 day';
+  select count(*) into day_hidden from public.guard_hits
+   where created_at > now() - interval '1 day' and action in ('hidden', 'mass');
+  select count(*) into week_hidden from public.guard_hits
+   where created_at > now() - interval '7 days' and action in ('hidden', 'mass');
+  select count(*) into week_undone from public.guard_hits
+   where created_at > now() - interval '7 days' and undone;
+
+  select coalesce(jsonb_agg(jsonb_build_object('word', word, 'count', many)), '[]'::jsonb) into top
+  from (
+    select hit->>'word' as word, count(*) as many
+    from public.guard_hits h, jsonb_array_elements(coalesce(h.verdict->'hits', '[]'::jsonb)) hit
+    where h.created_at > now() - interval '7 days'
+    group by hit->>'word'
+    order by count(*) desc
+    limit 8
+  ) rows;
+
+  return jsonb_build_object(
+    'day', day_all, 'day_hidden', day_hidden,
+    'week_hidden', week_hidden, 'week_undone', week_undone,
+    'miss', case when week_hidden = 0 then 0
+                 else round(week_undone::numeric * 100 / week_hidden) end,
+    'top', top);
+end;
+$$;
+
+create or replace function public.guard_try(src text)
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  return public.guard_look('post', coalesce(src, ''), auth.uid());
+end;
+$$;
+
+create or replace function public.guard_words_all()
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object(
+    'id', id, 'word', word, 'kind', kind, 'weight', weight, 'live', live) order by kind, word), '[]'::jsonb)
+    from public.guard_words);
+end;
+$$;
+
+create or replace function public.guard_word_add(src text, kind text default 'insult', weight integer default 3)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  clean text := public.guard_norm(src);
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админа'; end if;
+  if length(clean) < 3 then raise exception 'Слово слишком короткое'; end if;
+  if kind not in ('insult', 'threat', 'spam', 'link') then raise exception 'Не тот вид'; end if;
+  insert into public.guard_words (word, kind, weight, added_by)
+  values (clean, kind, least(9, greatest(1, coalesce(weight, 3))), auth.uid())
+  on conflict (word) do update set kind = excluded.kind, weight = excluded.weight, live = true;
+  perform public.log_action('guard.word', jsonb_build_object('word', clean, 'kind', kind));
+  return jsonb_build_object('ok', true, 'word', clean);
+end;
+$$;
+
+create or replace function public.guard_word_drop(target bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админа'; end if;
+  delete from public.guard_words where id = target;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.guard_config_read()
+returns jsonb language plpgsql security definer stable set search_path = public as $$
+declare
+  cfg public.guard_config;
+begin
+  if not public.viewer_is_moderator() then raise exception 'Только для модераторов'; end if;
+  select * into cfg from public.guard_config where id = 1;
+  return jsonb_build_object('live', cfg.live, 'hide_at', cfg.hide_at, 'mass_at', cfg.mass_at,
+    'watch_links', cfg.watch_links, 'watch_caps', cfg.watch_caps, 'watch_flood', cfg.watch_flood);
+end;
+$$;
+
+create or replace function public.guard_config_write(patch jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.viewer_is_admin() then raise exception 'Только для админа'; end if;
+  update public.guard_config set
+    live = coalesce((patch->>'live')::boolean, live),
+    hide_at = least(20, greatest(1, coalesce((patch->>'hide_at')::integer, hide_at))),
+    mass_at = least(50, greatest(2, coalesce((patch->>'mass_at')::integer, mass_at))),
+    watch_links = coalesce((patch->>'watch_links')::boolean, watch_links),
+    watch_caps = coalesce((patch->>'watch_caps')::boolean, watch_caps),
+    watch_flood = coalesce((patch->>'watch_flood')::boolean, watch_flood)
+  where id = 1;
+  perform public.log_action('guard.config', patch);
+  return public.guard_config_read();
+end;
+$$;
+
+insert into public.guard_words (word, kind, weight)
+select public.guard_norm(w), k, n from (values
+  ('дебил', 'insult', 3), ('даун', 'insult', 3), ('идиот', 'insult', 3),
+  ('тупиц', 'insult', 3), ('кретин', 'insult', 3), ('дегенерат', 'insult', 3),
+  ('имбецил', 'insult', 3), ('ничтожеств', 'insult', 3), ('урод', 'insult', 3),
+  ('ублюдок', 'insult', 4), ('мраз', 'insult', 4), ('тварь', 'insult', 3),
+  ('гнида', 'insult', 3), ('чмо', 'insult', 3), ('быдло', 'insult', 3),
+  ('жирдяй', 'insult', 3), ('жиртрест', 'insult', 3), ('лузер', 'insult', 2),
+  ('шлюх', 'insult', 4), ('потаскух', 'insult', 4), ('овца', 'insult', 2),
+  ('свинья', 'insult', 2), ('шизик', 'insult', 3), ('уебок', 'insult', 4),
+  ('долбоеб', 'insult', 4), ('пидор', 'insult', 4), ('петух', 'insult', 3),
+  ('убью тебя', 'threat', 6), ('сдохни', 'threat', 6), ('зарежу', 'threat', 6),
+  ('закопаю', 'threat', 6), ('порежу', 'threat', 6), ('найду тебя', 'threat', 5),
+  ('повесься', 'threat', 6), ('убей себя', 'threat', 6), ('иди умри', 'threat', 6),
+  ('сломаю тебе', 'threat', 5), ('приеду и', 'threat', 4),
+  ('заработок', 'spam', 2), ('лёгкие деньги', 'spam', 3), ('казино', 'spam', 3),
+  ('ставки на спорт', 'spam', 3), ('промокод', 'spam', 2), ('накрутк', 'spam', 3),
+  ('взаимная подписка', 'spam', 3), ('реферальн', 'spam', 2), ('инвестиц', 'spam', 2),
+  ('гарантирую доход', 'spam', 4), ('пассивный доход', 'spam', 3), ('подпишись на', 'spam', 2)
+) as seed(w, k, n)
+on conflict (word) do nothing;
+
+grant execute on function public.guard_queue(integer, text) to authenticated;
+grant execute on function public.guard_undo(bigint) to authenticated;
+grant execute on function public.guard_keep(bigint) to authenticated;
+grant execute on function public.guard_stats() to authenticated;
+grant execute on function public.guard_try(text) to authenticated;
+grant execute on function public.guard_words_all() to authenticated;
+grant execute on function public.guard_word_add(text, text, integer) to authenticated;
+grant execute on function public.guard_word_drop(bigint) to authenticated;
+grant execute on function public.guard_config_read() to authenticated;
+grant execute on function public.guard_config_write(jsonb) to authenticated;
