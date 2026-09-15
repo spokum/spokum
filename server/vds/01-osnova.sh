@@ -12,9 +12,27 @@ fi
 printf '\n\033[1m=== СпокУм · подготовка сервера ===\033[0m\n'
 
 step "1 из 8. Новый пароль root"
-echo "Старый пароль засвечен, придумайте новый. Экран не показывает набор, это нормально."
-until passwd root; do echo "Попробуйте ещё раз"; done
-green "пароль сменён"
+echo "Старый пароль засвечен, нужен новый. Набор будет видно на экране."
+echo "От восьми символов, латиница и цифры."
+while true; do
+  printf 'Новый пароль: '
+  read -r fresh
+  if [ ${#fresh} -lt 8 ]; then
+    echo "Коротко, нужно минимум восемь символов"
+    continue
+  fi
+  printf 'Ещё раз для проверки: '
+  read -r again
+  if [ "$fresh" != "$again" ]; then
+    echo "Не совпало, попробуйте снова"
+    continue
+  fi
+  if echo "root:$fresh" | chpasswd; then break; fi
+  echo "Система не приняла такой пароль, попробуйте другой"
+done
+unset fresh again
+clear
+green "пароль сменён, экран очищен"
 
 step "2 из 8. Обновление системы, это займёт несколько минут"
 export DEBIAN_FRONTEND=noninteractive
