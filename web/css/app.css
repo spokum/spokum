@@ -1187,12 +1187,20 @@ svg { display: block; flex: none; }
 .breath-circle {
   width: min(62vw, 260px); aspect-ratio: 1;
   border-radius: 50%;
+  display: grid; place-items: center;
   background: radial-gradient(circle at 50% 40%, var(--accent-soft), transparent 70%);
   border: 2px solid var(--accent);
-  will-change: transform;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+.breath-count {
+  font-size: 44px; font-weight: 300; color: var(--accent);
+  font-variant-numeric: tabular-nums; opacity: .35;
+  letter-spacing: -.03em;
 }
 .breath-label {
-  position: absolute;
+  position: absolute; bottom: 8px;
   font-size: 19px; font-weight: 650;
   letter-spacing: .01em;
 }
@@ -1557,7 +1565,7 @@ svg { display: block; flex: none; }
   background: var(--accent-soft);
   border: 2px solid var(--accent);
   color: var(--accent); font-size: 15px; font-weight: 700;
-  transition: transform 4s cubic-bezier(.4,0,.3,1);
+  will-change: transform, opacity;
 }
 .breathe-time { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .list-item.on { color: var(--accent); background: var(--accent-soft); }

@@ -177,13 +177,33 @@ export async function openBreathe() {
     ['выдох', 6000, 0.55]
   ];
 
-  const step = () => {
-    const [label, ms, scale] = steps[phase % steps.length];
-    word.textContent = label;
-    ring.style.transitionDuration = `${ms}ms`;
-    ring.style.transform = `scale(${scale})`;
-    phase += 1;
-    timer = setTimeout(step, ms);
+  const soft = (t) => t * t * (3 - 2 * t);
+  const frames = steps.map(([label, ms, scale], index) => ({
+    label,
+    ms,
+    to: scale,
+    from: index === 0 ? steps[steps.length - 1][2] : steps[index - 1][2]
+  }));
+  let started = 0;
+  let raf = null;
+
+  ring.style.transition = 'none';
+  ring.style.transform = `scale(${frames[0].from})`;
+
+  const step = (now) => {
+    if (!started) started = now;
+    const frame = frames[phase % frames.length];
+    let part = (now - started) / frame.ms;
+    if (part >= 1) {
+      part = 1;
+      started = now;
+      phase += 1;
+      word.textContent = frames[phase % frames.length].label;
+    }
+    const eased = frame.from + (frame.to - frame.from) * soft(Math.min(1, part));
+    ring.style.transform = `scale(${eased.toFixed(4)})`;
+    ring.style.opacity = (0.72 + eased * 0.28).toFixed(3);
+    raf = requestAnimationFrame(step);
   };
 
   const clock = setInterval(() => {
@@ -202,13 +222,14 @@ export async function openBreathe() {
   };
 
   view.querySelector('[data-back]').onclick = () => {
+    cancelAnimationFrame(raf);
     clearTimeout(timer);
     clearInterval(clock);
     api.breatheOut?.().catch(() => {});
     view.remove();
   };
 
-  step();
+  raf = requestAnimationFrame(step);
   ping();
   return view;
 }
