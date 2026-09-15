@@ -76,6 +76,7 @@ function shapePost(row, likedIds, extra = {}) {
     createdAt: ms(row.created_at),
     removed: !!row.removed,
     removedReason: row.removed_reason || '',
+    removedAuto: !!row.removed_auto,
     author: shapeProfile(row.author),
     likes: row.likes?.[0]?.count ?? 0,
     comments: row.comments?.[0]?.count ?? 0,
@@ -227,6 +228,7 @@ export async function createSupabase(url, key) {
   const AUTHOR_FIELDS = 'id, username, display_name, avatar, hue, mood, is_admin, is_moderator, is_developer, is_verified, mod_rank, premium_until, status_icon, is_beta';
   const POST_TAIL = `author:profiles!posts_author_id_fkey(${AUTHOR_FIELDS}), likes(count), comments(count)`;
   const POST_TIERS = [
+    `${POST_CORE}, removed_auto, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
     `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
     `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, ${POST_TAIL}`,
     `${POST_CORE}, kind, media, video, poster, duration, views, ${POST_TAIL}`,
@@ -807,7 +809,7 @@ export async function createSupabase(url, key) {
     async listComments(id) {
       const grab = (columns) =>
         sb.from('comments').select(columns).eq('post_id', id).order('id', { ascending: true }).limit(200);
-      let { data, error } = await grab(`id, body, created_at, removed, removed_reason, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`);
+      let { data, error } = await grab(`id, body, created_at, removed, removed_reason, removed_auto, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`);
       if (missingColumn(error)) {
         ({ data, error } = await grab(`id, body, created_at, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`));
       }
@@ -819,6 +821,7 @@ export async function createSupabase(url, key) {
           createdAt: ms(row.created_at),
           removed: !!row.removed,
           removedReason: row.removed_reason || '',
+          removedAuto: !!row.removed_auto,
           author: shapeProfile(row.author)
         }))
       };
@@ -1471,6 +1474,66 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('invite_use', { code });
       guard(error);
       return data;
+    },
+
+    async guardQueue(mode = 'all', size = 40) {
+      const { data, error } = await sb.rpc('guard_queue', { size, mode });
+      guard(error);
+      return { hits: data || [] };
+    },
+
+    async guardUndo(id) {
+      const { error } = await sb.rpc('guard_undo', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async guardKeep(id) {
+      const { error } = await sb.rpc('guard_keep', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async guardStats() {
+      const { data, error } = await sb.rpc('guard_stats');
+      guard(error);
+      return data || { day: 0, day_hidden: 0, week_hidden: 0, week_undone: 0, miss: 0, top: [] };
+    },
+
+    async guardTry(text) {
+      const { data, error } = await sb.rpc('guard_try', { src: text || '' });
+      guard(error);
+      return data || { score: 0, hits: [], notes: [], hide: false };
+    },
+
+    async guardWords() {
+      const { data, error } = await sb.rpc('guard_words_all');
+      guard(error);
+      return { words: data || [] };
+    },
+
+    async guardWordAdd(word, kind, weight) {
+      const { data, error } = await sb.rpc('guard_word_add', { src: word, kind, weight });
+      guard(error);
+      return data;
+    },
+
+    async guardWordDrop(id) {
+      const { error } = await sb.rpc('guard_word_drop', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async guardConfig() {
+      const { data, error } = await sb.rpc('guard_config_read');
+      guard(error);
+      return data || {};
+    },
+
+    async guardConfigSave(patch) {
+      const { data, error } = await sb.rpc('guard_config_write', { patch });
+      guard(error);
+      return data || {};
     },
 
     async moodTwins() {

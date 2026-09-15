@@ -11,6 +11,7 @@ const TABS = [
   ['queue', 'Публикации'],
   ['reels', 'Видео'],
   ['reports', 'Жалобы'],
+  ['guard', 'Автофильтр'],
   ['appeals', 'Споры'],
   ['school', 'Наставник'],
   ['strikes', 'Мой статус']
@@ -60,6 +61,7 @@ export async function openMod() {
       if (active === 'queue') await drawQueue(body);
       if (active === 'reels') await drawReels(body);
       if (active === 'reports') await drawReports(body);
+      if (active === 'guard') await drawGuard(body);
       if (active === 'appeals') await drawAppeals(body);
       if (active === 'school') await drawSchool(body);
       if (active === 'strikes') await drawStrikes(body);
@@ -196,6 +198,122 @@ async function drawReels(body) {
     };
   });
   await load('reels');
+}
+
+
+const GUARD_MODES = [
+  ['open', 'Ждут проверки'],
+  ['hidden', 'Скрытые'],
+  ['flagged', 'Только помечено'],
+  ['all', 'Всё подряд']
+];
+
+async function drawGuard(body) {
+  let mode = 'open';
+
+  const paint = async () => {
+    body.innerHTML = '<div class="card" style="height:140px;opacity:.35"></div>';
+    const [stats, result] = await Promise.all([api.guardStats(), api.guardQueue(mode, 60)]);
+    const hits = result.hits || [];
+    body.innerHTML = `
+      <div class="card" style="padding:14px">
+        <div class="row" style="gap:8px;align-items:flex-start">
+          <span style="flex:0 0 auto;opacity:.6">${icon('shield', 18)}</span>
+          <div class="grow" style="min-width:0">
+            <div class="strong small">Автофильтр</div>
+            <div class="tiny muted" style="line-height:1.5">Прячет оскорбления, угрозы, спам и то, на что много жалоб. Маты не трогает. Если ошибся — верните запись, автор получит уведомление</div>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-top:12px">
+          <div class="stat"><div class="v">${stats.day || 0}</div><div class="k">за сутки</div></div>
+          <div class="stat"><div class="v">${stats.day_hidden || 0}</div><div class="k">скрыто</div></div>
+          <div class="stat"><div class="v">${stats.miss || 0}%</div><div class="k">вернули</div></div>
+        </div>
+        ${(stats.top || []).length ? `<div class="chips wrap" style="margin-top:10px">${stats.top.map((row) => `<span class="chip">${esc(row.word)} · ${row.count}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="chips wrap" style="margin:12px 0" data-modes>
+        ${GUARD_MODES.map(([key, label]) => `<button class="chip" aria-pressed="${key === mode}" data-mode="${key}">${label}</button>`).join('')}
+      </div>
+      <div class="col" data-list></div>`;
+
+    body.querySelectorAll('[data-mode]').forEach((button) => {
+      button.onclick = () => {
+        mode = button.dataset.mode;
+        paint();
+      };
+    });
+
+    const list = body.querySelector('[data-list]');
+    if (!hits.length) {
+      list.innerHTML = emptyState('leaf', 'Пусто', mode === 'open' ? 'Автофильтр ничего не прятал' : 'Здесь пока ничего нет');
+      return;
+    }
+
+    hits.forEach((hit) => {
+      const hidden = hit.action === 'hidden' || hit.action === 'mass';
+      const mark = hit.action === 'mass'
+        ? '<span class="pill bad">много жалоб</span>'
+        : hidden
+          ? '<span class="pill bad">скрыто</span>'
+          : '<span class="pill">помечено</span>';
+      const card = el(`
+        <div class="card appear" style="padding:14px">
+          <div class="row">
+            ${hit.author ? avatar(hit.author, 36) : ''}
+            <div class="grow" style="min-width:0">
+              <div class="row" style="gap:6px">
+                <span class="strong small truncate">${esc(hit.author?.displayName || 'Кто-то')}</span>
+                ${hit.author ? badges(hit.author) : ''}
+              </div>
+              <div class="tiny muted">${hit.kind === 'post' ? 'запись' : 'комментарий'} · ${timeAgo(hit.at)} · вес ${hit.score}</div>
+            </div>
+            ${hit.undone ? '<span class="pill good">вернули</span>' : hit.kept ? '<span class="pill good">проверено</span>' : mark}
+          </div>
+          ${hit.body ? `<p class="post-text">${esc(hit.body)}</p>` : '<p class="tiny muted" style="margin:10px 0 0">Без текста</p>'}
+          <div class="chips wrap" style="margin-top:10px">
+            ${(hit.notes || []).map((note) => `<span class="chip">${esc(note)}</span>`).join('')}
+            ${(hit.hits || []).map((word) => `<span class="chip">${esc(word.word)}</span>`).join('')}
+          </div>
+          <div class="row" style="margin-top:12px;gap:8px">
+            ${hit.author ? `<button class="btn btn-sm" data-author>${icon('profile', 15)} Автор</button>` : ''}
+            ${hidden && !hit.undone ? `<button class="btn btn-sm grow" data-undo>${icon('back', 15)} Вернуть</button>` : ''}
+            ${hidden && !hit.undone && !hit.kept ? `<button class="btn btn-sm btn-ghost" data-keep>Всё верно</button>` : ''}
+          </div>
+        </div>`);
+      const author = card.querySelector('[data-author]');
+      if (author) author.onclick = () => openProfile(hit.author.id);
+      const undo = card.querySelector('[data-undo]');
+      if (undo) {
+        undo.onclick = async () => {
+          undo.disabled = true;
+          try {
+            await api.guardUndo(hit.id);
+            toast('Запись вернули', 'ok');
+            paint();
+          } catch (error) {
+            undo.disabled = false;
+            toast(error.message, 'err');
+          }
+        };
+      }
+      const keep = card.querySelector('[data-keep]');
+      if (keep) {
+        keep.onclick = async () => {
+          keep.disabled = true;
+          try {
+            await api.guardKeep(hit.id);
+            paint();
+          } catch (error) {
+            keep.disabled = false;
+            toast(error.message, 'err');
+          }
+        };
+      }
+      list.appendChild(card);
+    });
+  };
+
+  await paint();
 }
 
 export function pickRule() {

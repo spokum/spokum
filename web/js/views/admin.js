@@ -12,6 +12,7 @@ const TABS = [
   ['team', 'Модераторы'],
   ['content', 'Контент'],
   ['announce', 'Эфир'],
+  ['guard', 'Автофильтр'],
   ['actions', 'Наказания'],
   ['audit', 'Журнал']
 ];
@@ -61,6 +62,7 @@ export async function openAdmin() {
       if (active === 'team') await drawTeam(body);
       if (active === 'content') await drawContent(body);
       if (active === 'announce') await drawAnnounce(body);
+      if (active === 'guard') await drawGuard(body);
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
     } catch (error) {
@@ -72,6 +74,149 @@ export async function openAdmin() {
   draw();
 }
 
+
+
+const GUARD_KINDS = [
+  ['insult', 'Оскорбление'],
+  ['threat', 'Угроза'],
+  ['spam', 'Спам'],
+  ['link', 'Ссылки']
+];
+
+async function drawGuard(body) {
+  const paint = async () => {
+    body.innerHTML = '<div class="card" style="height:140px;opacity:.35"></div>';
+    const [cfg, stats, words] = await Promise.all([api.guardConfig(), api.guardStats(), api.guardWords()]);
+    const rows = words.words || [];
+    body.innerHTML = `
+      <div class="card" style="padding:14px">
+        <div class="row" style="gap:8px">
+          <span style="flex:0 0 auto;opacity:.6">${icon('shield', 18)}</span>
+          <div class="grow" style="min-width:0">
+            <div class="strong small">Автофильтр</div>
+            <div class="tiny muted">Разбирает записи сам, без внешних сервисов</div>
+          </div>
+          <button class="btn btn-sm ${cfg.live ? 'btn-danger' : ''}" data-live>${cfg.live ? 'Выключить' : 'Включить'}</button>
+        </div>
+        <div class="stat-grid" style="margin-top:12px">
+          <div class="stat"><div class="v">${stats.week_hidden || 0}</div><div class="k">скрыто за неделю</div></div>
+          <div class="stat"><div class="v">${stats.week_undone || 0}</div><div class="k">вернули</div></div>
+          <div class="stat"><div class="v">${stats.miss || 0}%</div><div class="k">ошибок</div></div>
+        </div>
+        ${(stats.miss || 0) > 25 ? '<div class="tiny muted" style="margin-top:10px;line-height:1.5">Возвращают слишком часто. Поднимите порог, чтобы фильтр стал мягче</div>' : ''}
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="strong small" style="margin-bottom:10px">Строгость</div>
+        <div class="row" style="gap:10px">
+          <div class="grow tiny">Прятать при весе</div>
+          <button class="btn btn-icon btn-ghost btn-sm" data-less>${icon('minus', 16)}</button>
+          <span class="strong" style="min-width:26px;text-align:center">${cfg.hide_at}</span>
+          <button class="btn btn-icon btn-ghost btn-sm" data-more>${icon('plus', 16)}</button>
+        </div>
+        <div class="tiny muted" style="margin-top:6px;line-height:1.5">Одно оскорбление весит три, обращение на «ты» добавляет два, угроза шесть. Чем выше порог, тем мягче фильтр</div>
+        <div class="row" style="gap:10px;margin-top:14px">
+          <div class="grow tiny">Прятать после жалоб</div>
+          <button class="btn btn-icon btn-ghost btn-sm" data-mass-less>${icon('minus', 16)}</button>
+          <span class="strong" style="min-width:26px;text-align:center">${cfg.mass_at}</span>
+          <button class="btn btn-icon btn-ghost btn-sm" data-mass-more>${icon('plus', 16)}</button>
+        </div>
+        <div class="col" style="gap:0;margin-top:12px">
+          <label class="row between" style="padding:8px 0"><span class="small">Ссылки с новых аккаунтов</span><input type="checkbox" data-links ${cfg.watch_links ? 'checked' : ''}></label>
+          <label class="row between" style="padding:8px 0"><span class="small">Сплошные заглавные</span><input type="checkbox" data-caps ${cfg.watch_caps ? 'checked' : ''}></label>
+          <label class="row between" style="padding:8px 0"><span class="small">Повторы и частые публикации</span><input type="checkbox" data-flood ${cfg.watch_flood ? 'checked' : ''}></label>
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="strong small" style="margin-bottom:4px">Проверить текст</div>
+        <div class="tiny muted" style="margin-bottom:10px">Напишите что-нибудь и посмотрите, что решит фильтр. Запись никуда не уйдёт</div>
+        <textarea class="input" data-try rows="2" placeholder="Например: ты дебил"></textarea>
+        <button class="btn btn-sm" style="margin-top:8px" data-try-go>Проверить</button>
+        <div class="tiny" data-try-out style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="strong small" style="margin-bottom:4px">Словарь · ${rows.length}</div>
+        <div class="tiny muted" style="margin-bottom:10px">Слово пишется в начальной части, окончания подбираются сами. Маты сюда не добавляем, только оскорбления и угрозы</div>
+        <input class="input" data-word placeholder="новое слово">
+        <div class="chips wrap" style="margin-top:8px" data-kinds>
+          ${GUARD_KINDS.map(([key, label], index) => `<button class="chip" aria-pressed="${index === 0}" data-kind="${key}">${label}</button>`).join('')}
+        </div>
+        <button class="btn btn-sm" style="margin-top:8px" data-word-add>${icon('plus', 15)} Добавить</button>
+        <div class="chips wrap" style="margin-top:12px">
+          ${rows.map((row) => `<button class="chip" data-drop="${row.id}" title="убрать">${esc(row.word)} · ${row.weight}</button>`).join('')}
+        </div>
+      </div>`;
+
+    const save = async (patch) => {
+      try {
+        await api.guardConfigSave(patch);
+        paint();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+
+    body.querySelector('[data-live]').onclick = () => save({ live: !cfg.live });
+    body.querySelector('[data-more]').onclick = () => save({ hide_at: cfg.hide_at + 1 });
+    body.querySelector('[data-less]').onclick = () => save({ hide_at: cfg.hide_at - 1 });
+    body.querySelector('[data-mass-more]').onclick = () => save({ mass_at: cfg.mass_at + 1 });
+    body.querySelector('[data-mass-less]').onclick = () => save({ mass_at: cfg.mass_at - 1 });
+    body.querySelector('[data-links]').onchange = (event) => save({ watch_links: event.target.checked });
+    body.querySelector('[data-caps]').onchange = (event) => save({ watch_caps: event.target.checked });
+    body.querySelector('[data-flood]').onchange = (event) => save({ watch_flood: event.target.checked });
+
+    const out = body.querySelector('[data-try-out]');
+    body.querySelector('[data-try-go]').onclick = async () => {
+      const text = body.querySelector('[data-try]').value.trim();
+      if (!text) return;
+      try {
+        const verdict = await api.guardTry(text);
+        out.innerHTML = `
+          <span class="pill ${verdict.hide ? 'bad' : 'good'}">${verdict.hide ? 'спрятал бы' : 'пропустил бы'}</span>
+          <span class="muted" style="margin-left:8px">вес ${verdict.score}</span>
+          ${(verdict.notes || []).length ? `<div class="chips wrap" style="margin-top:8px">${verdict.notes.map((note) => `<span class="chip">${esc(note)}</span>`).join('')}</div>` : ''}`;
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+
+    let kind = 'insult';
+    body.querySelectorAll('[data-kind]').forEach((button) => {
+      button.onclick = () => {
+        kind = button.dataset.kind;
+        body.querySelectorAll('[data-kind]').forEach((other) => other.setAttribute('aria-pressed', String(other === button)));
+      };
+    });
+
+    body.querySelector('[data-word-add]').onclick = async () => {
+      const word = body.querySelector('[data-word]').value.trim();
+      if (!word) return;
+      try {
+        await api.guardWordAdd(word, kind, kind === 'threat' ? 6 : 3);
+        toast('Добавлено', 'ok');
+        paint();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+
+    body.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = async () => {
+        if (!(await confirmSheet('Убрать слово?', button.textContent.trim(), 'Убрать'))) return;
+        try {
+          await api.guardWordDrop(Number(button.dataset.drop));
+          paint();
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  };
+
+  await paint();
+}
 
 async function drawHealth(body) {
   if (!api.adminHealth) {

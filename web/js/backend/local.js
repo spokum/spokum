@@ -294,6 +294,7 @@ function shapePost(post, viewerId) {
     createdAt: post.createdAt,
     removed: post.removed,
     removedReason: post.removedReason,
+    removedAuto: !!post.removedAuto,
     author: pub(author),
     likes: state.likes.filter((l) => l.postId === post.id).length,
     liked: state.likes.some((l) => l.postId === post.id && l.userId === viewerId),
@@ -368,6 +369,223 @@ function applyStrike(moderatorId, adminId, reason) {
     log(adminId, 'mod.revoked', { moderatorId, count });
   }
   return count;
+}
+
+const GUARD_SEED = [
+  ['дебил', 'insult', 3], ['даун', 'insult', 3], ['идиот', 'insult', 3],
+  ['тупиц', 'insult', 3], ['кретин', 'insult', 3], ['дегенерат', 'insult', 3],
+  ['имбецил', 'insult', 3], ['ничтожеств', 'insult', 3], ['урод', 'insult', 3],
+  ['ублюдок', 'insult', 4], ['мраз', 'insult', 4], ['тварь', 'insult', 3],
+  ['гнида', 'insult', 3], ['чмо', 'insult', 3], ['быдло', 'insult', 3],
+  ['жирдяй', 'insult', 3], ['жиртрест', 'insult', 3], ['лузер', 'insult', 2],
+  ['шлюх', 'insult', 4], ['потаскух', 'insult', 4], ['овца', 'insult', 2],
+  ['свинья', 'insult', 2], ['шизик', 'insult', 3], ['уебок', 'insult', 4],
+  ['долбоеб', 'insult', 4], ['пидор', 'insult', 4], ['петух', 'insult', 3],
+  ['убью тебя', 'threat', 6], ['сдохни', 'threat', 6], ['зарежу', 'threat', 6],
+  ['закопаю', 'threat', 6], ['порежу', 'threat', 6], ['найду тебя', 'threat', 5],
+  ['повесься', 'threat', 6], ['убей себя', 'threat', 6], ['иди умри', 'threat', 6],
+  ['сломаю тебе', 'threat', 5], ['приеду и', 'threat', 4],
+  ['заработок', 'spam', 2], ['лёгкие деньги', 'spam', 3], ['казино', 'spam', 3],
+  ['ставки на спорт', 'spam', 3], ['промокод', 'spam', 2], ['накрутк', 'spam', 3],
+  ['взаимная подписка', 'spam', 3], ['реферальн', 'spam', 2], ['инвестиц', 'spam', 2],
+  ['гарантирую доход', 'spam', 4], ['пассивный доход', 'spam', 3], ['подпишись на', 'spam', 2]
+];
+
+const GUARD_MAP = { a: 'а', b: 'в', c: 'с', e: 'е', h: 'н', k: 'к', m: 'м', o: 'о', p: 'р', t: 'т', u: 'и', x: 'х', y: 'у', '0': 'о', '3': 'з', '4': 'ч', '6': 'б', '@': 'а', 'ё': 'е' };
+
+function guardNorm(src) {
+  const lowered = String(src || '').toLowerCase();
+  let out = '';
+  for (const glyph of lowered) out += GUARD_MAP[glyph] || glyph;
+  return out
+    .replace(/[^а-я ]+/g, ' ')
+    .replace(/(.)\1+/g, '$1')
+    .replace(/ +/g, ' ')
+    .trim();
+}
+
+function guardWordList() {
+  ensureGuard();
+  return state.guardWords;
+}
+
+function ensureGuard() {
+  if (!state.guardWords || !state.guardWords.length) {
+    state.guardWords = GUARD_SEED.map((row, index) => ({
+      id: index + 1,
+      word: guardNorm(row[0]),
+      kind: row[1],
+      weight: row[2],
+      live: true
+    }));
+  }
+  if (!state.guardHits) state.guardHits = [];
+  if (!state.guardConfig) {
+    state.guardConfig = { live: true, hide_at: 4, mass_at: 4, watch_links: true, watch_caps: true, watch_flood: true };
+  }
+}
+
+function guardScan(src) {
+  const clean = guardNorm(src);
+  if (!clean) return { score: 0, hits: [], kinds: [] };
+  const squashed = clean.replace(/ /g, '');
+  const hits = [];
+  const kinds = [];
+  let score = 0;
+  for (const row of guardWordList()) {
+    if (!row.live) continue;
+    const near = new RegExp('(^| )' + row.word + '[а-я]{0,4}( |$)');
+    if (near.test(clean) || (row.word.length >= 5 && squashed.includes(row.word))) {
+      hits.push({ word: row.word, kind: row.kind, weight: row.weight });
+      score += row.weight;
+      if (!kinds.includes(row.kind)) kinds.push(row.kind);
+    }
+  }
+  if (/(^| )(ты|тебе|тебя|тобой|вы|вам|вас|твоя|твой|твое)( |$)/.test(clean) && (kinds.includes('insult') || kinds.includes('threat'))) {
+    score += 2;
+    kinds.push('aimed');
+  }
+  return { score, hits, kinds };
+}
+
+function guardLook(kind, src, authorId) {
+  ensureGuard();
+  const cfg = state.guardConfig;
+  if (!cfg.live) return { score: 0, hits: [], kinds: [], notes: [], hide: false };
+  const found = guardScan(src);
+  let score = found.score;
+  const notes = [];
+  if (found.hits.length) {
+    if (found.kinds.includes('threat')) notes.push('угроза');
+    else if (found.kinds.includes('insult')) notes.push('оскорбление');
+    else if (found.kinds.includes('spam')) notes.push('спам');
+    else notes.push('запрещённые слова');
+  }
+  const author = state.users.find((item) => item.id === authorId);
+  const raw = String(src || '');
+  if (cfg.watch_links) {
+    const links = (raw.toLowerCase().match(/(https?:\/\/|t\.me\/|www\.|vk\.com|telegram\.|@[a-z0-9_]{5,})/g) || []).length;
+    if (links > 0 && author && author.createdAt > Date.now() - 7 * 86400000) {
+      score += 3;
+      notes.push('ссылки с нового аккаунта');
+    } else if (links >= 3) {
+      score += 2;
+      notes.push('много ссылок');
+    }
+  }
+  if (cfg.watch_caps && raw.length > 40) {
+    const letters = (raw.match(/[А-Яа-яA-Za-zЁё]/g) || []).length;
+    const caps = (raw.match(/[А-ЯA-ZЁ]/g) || []).length;
+    if (letters > 0 && caps / letters > 0.75) {
+      score += 1;
+      notes.push('сплошные заглавные');
+    }
+  }
+  if (cfg.watch_flood && authorId) {
+    const rows = kind === 'post' ? state.posts : state.comments;
+    const mine = rows.filter((row) => row.authorId === authorId);
+    const same = guardNorm(raw);
+    if (same && mine.some((row) => row.createdAt > Date.now() - 3600000 && guardNorm(row.text) === same)) {
+      score += 3;
+      notes.push('повтор того же текста');
+    }
+    if (mine.filter((row) => row.createdAt > Date.now() - 180000).length >= 6) {
+      score += 2;
+      notes.push('слишком часто');
+    }
+  }
+  return { score, hits: found.hits, kinds: found.kinds, notes, hide: score >= cfg.hide_at };
+}
+
+function guardReason(verdict) {
+  return 'Автофильтр: ' + (verdict.notes.join(', ') || 'подозрительная запись');
+}
+
+function guardNote(kind, target, authorId, verdict, hidden, body) {
+  ensureGuard();
+  if (verdict.score <= 0) return;
+  state.guardHits.unshift({
+    id: next('guardHits'),
+    source: 'filter',
+    targetKind: kind,
+    targetId: target,
+    userId: authorId,
+    score: verdict.score,
+    verdict,
+    action: hidden ? 'hidden' : 'flagged',
+    body: String(body || '').slice(0, 400),
+    createdAt: Date.now(),
+    undone: false,
+    undoneBy: null,
+    kept: false
+  });
+}
+
+function guardApply(kind, row, authorId) {
+  const user = state.users.find((item) => item.id === authorId);
+  if (user && (user.isModerator || user.isAdmin)) return false;
+  const verdict = guardLook(kind, row.text, authorId);
+  if (verdict.hide) {
+    row.removed = true;
+    row.removedBy = null;
+    row.removedAuto = true;
+    row.removedReason = guardReason(verdict);
+    if (kind === 'post') row.removedAt = Date.now();
+  }
+  guardNote(kind, row.id, authorId, verdict, !!verdict.hide, row.text);
+  if (verdict.hide) {
+    note_(
+      authorId,
+      'removed',
+      kind === 'post' ? 'Запись скрыта автоматически' : 'Комментарий скрыт автоматически',
+      row.removedReason + '. Модератор посмотрит и вернёт, если это ошибка',
+      { post: kind === 'post' ? row.id : row.postId, auto: true }
+    );
+  }
+  return !!verdict.hide;
+}
+
+function guardMass(kind, target) {
+  ensureGuard();
+  const cfg = state.guardConfig;
+  if (!cfg.live) return;
+  if (kind !== 'post' && kind !== 'comment') return;
+  const many = new Set(
+    state.reports
+      .filter((row) => row.targetKind === kind && String(row.targetId) === String(target) && row.createdAt > Date.now() - 86400000)
+      .map((row) => row.reporterId)
+  ).size;
+  if (many < cfg.mass_at) return;
+  const rows = kind === 'post' ? state.posts : state.comments;
+  const row = rows.find((item) => String(item.id) === String(target));
+  if (!row || row.removed) return;
+  row.removed = true;
+  row.removedBy = null;
+  row.removedAuto = true;
+  row.removedReason = 'Автофильтр: много жалоб';
+  if (kind === 'post') row.removedAt = Date.now();
+  state.guardHits.unshift({
+    id: next('guardHits'),
+    source: 'filter',
+    targetKind: kind,
+    targetId: row.id,
+    userId: row.authorId,
+    score: many,
+    verdict: { notes: ['много жалоб'], hits: [], reports: many },
+    action: 'mass',
+    body: String(row.text || '').slice(0, 400),
+    createdAt: Date.now(),
+    undone: false,
+    undoneBy: null,
+    kept: false
+  });
+  note_(
+    row.authorId,
+    'removed',
+    kind === 'post' ? 'Запись скрыта до проверки' : 'Комментарий скрыт до проверки',
+    'На неё пожаловались несколько человек. Модератор посмотрит и вернёт, если это ошибка',
+    { post: kind === 'post' ? row.id : row.postId, auto: true }
+  );
 }
 
 export const local = {
@@ -776,6 +994,7 @@ export const local = {
       removedReason: '',
       removedAt: 0
     };
+    guardApply('post', post, user.id);
     state.posts.push(post);
     save();
     return { post: shapePost(post, user.id) };
@@ -813,6 +1032,7 @@ export const local = {
           createdAt: c.createdAt,
           removed: !!c.removed,
           removedReason: c.removedReason || '',
+          removedAuto: !!c.removedAuto,
           author: pub(state.users.find((u) => u.id === c.authorId))
         }))
     };
@@ -827,7 +1047,19 @@ export const local = {
       (c) => c.postId === id && c.authorId === user.id && c.text === body && Date.now() - c.createdAt < 10000
     );
     if (!twin) {
-      state.comments.push({ id: next('comments'), postId: id, authorId: user.id, text: body, createdAt: Date.now() });
+      const row = {
+        id: next('comments'),
+        postId: id,
+        authorId: user.id,
+        text: body,
+        createdAt: Date.now(),
+        removed: false,
+        removedBy: null,
+        removedAuto: false,
+        removedReason: ''
+      };
+      guardApply('comment', row, user.id);
+      state.comments.push(row);
       save();
     }
     return { post: shapePost(state.posts.find((p) => p.id === id), user.id) };
@@ -962,6 +1194,7 @@ export const local = {
       handledBy: null,
       handledAt: 0
     });
+    guardMass(targetKind, targetId);
     save();
     return { ok: true };
   },
@@ -1951,6 +2184,151 @@ export const local = {
     if (host) note_(host.id, 'gift', 'К вам пришёл друг', 'Кто-то зашёл по вашему приглашению, вам двести пятьдесят монет', { coins: 250 });
     save();
     return { ok: true, coins: 150 };
+  },
+
+  async guardQueue(mode = 'all', size = 40) {
+    needMod();
+    ensureGuard();
+    const rows = state.guardHits.filter((row) => {
+      if (mode === 'hidden') return row.action === 'hidden' || row.action === 'mass';
+      if (mode === 'flagged') return row.action === 'flagged';
+      if (mode === 'open') return (row.action === 'hidden' || row.action === 'mass') && !row.undone && !row.kept;
+      return true;
+    });
+    return {
+      hits: rows.slice(0, size).map((row) => ({
+        id: row.id,
+        kind: row.targetKind,
+        target: row.targetId,
+        score: row.score,
+        action: row.action,
+        body: row.body,
+        notes: row.verdict?.notes || [],
+        hits: row.verdict?.hits || [],
+        source: row.source,
+        at: new Date(row.createdAt).toISOString(),
+        undone: row.undone,
+        kept: row.kept,
+        author: pub(state.users.find((item) => item.id === row.userId)) || null
+      }))
+    };
+  },
+
+  async guardUndo(id) {
+    const user = needMod();
+    ensureGuard();
+    const hit = state.guardHits.find((row) => row.id === id);
+    if (!hit) fail('Запись не найдена');
+    if (hit.undone) return { ok: true };
+    const rows = hit.targetKind === 'post' ? state.posts : state.comments;
+    const row = rows.find((item) => String(item.id) === String(hit.targetId));
+    if (row && row.removedAuto) {
+      row.removed = false;
+      row.removedAuto = false;
+      row.removedReason = '';
+      if (hit.targetKind === 'post') row.removedAt = 0;
+    }
+    hit.undone = true;
+    hit.undoneBy = user.id;
+    hit.kept = false;
+    if (hit.userId) {
+      note_(hit.userId, 'removed', 'Автофильтр ошибся', 'Модератор вернул вашу запись, она снова видна всем', { post: hit.targetId });
+    }
+    log(user.id, 'guard.undo', { hit: id });
+    save();
+    return { ok: true };
+  },
+
+  async guardKeep(id) {
+    const user = needMod();
+    ensureGuard();
+    const hit = state.guardHits.find((row) => row.id === id);
+    if (!hit) fail('Запись не найдена');
+    hit.kept = true;
+    log(user.id, 'guard.keep', { hit: id });
+    save();
+    return { ok: true };
+  },
+
+  async guardStats() {
+    needMod();
+    ensureGuard();
+    const day = state.guardHits.filter((row) => row.createdAt > Date.now() - 86400000);
+    const week = state.guardHits.filter((row) => row.createdAt > Date.now() - 7 * 86400000);
+    const weekHidden = week.filter((row) => row.action === 'hidden' || row.action === 'mass').length;
+    const weekUndone = week.filter((row) => row.undone).length;
+    const count = {};
+    week.forEach((row) => (row.verdict?.hits || []).forEach((hit) => {
+      count[hit.word] = (count[hit.word] || 0) + 1;
+    }));
+    return {
+      day: day.length,
+      day_hidden: day.filter((row) => row.action === 'hidden' || row.action === 'mass').length,
+      week_hidden: weekHidden,
+      week_undone: weekUndone,
+      miss: weekHidden ? Math.round((weekUndone * 100) / weekHidden) : 0,
+      top: Object.keys(count)
+        .sort((a, b) => count[b] - count[a])
+        .slice(0, 8)
+        .map((word) => ({ word, count: count[word] }))
+    };
+  },
+
+  async guardTry(text) {
+    const user = needMod();
+    return guardLook('post', text || '', user.id);
+  },
+
+  async guardWords() {
+    needMod();
+    return { words: guardWordList().map((row) => ({ ...row })) };
+  },
+
+  async guardWordAdd(word, kind, weight) {
+    needAdmin();
+    ensureGuard();
+    const clean = guardNorm(word);
+    if (clean.length < 3) fail('Слово слишком короткое');
+    if (!['insult', 'threat', 'spam', 'link'].includes(kind)) fail('Не тот вид');
+    const weighed = Math.min(9, Math.max(1, Number(weight) || 3));
+    const found = state.guardWords.find((row) => row.word === clean);
+    if (found) {
+      found.kind = kind;
+      found.weight = weighed;
+      found.live = true;
+    } else {
+      state.guardWords.push({ id: next('guardWords'), word: clean, kind, weight: weighed, live: true });
+    }
+    save();
+    return { ok: true, word: clean };
+  },
+
+  async guardWordDrop(id) {
+    needAdmin();
+    ensureGuard();
+    state.guardWords = state.guardWords.filter((row) => row.id !== id);
+    save();
+    return { ok: true };
+  },
+
+  async guardConfig() {
+    needMod();
+    ensureGuard();
+    return { ...state.guardConfig };
+  },
+
+  async guardConfigSave(patch) {
+    needAdmin();
+    ensureGuard();
+    const cfg = state.guardConfig;
+    if (patch.live !== undefined) cfg.live = !!patch.live;
+    if (patch.hide_at !== undefined) cfg.hide_at = Math.min(20, Math.max(1, Number(patch.hide_at) || cfg.hide_at));
+    if (patch.mass_at !== undefined) cfg.mass_at = Math.min(50, Math.max(2, Number(patch.mass_at) || cfg.mass_at));
+    if (patch.watch_links !== undefined) cfg.watch_links = !!patch.watch_links;
+    if (patch.watch_caps !== undefined) cfg.watch_caps = !!patch.watch_caps;
+    if (patch.watch_flood !== undefined) cfg.watch_flood = !!patch.watch_flood;
+    save();
+    return { ...cfg };
   },
 
   async moodTwins() {
