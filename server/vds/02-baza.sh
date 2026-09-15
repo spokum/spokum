@@ -18,6 +18,13 @@ command -v docker >/dev/null 2>&1 || die "Docker не найден, сначал
 
 if [ "${SPOKUM_INSIDE:-}" != "1" ]; then
   printf '\n\033[1m=== СпокУм · база на своём сервере ===\033[0m\n\n'
+  if [ "${SPOKUM_ZANOVO:-}" = "1" ] && [ -d "$STACK" ]; then
+    echo "Стираем прежнюю установку вместе с данными и ставим заново."
+    ( cd "$STACK" && docker compose down -v >/dev/null 2>&1 )
+    rm -f "$STACK/.env"
+    green "стёрто"
+    echo
+  fi
   echo "Адрес базы будет: https://$HOST"
   echo "Работа идёт в фоне, обрыв связи ей не мешает."
   echo
@@ -71,7 +78,7 @@ if [ ! -f "$STACK/.env" ]; then
   SECRET_BASE=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 64)
   VAULT_KEY=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
   META_KEY=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
-  RT_KEY=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+  RT_KEY=$(tr -dc 'a-z0-9' < /dev/urandom | head -c 16)
   PANEL_PASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20)
   S3_ID=$(tr -dc 'a-f0-9' < /dev/urandom | head -c 32)
   S3_SECRET=$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)
@@ -258,8 +265,10 @@ ANON=$(grep '^ANON_KEY=' "$STACK/.env" | cut -d= -f2-)
 OK=0
 for i in $(seq 1 30); do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
-    -H "apikey: $ANON" "https://$HOST/rest/v1/" 2>/dev/null)
-  if [ "$CODE" = "200" ]; then OK=1; break; fi
+    -H "apikey: $ANON" -H "Authorization: Bearer $ANON" "https://$HOST/rest/v1/" 2>/dev/null)
+  case "$CODE" in
+    200|401|404) OK=1; break ;;
+  esac
   printf '  сертификат ещё выпускается, ответ %s\n' "${CODE:-нет}"
   sleep 10
 done
@@ -300,4 +309,10 @@ echo "Панель: https://$HOST  (логин spokum)"
 echo
 free -m | awk '/Mem:/ {printf "память занято %s МБ из %s МБ\n", $3, $2}'
 echo
-green "Покажите мне вывод команды:  cat $KEYS"
+echo "Все доступы лежат в $KEYS — не показывайте этот файл целиком никому."
+echo
+echo "Мне нужна только одна строка, она и так открытая:"
+echo
+grep -A1 '^ANON_KEY' "$KEYS" | tail -1
+echo
+green "Покажите мне её и список сервисов выше."
