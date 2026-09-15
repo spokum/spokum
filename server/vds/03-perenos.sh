@@ -124,11 +124,12 @@ wc -l < "$WORK/identities.csv" 2>/dev/null | xargs echo "  выгружено в
 
 step "4 из 7. Забираем всё остальное"
 docker exec -i supabase-db pg_dump "$SRC" \
-  --data-only --inserts --on-conflict-do-nothing --no-owner --no-privileges \
-  --schema=public > "$WORK/public.sql" || die "Не снялся дамп данных"
+  --data-only --column-inserts --on-conflict-do-nothing --no-owner --no-privileges \
+  --schema=public > "$WORK/public.sql" 2>/dev/null || die "Не снялся дамп данных"
 du -h "$WORK/public.sql" | cut -f1 | xargs echo "  размер выгрузки:"
 
 step "5 из 7. Заливаем людей"
+docker cp "$WORK/users.csv" supabase-db:/tmp/spokum-users.csv >/dev/null
 {
   echo "set session_replication_role = replica;"
   echo "create temp table vhod_users (
@@ -136,9 +137,7 @@ step "5 из 7. Заливаем людей"
     email_confirmed_at timestamptz, raw_app_meta_data jsonb, raw_user_meta_data jsonb,
     created_at timestamptz, updated_at timestamptz, last_sign_in_at timestamptz,
     phone text, banned_until timestamptz, is_super_admin boolean);"
-  echo "\\copy vhod_users from '/dev/stdin' csv"
-  cat "$WORK/users.csv"
-  echo "\\."
+  echo "\\copy vhod_users from '/tmp/spokum-users.csv' csv"
   cat <<'SQL'
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -170,14 +169,13 @@ SQL
 
 step "6 из 7. Заливаем входы и все данные"
 if [ -s "$WORK/identities.csv" ]; then
+  docker cp "$WORK/identities.csv" supabase-db:/tmp/spokum-id.csv >/dev/null
   {
     echo "set session_replication_role = replica;"
     echo "create temp table vhod_id (
       id text, user_id uuid, identity_data jsonb, provider text,
       last_sign_in_at timestamptz, created_at timestamptz, updated_at timestamptz, provider_id text);"
-    echo "\\copy vhod_id from '/dev/stdin' csv"
-    cat "$WORK/identities.csv"
-    echo "\\."
+    echo "\\copy vhod_id from '/tmp/spokum-id.csv' csv"
     cat <<'SQL'
 insert into auth.identities (id, user_id, identity_data, provider, provider_id,
                              last_sign_in_at, created_at, updated_at)
@@ -242,6 +240,7 @@ select 'людей ' || (select count(*) from auth.users)
     || ' | сообщений ' || (select count(*) from public.messages)
     || ' | чатов ' || (select count(*) from public.chats);"
 
+docker exec supabase-db rm -f /tmp/spokum-users.csv /tmp/spokum-id.csv 2>/dev/null
 rm -f "$WORK/users.csv" "$WORK/identities.csv"
 
 printf '\n\033[1m=== Перенос закончен ===\033[0m\n\n'
