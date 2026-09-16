@@ -320,12 +320,48 @@ export async function createSupabase(url, key) {
       });
   };
 
+  const KEEP_KEY = 'spokum.me.cache';
+
+  const keepProfile = (user) => {
+    if (!user?.id) return;
+    try {
+      localStorage.setItem(KEEP_KEY, JSON.stringify({ at: Date.now(), user }));
+    } catch {}
+  };
+
+  const keptProfile = () => {
+    try {
+      const row = JSON.parse(localStorage.getItem(KEEP_KEY) || 'null');
+      if (row?.user?.id) return row.user;
+    } catch {}
+    return null;
+  };
+
+  const storedSession = () => {
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key || !/^sb-.*-auth-token$/.test(key)) continue;
+        const row = JSON.parse(localStorage.getItem(key) || 'null');
+        const who = row?.user?.id || row?.currentSession?.user?.id;
+        if (who) return who;
+      }
+    } catch {}
+    return null;
+  };
+
   const sessionResult = await withTimeout(sb.auth.getSession(), 8000, { data: { session: null } });
-  uid = sessionResult?.data?.session?.user?.id || null;
+  uid = sessionResult?.data?.session?.user?.id || storedSession() || null;
   if (uid) listen();
 
-  sb.auth.onAuthStateChange((_event, session) => {
+  sb.auth.onAuthStateChange((event, session) => {
+    if (!session && event !== 'SIGNED_OUT' && event !== 'USER_DELETED') return;
     uid = session?.user?.id || null;
+    if (!uid) {
+      try {
+        localStorage.removeItem(KEEP_KEY);
+      } catch {}
+    }
     if (uid) listen();
   });
 
@@ -387,10 +423,23 @@ export async function createSupabase(url, key) {
       return { ok: true };
     },
 
+    cachedUser() {
+      const kept = keptProfile();
+      return kept && (!uid || kept.id === uid) ? kept : null;
+    },
+
     async me() {
       if (!uid) return { user: null };
-      await sb.rpc('touch_presence');
-      return { user: await profileById(uid) };
+      sb.rpc('touch_presence').catch(() => {});
+      try {
+        const user = await profileById(uid);
+        if (user) keepProfile(user);
+        return { user };
+      } catch (error) {
+        const kept = keptProfile();
+        if (kept && kept.id === uid) return { user: kept };
+        throw error;
+      }
     },
 
     async tidyProfile() {

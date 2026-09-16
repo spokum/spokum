@@ -225,9 +225,9 @@ async function boot() {
   ]);
   try {
     const { user } = await api.me();
-    setUser(user);
+    setUser(user || api.cachedUser?.() || null);
   } catch {
-    setUser(null);
+    setUser(api.cachedUser?.() || null);
   }
   if (await checkDevice(false)) return;
   if (!state.user) {

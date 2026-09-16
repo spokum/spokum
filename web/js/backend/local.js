@@ -2258,6 +2258,10 @@ export const local = {
     return { rang };
   },
 
+  cachedUser() {
+    return null;
+  },
+
   async guardQueue(mode = 'all', size = 40) {
     needMod();
     ensureGuard();
