@@ -673,6 +673,8 @@ function openUserActions(user, refresh) {
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-mute style="color:#c6b083">${icon('mute', 18)}<span>${user.mutedUntil > Date.now() ? 'Снять мут' : 'Замутить'}</span></button>
       <button class="list-item" data-ban style="color:#c98b8b">${icon('ban', 18)}<span>${user.bannedUntil > Date.now() ? 'Разблокировать' : 'Заблокировать'}</span></button>
+      <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-erase style="color:#e07a7a">${icon('trash', 18)}<span>Удалить аккаунт навсегда</span></button>
     </div>`);
   const sheet = openSheet('', body);
 
@@ -847,6 +849,39 @@ function openUserActions(user, refresh) {
 
   body.querySelector('[data-mute]').onclick = () => restrict('mute', user.mutedUntil > Date.now() ? 'unmute' : null);
   body.querySelector('[data-ban]').onclick = () => restrict('ban', user.bannedUntil > Date.now() ? 'unban' : null);
+
+  // Полное удаление: профиль, записи, переписка, подарки и сам вход.
+  // Два подтверждения и ввод @имени — чтобы не удалить человека случайно.
+  body.querySelector('[data-erase]').onclick = async () => {
+    sheet.close();
+    if (!api.adminDeleteUser) {
+      return toast('Обновите базу: прогоните schema.sql заново', 'err');
+    }
+    const sure = await confirmSheet({
+      title: 'Удалить аккаунт навсегда',
+      text: `«${user.displayName}» (@${user.username}) исчезнет целиком: профиль, записи, переписка, подарки и сам вход. Вернуть это будет нельзя.`,
+      confirm: 'Продолжить',
+      danger: true
+    });
+    if (!sure) return;
+    const typed = await promptSheet({
+      title: 'Последний шаг',
+      label: `Чтобы подтвердить, напишите @${user.username} в поле ниже`,
+      placeholder: user.username,
+      confirm: 'Удалить навсегда'
+    });
+    if (!typed) return;
+    if (typed.toLowerCase().replace(/^@/, '').trim() !== String(user.username).toLowerCase()) {
+      return toast('Имя не совпало, ничего не удалено', 'err');
+    }
+    try {
+      const result = await api.adminDeleteUser(user.id);
+      toast(`@${result?.username || user.username} удалён навсегда`);
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 }
 
 export function pickPremiumDays() {

@@ -368,6 +368,14 @@ export async function createSupabase(url, key) {
       }));
       sessionLost = false;
     } catch {}
+    // Держим приложение в курсе: у него своя копия ключа для фоновой проверки
+    // уведомлений. Если она отстанет, приложение и веб начнут обновлять вход
+    // по разным ключам — и вход сгорит.
+    if (window.SpokumHost?.setAuth) {
+      try {
+        window.SpokumHost.setAuth(url, key, session.refresh_token);
+      } catch {}
+    }
   };
 
   const keptSession = () => {
@@ -386,12 +394,35 @@ export async function createSupabase(url, key) {
 
   const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 
+  // Библиотека входа молча стирает сессию, если обновление ключа вернуло отказ
+  // («ключ уже использован», «сессия не найдена»). Снаружи это выглядит как
+  // выход из аккаунта. Поэтому всегда проверяем, живёт ли сессия на самом деле.
+  const liveSession = async () => {
+    try {
+      const { data } = await withTimeout(sb.auth.getSession(), 6000, { data: null });
+      return data?.session || null;
+    } catch {
+      return null;
+    }
+  };
+
   const restoreSession = async (tries = 3) => {
     if (restoring) return restoring;
     if (leaving || !navigator.onLine) return null;
     const kept = keptSession();
     if (!kept?.refresh_token) return null;
     restoring = (async () => {
+      // Может быть, вход уже поднят — другой вкладкой того же устройства или
+      // самой библиотекой. Тогда ничего не обновляем: лишний запрос нового ключа
+      // как раз и приводит к «ключ уже использован».
+      const already = await liveSession();
+      if (already?.user?.id) {
+        uid = already.user.id;
+        keepSession(already);
+        sessionLost = false;
+        listen();
+        return uid;
+      }
       for (let attempt = 1; attempt <= tries; attempt += 1) {
         const copy = keptSession();
         if (!copy?.refresh_token || leaving) return null;
@@ -415,6 +446,14 @@ export async function createSupabase(url, key) {
           return null;
         } catch (error) {
           const text = error?.message || '';
+          // «Ключ уже использован» — не повод выходить из аккаунта. Так бывает,
+          // когда в приложении вход обновляют сразу два места (веб и фоновая
+          // служба уведомлений). Сервер в этом случае отдаёт рабочий ключ, так
+          // что просто пробуем ещё раз, а не показываем экран входа.
+          if (/already used/i.test(text)) {
+            if (attempt < tries) await pause(2000 * attempt);
+            continue;
+          }
           // Токен отозван или испорчен — повторять бессмысленно, нужен обычный вход.
           if (/invalid|revoked|expired|not found|no such/i.test(text)) {
             sessionLost = true;
@@ -1218,6 +1257,13 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('admin_wipe_posts', { target: userId });
       guard(error);
       return { removed: data || 0 };
+    },
+
+    // Удаление аккаунта целиком: записи, переписка, файлы и сам вход.
+    async adminDeleteUser(userId) {
+      const { data, error } = await sb.rpc('admin_delete_user', { target: userId });
+      guard(error);
+      return data || { ok: true };
     },
 
     async resetLook(userId) {

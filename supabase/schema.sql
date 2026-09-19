@@ -3117,57 +3117,23 @@ alter table public.event_claims enable row level security;
 drop policy if exists event_claims_own on public.event_claims;
 create policy event_claims_own on public.event_claims for select using (user_id = auth.uid());
 
-insert into public.gift_types (id, title, price, rarity, art, hue, sort) values
-  ('rose', 'Розочка лета', 0, 'legend', 'rose', 340, 0)
-on conflict (id) do update set title = excluded.title, price = excluded.price,
-  rarity = excluded.rarity, art = excluded.art, hue = excluded.hue, sort = excluded.sort;
+-- Розочка лета удалена из продукта целиком и без возврата.
+-- Сначала убираем уже выданные подарки и отметки ивента, затем сам подарок.
+delete from public.gifts where type_id = 'rose';
+delete from public.gift_types where id = 'rose';
+delete from public.event_claims where event_id = 'summer26';
 
+-- Функции ивента оставлены пустыми (а не удалены): старые версии приложения
+-- продолжают их вызывать и не должны сыпать ошибками.
 create or replace function public.event_state()
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  ends_at timestamptz := timestamptz '2026-09-02 00:00:00+03';
-  taken boolean;
-begin
-  if now() >= ends_at then
-    return jsonb_build_object('active', false, 'id', 'summer26');
-  end if;
-  select exists (select 1 from public.event_claims where event_id = 'summer26' and user_id = auth.uid()) into taken;
-  return jsonb_build_object(
-    'active', true,
-    'id', 'summer26',
-    'title', 'Последний день лета',
-    'text', 'Лето уходит. Заберите розочку на память, она останется у вас навсегда. Ивент идёт до конца первого сентября',
-    'endsAt', ends_at,
-    'claimed', coalesce(taken, false)
-  );
-end;
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('active', false, 'id', 'summer26');
 $$;
 
 create or replace function public.event_claim()
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  ends_at timestamptz := timestamptz '2026-09-02 00:00:00+03';
-  fresh bigint;
 begin
-  if auth.uid() is null then raise exception 'Нужен вход'; end if;
-  if now() >= ends_at then raise exception 'Событие закончилось'; end if;
-  if exists (select 1 from public.event_claims where event_id = 'summer26' and user_id = auth.uid()) then
-    raise exception 'Розочка уже ваша';
-  end if;
-
-  insert into public.event_claims (event_id, user_id) values ('summer26', auth.uid());
-  insert into public.gifts (type_id, owner_id, from_id, note, pinned)
-  values ('rose', auth.uid(), null, 'В память о лете 2026', true)
-  returning id into fresh;
-
-  perform set_config('spokum.privileged', 'on', true);
-  update public.profiles set coins = coins + 100 where id = auth.uid();
-  insert into public.coin_log (user_id, amount, reason) values (auth.uid(), 100, 'Подарок к концу лета');
-
-  perform public.notify_user(auth.uid(), 'gift', 'Розочка ваша',
-    'Спасибо, что были здесь этим летом. Сто монет тоже ваши', jsonb_build_object('gift', fresh));
-
-  return jsonb_build_object('ok', true, 'gift', fresh);
+  raise exception 'Событие закончилось';
 end;
 $$;
 
@@ -3250,8 +3216,7 @@ returns jsonb language sql security definer stable set search_path = public as $
     'friends', (select count(*) from public.follows where follower_id = auth.uid()),
     'gifts', (select count(*) from public.gifts where owner_id = auth.uid() and not sold),
     'streak', (select coalesce(best_streak, 0) from public.profiles where id = auth.uid()),
-    'coins', (select coalesce(coins, 0) from public.profiles where id = auth.uid()),
-    'rose', (select exists (select 1 from public.event_claims where user_id = auth.uid() and event_id = 'summer26'))
+    'coins', (select coalesce(coins, 0) from public.profiles where id = auth.uid())
   );
 $$;
 
@@ -3387,7 +3352,7 @@ declare
   mine integer;
   all_kinds integer;
 begin
-  -- Считаем только подарки нынешнего сезона: летняя розочка не должна мешать
+  -- Считаем только подарки нынешнего сезона: прошлогодние не должны мешать
   -- собрать осеннюю коллекцию (иначе «1 из 5» висело бы вечно).
   select count(distinct g.type_id) into mine
     from public.gifts g join public.gift_types t on t.id = g.type_id
@@ -4589,3 +4554,75 @@ grant execute on function public.reminder_make(text, integer) to authenticated;
 grant execute on function public.reminder_drop(bigint) to authenticated;
 grant execute on function public.reminders_mine() to authenticated;
 grant execute on function public.reminders_ring() to authenticated;
+
+
+-- Полное удаление аккаунта «с корнями»: записи, файлы, сам вход.
+-- Ничего не остаётся — ни профиля, ни переписки, ни аватарок.
+create or replace function public.admin_delete_user(target uuid)
+returns jsonb language plpgsql security definer set search_path = public, auth, storage as $$
+declare
+  boss uuid := auth.uid();
+  who public.profiles;
+  posts_count bigint := 0;
+  messages_count bigint := 0;
+  files_count bigint := 0;
+begin
+  if boss is null then raise exception 'Нужен вход'; end if;
+  if not exists (select 1 from public.profiles where id = boss and is_admin) then
+    raise exception 'Удалять аккаунты может только админ';
+  end if;
+  if target is null then raise exception 'Кого удалять?'; end if;
+  if target = boss then raise exception 'Себя удалить нельзя'; end if;
+
+  select * into who from public.profiles where id = target;
+
+  if not found then
+    -- Профиля уже нет, но запись входа могла остаться.
+    delete from auth.users where id = target;
+    return jsonb_build_object('ok', true, 'username', '', 'note', 'входа не было, запись очищена');
+  end if;
+
+  if who.username = 'vanya8' then raise exception 'Основателя удалить нельзя'; end if;
+
+  perform set_config('spokum.privileged', 'on', true);
+
+  select count(*) into posts_count from public.posts where author_id = target;
+  select count(*) into messages_count from public.messages where user_id = target;
+
+  -- Файлы человека из хранилища (аватары, баннеры, вложения, истории).
+  begin
+    select count(*) into files_count from storage.objects where owner = target and bucket_id in ('media', 'stories');
+    delete from storage.objects where owner = target and bucket_id in ('media', 'stories');
+  exception
+    when undefined_table or undefined_column or insufficient_privilege then
+      files_count := 0;
+  end;
+
+  -- Запись в журнал делаем до удаления профиля, иначе будет не о ком писать.
+  insert into public.audit (actor_id, action, meta)
+  values (boss, 'admin.delete_user', jsonb_build_object(
+    'id', target,
+    'username', who.username,
+    'displayName', who.display_name,
+    'posts', posts_count,
+    'messages', messages_count,
+    'files', files_count
+  ));
+
+  -- Удаляем запись входа: профиль и весь его контент уезжают каскадом,
+  -- а вместе с ними — все его входы и ключи обновления.
+  delete from auth.users where id = target;
+
+  return jsonb_build_object(
+    'ok', true,
+    'username', who.username,
+    'displayName', who.display_name,
+    'id', target,
+    'posts', posts_count,
+    'messages', messages_count,
+    'files', files_count
+  );
+end;
+$$;
+
+grant execute on function public.admin_delete_user(uuid) to authenticated;

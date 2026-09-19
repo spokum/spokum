@@ -2,7 +2,8 @@
 # СпокУм · вход больше не вылетает
 #
 # Что делает: настраивает службу входа (auth) так, чтобы сессия не отзывалась
-# из-за обрыва связи, смены сети или VPN. Запускать один раз, можно и повторно.
+# из-за обрыва связи, смены сети, VPN или повторного запроса ключа. Запускать
+# один раз, можно и повторно — настройки просто обновятся.
 set -uo pipefail
 
 STACK=/opt/spokum/supabase
@@ -17,7 +18,8 @@ die()   { printf '\033[31m%s\033[0m\n' "$1"; exit 1; }
 [ "$(id -u)" = "0" ] || die "Запускать нужно от root"
 [ -f "$STACK/.env" ] || die "База не установлена: нет $STACK/.env"
 [ -f "$STACK/compose.spokum.yml" ] || die "Не найден $STACK/compose.spokum.yml"
-docker ps --format '{{.Names}}' | grep -q '^supabase-auth$' || die "Служба входа не запущена"
+docker ps --format '{{.Names}}' | grep -q '^supabase-auth$' \
+  || die "Служба входа не запущена. Запустите: cd $STACK && docker compose up -d"
 
 printf '\n\033[1m=== СпокУм · вход, который не вылетает ===\033[0m\n'
 
@@ -36,50 +38,91 @@ green "копия: $KEEP"
 
 step "3 из 6. Прописываем настройки"
 python3 - "$STACK/compose.spokum.yml" <<'PY'
+import re
 import sys
 
 path = sys.argv[1]
 text = open(path, encoding='utf-8').read()
 
-if 'GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED' in text:
-    print('  настройки уже прописаны, ничего не меняем')
-    sys.exit(0)
+VALUES = [
+    ('GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED', '"false"'),
+    ('GOTRUE_SECURITY_REFRESH_TOKEN_ALLOW_REUSE', '"true"'),
+    ('GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL', '"31536000"'),
+    ('GOTRUE_RATE_LIMIT_TOKEN_REFRESH', '"900"'),
+]
 
-block = """  auth:
-    environment:
-      # Смена сети, VPN и обрыв связи не должны отзывать вход.
-      # Если выключить вращение, один и тот же ключ входа работает и в
-      # приложении, и в вебе, и в фоне, поэтому «повторное использование»
-      # больше не считается взломом и сессия не сгорает.
-      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "false"
-      GOTRUE_SECURITY_REFRESH_TOKEN_ALLOW_REUSE: "true"
-      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "3600"
-      # Много людей за одним адресом (мобильный оператор, VPN) — поднимаем потолок.
-      GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "900"
+WHY = [
+    "# Смена сети, VPN и обрыв связи не должны отзывать вход.",
+    "# Ключ входа обновляют сразу два места: приложение и фоновая служба",
+    "# уведомлений. Сервер считал это «повторным использованием» и отзывал",
+    "# сессию — человека выбрасывало из аккаунта. Эти настройки запрещают",
+    "# отзыв: ключ живёт, пока человек сам не нажмёт «Выйти».",
+    "# Много людей за одним адресом (мобильный оператор, VPN) — потолок выше.",
+]
 
-"""
 
-lines = text.splitlines()
-out = []
-done = False
-for line in lines:
-    if not done and line.startswith('volumes:'):
-        out.extend(block.rstrip('\n').splitlines())
-        done = True
-    out.append(line)
+def line_for(indent, key, value):
+    return ' ' * indent + key + ': ' + value
 
-if not done:
-    print('  ВНИМАНИЕ: в файле нет раздела volumes, настройки не дописаны')
-    sys.exit(2)
 
-open(path, 'w', encoding='utf-8').write('\n'.join(out) + '\n')
-print('  настройки дописаны')
+# 1. Обновляем значения, которые уже прописаны (в том числе старые).
+for key, value in VALUES:
+    pattern = re.compile(r'^([ \t]*)' + key + r':.*$', re.M)
+    text = pattern.sub(lambda m: m.group(1) + key + ': ' + value, text)
+
+missing = [(key, value) for key, value in VALUES
+           if not re.search(r'^[ \t]*' + re.escape(key) + r':', text, re.M)]
+
+if missing:
+    lines = text.splitlines()
+    service = None
+    for i, row in enumerate(lines):
+        if re.match(r'^[ \t]{0,4}auth:\s*$', row):
+            j = i + 1
+            while j < len(lines) and (lines[j].strip() == '' or lines[j].startswith(' ')):
+                j += 1
+            service = (i, j)
+            break
+
+    if service:
+        start, end = service
+        env = None
+        for k in range(start + 1, end):
+            if re.match(r'^[ \t]+environment:\s*$', lines[k]):
+                env = k
+                break
+        if env is None:
+            indent = len(lines[start]) - len(lines[start].lstrip()) + 4
+            lines[start + 1:start + 1] = (
+                [' ' * (indent - 2) + 'environment:']
+                + [' ' * indent + row for row in WHY]
+                + [line_for(indent, key, value) for key, value in missing]
+            )
+        else:
+            outer = len(lines[env]) - len(lines[env].lstrip())
+            indent = outer + 2
+            k = env + 1
+            while k < len(lines) and (lines[k].strip() == '' or (len(lines[k]) - len(lines[k].lstrip())) > outer):
+                k += 1
+            lines[k:k] = [' ' * indent + row for row in WHY] \
+                + [line_for(indent, key, value) for key, value in missing]
+    else:
+        block = ['  auth:', '    environment:'] \
+            + ['      ' + row for row in WHY] \
+            + [line_for(6, key, value) for key, value in missing] + ['']
+        tail = next((i for i, row in enumerate(lines) if row.startswith('volumes:')), None)
+        if tail is None:
+            lines.extend([''] + block)
+        else:
+            lines[tail:tail] = block
+
+    text = '\n'.join(lines)
+
+open(path, 'w', encoding='utf-8').write(text.rstrip('\n') + '\n')
+print('  настройки записаны')
+
 PY
 STATUS=$?
-if [ "$STATUS" = "2" ]; then
-  cp "$KEEP" "$STACK/compose.spokum.yml"
-  die "Настройки не дописались, вернули прежний файл"
-fi
 [ "$STATUS" = "0" ] || die "Не получилось изменить compose.spokum.yml"
 
 cd "$STACK" || die "Нет папки $STACK"
@@ -92,7 +135,7 @@ green "файл настроек в порядке"
 
 step "4 из 6. Перезапускаем службу входа"
 docker compose up -d --force-recreate auth 2>&1 | tail -5
-sleep 8
+sleep 10
 
 step "5 из 6. Проверяем, что вход жив"
 ANON=$(grep '^ANON_KEY=' "$STACK/.env" | cut -d= -f2-)
@@ -110,14 +153,30 @@ case "$REST" in
 esac
 
 echo "  настройки в работе:"
-docker exec supabase-auth env 2>/dev/null | grep -E 'GOTRUE_SECURITY_REFRESH_TOKEN|GOTRUE_RATE_LIMIT_TOKEN_REFRESH' \
-  | sort | sed 's/^/    /' || true
+APPLIED=$(docker exec supabase-auth env 2>/dev/null \
+  | grep -E '^GOTRUE_SECURITY_REFRESH_TOKEN_(ROTATION_ENABLED|ALLOW_REUSE|REUSE_INTERVAL)=|^GOTRUE_RATE_LIMIT_TOKEN_REFRESH=' \
+  | sort)
+printf '%s\n' "$APPLIED" | sed 's/^/    /'
+
+BAD=0
+printf '%s\n' "$APPLIED" | grep -qx 'GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED=false' || BAD=1
+printf '%s\n' "$APPLIED" | grep -qx 'GOTRUE_SECURITY_REFRESH_TOKEN_ALLOW_REUSE=true' || BAD=1
+if [ "$BAD" = "0" ]; then
+  green "  всё на месте: вход больше не отзывается"
+else
+  warn "  служба входа не увидела настройки — значит запущена не та служба"
+  warn "  выполните ещё раз: cd $STACK && docker compose up -d --force-recreate auth"
+fi
 
 step "6 из 6. Итог"
 docker compose ps --format 'table {{.Service}}\t{{.Status}}' 2>/dev/null | sed 's/^/  /'
 
 printf '\n'
-green "Готово. Вход больше не сгорает от повторного запроса."
+if [ "$BAD" = "0" ]; then
+  green "Готово. Вход больше не сгорает от повторного запроса ключа."
+else
+  warn "Настройки записаны, но служба их пока не подхватила. Повторите запуск скрипта."
+fi
 echo
 echo "Откатить настройки, если что-то пойдёт не так:"
 echo "  cp $KEEP $STACK/compose.spokum.yml"

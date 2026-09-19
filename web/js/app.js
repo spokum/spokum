@@ -73,6 +73,11 @@ function watchNetwork() {
   };
   window.addEventListener('online', update);
   window.addEventListener('offline', update);
+  // Возвращаемся к приложению — сразу проверяем вход: пока телефон лежал в
+  // кармане, ключ мог устареть, и человека не должно выбрасывать на экран входа.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') bringBackSession();
+  });
   networkBar();
 }
 
@@ -217,10 +222,12 @@ function showBlocked(ban) {
 
 let sessionPending = false;
 let sessionTries = 0;
+// Пробуем долго: полчаса на связи — это не повод показывать экран входа.
+const SESSION_TRIES_MAX = 480;
 
 async function bringBackSession() {
   if (!sessionPending || !navigator.onLine) return;
-  if (sessionTries > 12) return;
+  if (sessionTries > SESSION_TRIES_MAX) return;
   sessionTries += 1;
   let user = null;
   try {

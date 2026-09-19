@@ -67,6 +67,9 @@ export function createRemote(base) {
     wipePosts(userId) {
       return call('POST', `/api/admin/users/${userId}/wipe`);
     },
+    adminDeleteUser(userId) {
+      return call('POST', `/api/admin/users/${userId}/erase`);
+    },
     resetLook(userId) {
       return call('POST', `/api/admin/users/${userId}/reset-look`);
     },
