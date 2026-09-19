@@ -396,10 +396,12 @@ export async function createSupabase(url, key) {
         const copy = keptSession();
         if (!copy?.refresh_token || leaving) return null;
         try {
-          const { data, error } = await sb.auth.setSession({
-            access_token: copy.access_token || '',
-            refresh_token: copy.refresh_token
-          });
+          // Со ключом на месте просто возвращаем сессию в библиотеку. Если ключа
+          // доступа нет (или он уже старый), обновляем вход по ключу обновления —
+          // так тоже можно войти.
+          const { data, error } = copy.access_token
+            ? await sb.auth.setSession({ access_token: copy.access_token, refresh_token: copy.refresh_token })
+            : await sb.auth.refreshSession({ refresh_token: copy.refresh_token });
           if (error) throw error;
           const fresh = data?.session || null;
           const who = fresh?.user?.id || data?.user?.id || null;
