@@ -89,7 +89,10 @@ export async function openGiftShop(target, done) {
   const grid = body.querySelector('[data-grid]');
   const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][new Date().getMonth()];
   types
-    .filter((kind) => !kind.season || kind.season === season)
+    // Подарки за событие (например, розочка лета) выдаются кнопкой в ленте.
+    // В магазине им делать нечего: цена ноль, и раньше их можно было «купить» себе
+    // бесплатно и без ограничений.
+    .filter((kind) => kind.price > 0 && (!kind.season || kind.season === season))
     .forEach((kind) => {
     const card = el(`<button class="gift-card ${purse < kind.price ? 'poor' : ''}">
       ${kind.season ? '<span class="gift-season">сезон</span>' : ''}
@@ -99,6 +102,7 @@ export async function openGiftShop(target, done) {
       <span class="row" style="gap:4px;margin-top:5px;color:var(--accent)">${icon('coin', 13)}<span class="tiny strong">${kind.price}</span></span>
     </button>`);
     card.onclick = async () => {
+      if (!(kind.price > 0)) return toast('Такой подарок не продаётся', 'err');
       const have = state.user?.coins || 0;
       if (have < kind.price) return toast(`Не хватает ${kind.price - have} монет`, 'err');
 

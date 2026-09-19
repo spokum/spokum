@@ -2167,6 +2167,7 @@ begin
   if not public.viewer_can_write() then raise exception 'Сейчас нельзя'; end if;
   select * into kind from public.gift_types where id = gift;
   if kind.id is null then raise exception 'Подарок не найден'; end if;
+  if coalesce(kind.price, 0) <= 0 then raise exception 'Этот подарок не продаётся: его выдают за событие'; end if;
   if not exists (select 1 from public.profiles where id = target) then raise exception 'Человек не найден'; end if;
 
   select coins into purse from public.profiles where id = auth.uid();
@@ -2224,6 +2225,7 @@ begin
   if row.sold then raise exception 'Подарок уже продан'; end if;
 
   select * into kind from public.gift_types where id = row.type_id;
+  if coalesce(kind.price, 0) <= 0 then raise exception 'Такой подарок продать нельзя'; end if;
   pay := greatest(1, (kind.price * 70) / 100);
   fee := greatest(1, (kind.price * 15) / 100);
 
@@ -3385,10 +3387,12 @@ declare
   mine integer;
   all_kinds integer;
 begin
+  -- Считаем только подарки нынешнего сезона: летняя розочка не должна мешать
+  -- собрать осеннюю коллекцию (иначе «1 из 5» висело бы вечно).
   select count(distinct g.type_id) into mine
     from public.gifts g join public.gift_types t on t.id = g.type_id
-   where g.owner_id = auth.uid() and not g.sold and t.season <> '';
-  select count(*) into all_kinds from public.gift_types where season <> '';
+   where g.owner_id = auth.uid() and not g.sold and t.season = now_season;
+  select count(*) into all_kinds from public.gift_types where season = now_season;
   return jsonb_build_object(
     'season', now_season,
     'title', case now_season

@@ -1510,6 +1510,7 @@ export const local = {
     notMuted(user);
     const kind = giftType(typeId);
     if (!kind) fail('Подарок не найден');
+    if (!(kind.price > 0)) fail('Такой подарок не продаётся: его выдают за событие');
     const target = state.users.find((u) => u.id === userId);
     if (!target) fail('Человек не найден');
     if ((user.coins || 0) < kind.price) fail(`Не хватает монет: нужно ${kind.price}, у вас ${user.coins || 0}`);
@@ -1552,6 +1553,7 @@ export const local = {
     if (gift.ownerId !== user.id) fail('Это не ваш подарок');
     if (gift.sold) fail('Подарок уже продан');
     const kind = giftType(gift.typeId) || { price: 0, title: '' };
+    if (!(kind.price > 0)) fail('Такой подарок продать нельзя');
     const paid = Math.max(1, Math.floor((kind.price * 70) / 100));
     const fee = Math.max(1, Math.floor((kind.price * 15) / 100));
     gift.sold = true;
