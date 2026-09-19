@@ -1262,6 +1262,9 @@ export async function createSupabase(url, key) {
     // Удаление аккаунта целиком: записи, переписка, файлы и сам вход.
     async adminDeleteUser(userId) {
       const { data, error } = await sb.rpc('admin_delete_user', { target: userId });
+      if (error && /could not find the function|does not exist/i.test(error.message || '')) {
+        throw new Error('В базе ещё нет этой функции. Прогоните на сервере 06-shema.sh и попробуйте снова');
+      }
       guard(error);
       return data || { ok: true };
     },
