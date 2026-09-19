@@ -101,11 +101,12 @@ HEALTH=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$HOST/aut
 REST=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
   -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
   "https://$HOST/rest/v1/profiles?select=id&limit=1" 2>/dev/null)
-echo "  вход:  ${HEALTH:-нет ответа}"
-echo "  база:  ${REST:-нет ответа}"
-case "$HEALTH$REST" in
+echo "  вход:  ${HEALTH:-нет ответа} (годится 200, 401 и 404 — значит служба жива)"
+echo "  база:  ${REST:-нет ответа} (ждём 200)"
+case "$REST" in
+  200) green "вход и база отвечают" ;;
   *000*|"") warn "снаружи пока тишина, проверьте ещё раз через минуту" ;;
-  *) green "оба адреса отвечают" ;;
+  *) warn "база ответила кодом $REST, посмотрите docker compose ps" ;;
 esac
 
 echo "  настройки в работе:"
