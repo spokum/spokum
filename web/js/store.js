@@ -13,6 +13,8 @@ export const api = new Proxy({}, {
   }
 });
 
+let starting = null;
+
 export async function initBackend() {
   const params = new URLSearchParams(location.search);
   if (window.SPOKUM_FORCE_LOCAL || params.get('local') === '1') return backend.mode;
@@ -21,15 +23,24 @@ export async function initBackend() {
   const apiBase = window.SPOKUM_API || params.get('api') || '';
 
   if (supabaseUrl && supabaseKey) {
-    try {
-      const { createSupabase } = await import('./backend/supabase.js');
-      backend = await createSupabase(supabaseUrl, supabaseKey);
-      return backend.mode;
-    } catch (error) {
-      console.error(error);
-      backend = local;
-      return 'local';
-    }
+    if (backend.mode === 'supabase') return backend.mode;
+    // Повторный запуск не должен поднимать вторую копию службы входа:
+    // две копии одновременно обновляют один и тот же ключ, и вход вылетает.
+    if (starting) return starting;
+    starting = (async () => {
+      try {
+        const { createSupabase } = await import('./backend/supabase.js');
+        const made = await createSupabase(supabaseUrl, supabaseKey);
+        if (backend.mode !== 'supabase') backend = made;
+        return backend.mode;
+      } catch (error) {
+        console.error(error);
+        return backend.mode;
+      } finally {
+        starting = null;
+      }
+    })();
+    return starting;
   }
 
   if (apiBase) backend = createRemote(apiBase);

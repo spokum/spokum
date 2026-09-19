@@ -44,14 +44,22 @@ function tryLogo(url) {
 
 function networkBar() {
   let bar = document.querySelector('.offline-bar');
-  if (navigator.onLine) {
+  const broken = !navigator.onLine || sessionPending;
+  if (!broken) {
     bar?.remove();
     delete document.documentElement.dataset.offline;
     return;
   }
+  const text = navigator.onLine
+    ? 'Связь с базой пропала. Показываем сохранённое'
+    : 'Нет интернета. Показываем сохранённое';
   document.documentElement.dataset.offline = 'yes';
-  if (bar) return;
-  bar = el(`<div class="offline-bar">${icon('warn', 15)}<span>Нет интернета. Показываем сохранённое</span></div>`);
+  if (bar) {
+    const span = bar.querySelector('span');
+    if (span) span.textContent = text;
+    return;
+  }
+  bar = el(`<div class="offline-bar">${icon('warn', 15)}<span>${text}</span></div>`);
   document.body.appendChild(bar);
 }
 
@@ -60,6 +68,7 @@ function watchNetwork() {
     state.online = navigator.onLine;
     networkBar();
     emit('network', state.online);
+    if (navigator.onLine) bringBackSession();
     if (navigator.onLine && state.tab) openTab(state.tab);
   };
   window.addEventListener('online', update);
@@ -206,6 +215,75 @@ function showBlocked(ban) {
   api.logout?.().catch(() => {});
 }
 
+let sessionPending = false;
+let sessionTries = 0;
+
+async function bringBackSession() {
+  if (!sessionPending || !navigator.onLine) return;
+  if (sessionTries > 12) return;
+  sessionTries += 1;
+  let user = null;
+  try {
+    ({ user } = await api.me());
+  } catch {
+    return;
+  }
+  if (user) {
+    sessionPending = false;
+    networkBar();
+    setUser(user);
+    announcePremium(user);
+    openTab(state.tab || 'feed');
+    return;
+  }
+  if (api.sessionGone?.() !== false) {
+    sessionPending = false;
+    networkBar();
+    setUser(null);
+    renderAuth(root, start);
+  }
+}
+
+const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+
+// Настроена ли внешняя база. Если да, «нет входа» можно говорить только тогда,
+// когда она точно ответила: на медленной связи и через VPN она поднимается долго,
+// и раньше приложение успевало показать экран входа просто из-за задержки.
+function remoteConfigured() {
+  if (window.SPOKUM_FORCE_LOCAL) return false;
+  const params = new URLSearchParams(location.search);
+  if (params.get('local') === '1') return false;
+  return !!(window.SPOKUM_SUPABASE_URL || window.SPOKUM_API || params.get('supabaseUrl') || params.get('api'));
+}
+
+function showNoBase() {
+  root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div>
+    <div class="col" style="gap:10px;max-width:340px;text-align:center;align-items:center">
+      <div class="strong" style="font-size:17px">База не отвечает</div>
+      <p class="small muted" style="margin:0;line-height:1.55">Интернет есть, а сервер молчит. Аккаунт на месте, вход не потерян — просто нажмите «Повторить».</p>
+      <button class="btn btn-primary" data-retry style="width:100%">Повторить</button>
+    </div></div>`;
+  root.querySelector('[data-retry]').onclick = () => location.reload();
+}
+
+async function waitForBackend() {
+  const ready = initBackend();
+  const slow = await Promise.race([
+    ready.then(() => 'ready'),
+    new Promise((done) => setTimeout(() => done('slow'), 12000))
+  ]).catch(() => 'slow');
+  if (slow === 'slow' && remoteConfigured() && navigator.onLine) {
+    const note = root.querySelector('.auth-logo');
+    if (note) note.insertAdjacentHTML('afterend', '<div class="tiny muted" style="text-align:center;margin-top:10px">Связываемся с базой, это может занять минуту</div>');
+    await Promise.race([ready.catch(() => {}), pause(20000)]);
+  }
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (!remoteConfigured() || !navigator.onLine || api.mode !== 'local') break;
+    await pause(1500 * attempt);
+    await Promise.race([initBackend().catch(() => {}), pause(15000)]);
+  }
+}
+
 async function boot() {
   applyAppearance(null);
   await detectLogo();
@@ -219,20 +297,42 @@ async function boot() {
     module.applyComfort?.();
     setInterval(() => module.applyNight?.(), 300000);
   }).catch(() => {});
-  await Promise.race([
-    initBackend(),
-    new Promise((done) => setTimeout(done, 12000))
-  ]);
+  await waitForBackend();
+  if (remoteConfigured() && navigator.onLine && api.mode === 'local') {
+    showNoBase();
+    return;
+  }
+  let fromCache = false;
   try {
     const { user } = await api.me();
-    setUser(user || api.cachedUser?.() || null);
+    if (user) setUser(user);
+    else {
+      const kept = api.cachedUser?.() || null;
+      setUser(kept);
+      fromCache = !!kept;
+    }
   } catch {
-    setUser(api.cachedUser?.() || null);
+    const kept = api.cachedUser?.() || null;
+    setUser(kept);
+    fromCache = !!kept;
   }
   if (await checkDevice(false)) return;
   if (!state.user) {
     renderAuth(root, start);
     return;
+  }
+  if (fromCache) {
+    // Профиль взяли из сохранённого, а вход ещё не подтверждён. Если сервер
+    // прямо отказал во входе — показываем экран входа, если виновата связь,
+    // пускаем в приложение и дожидаемся сети: из аккаунта не выбрасываем.
+    if (api.sessionGone?.() === true) {
+      setUser(null);
+      renderAuth(root, start);
+      return;
+    }
+    sessionPending = true;
+    networkBar();
+    setInterval(bringBackSession, 30000);
   }
   const { pinOn, askPin } = await import('./pin.js');
   if (pinOn()) {
