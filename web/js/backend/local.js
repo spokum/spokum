@@ -967,9 +967,16 @@ export const local = {
     state.members = (state.members || []).filter((m) => !chats.has(m.chatId));
     state.messages = (state.messages || []).filter((m) => !chats.has(m.chatId));
 
-    // Всё остальное, где встречается его номер: лайки, ответы, подписки, подарки,
-    // жалобы, наказания, монеты, заметки, истории, игры — подчистую.
-    const mentions = (row) => Object.values(row || {}).includes(userId);
+    // Всё остальное, где встречается его номер или его записи: лайки, ответы,
+    // подписки, подарки, жалобы, наказания, монеты, заметки, истории, игры.
+    const goneIds = new Set([userId]);
+    state.posts.forEach((p) => {
+      if (p.authorId === userId) goneIds.add(p.id);
+    });
+    state.comments.forEach((c) => {
+      if (c.authorId === userId || goneIds.has(c.postId)) goneIds.add(c.id);
+    });
+    const mentions = (row) => Object.values(row || {}).some((value) => goneIds.has(value));
     for (const key of Object.keys(state)) {
       if (!Array.isArray(state[key]) || key === 'users') continue;
       state[key] = state[key].filter((row) => !mentions(row));
