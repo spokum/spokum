@@ -147,9 +147,9 @@ REST=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
 echo "  вход:  ${HEALTH:-нет ответа} (годится 200, 401 и 404 — значит служба жива)"
 echo "  база:  ${REST:-нет ответа} (ждём 200)"
 case "$REST" in
-  200) green "вход и база отвечают" ;;
+  200) green "база и вход отвечают" ;;
   *000*|"") warn "снаружи пока тишина, проверьте ещё раз через минуту" ;;
-  *) warn "база ответила кодом $REST, посмотрите docker compose ps" ;;
+  *) warn "ответ кодом $REST — посмотрите docker compose ps и docker compose logs --tail=50 auth" ;;
 esac
 
 echo "  настройки в работе:"
