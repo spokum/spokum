@@ -207,6 +207,16 @@ services:
       - caddy-data:/data
       - caddy-config:/config
 
+  auth:
+    environment:
+      # Вход не должен сгорать из-за обрыва связи, смены сети, VPN или повторного
+      # запроса ключа: ключ обновляют и приложение, и фоновая служба уведомлений.
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "false"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ALLOW_REUSE: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "31536000"
+      # Людей за одним адресом может быть много: мобильный оператор, VPN.
+      GOTRUE_RATE_LIMIT_TOKEN_REFRESH: "900"
+
 volumes:
   caddy-data:
   caddy-config:

@@ -143,70 +143,9 @@ export async function render(root) {
   renderComposer(root);
   renderFilters(root);
   loadAnnouncements(root);
-  loadEvent(root);
+  loadSeason(root);
   await load(root);
 }
-
-function eventLeft(endsAt) {
-  const gap = Number(endsAt) - Date.now();
-  if (gap <= 0) return 'событие закончилось';
-  const days = Math.floor(gap / 86400000);
-  const hours = Math.floor(gap / 3600000);
-  const minutes = Math.floor((gap % 3600000) / 60000);
-  if (days >= 1) return `ещё ${plural(days, 'день', 'дня', 'дней')}`;
-  if (hours >= 1) return `ещё ${plural(hours, 'час', 'часа', 'часов')}`;
-  return `ещё ${plural(minutes, 'минута', 'минуты', 'минут')}`;
-}
-
-async function loadEvent(root) {
-  const host = root.querySelector('[data-event]');
-  if (!host || !api.eventState || !state.user) return;
-  let info = null;
-  try {
-    info = await cached('event', 600000, () => api.eventState());
-  } catch {
-    host.innerHTML = '';
-    return;
-  }
-  if (!info || !info.active) {
-    host.innerHTML = '';
-    loadSeason(root);
-    return;
-  }
-  const draw = () => {
-    host.innerHTML = `<div class="card event-card">
-      <div class="event-top">
-        <div class="event-rose">${icon('rose', 26)}</div>
-        <div class="grow" style="min-width:0">
-          <div class="strong small">${esc(info.title || 'Последний день лета')}</div>
-          <div class="tiny muted" style="margin-top:4px;line-height:1.5">${esc(info.text || '')}</div>
-          <div class="tiny muted" style="margin-top:6px">${esc(eventLeft(info.endsAt))}</div>
-        </div>
-      </div>
-      ${info.claimed
-        ? `<span class="pill event-done">${icon('check', 14)}<span>Розочка уже ваша</span></span>`
-        : '<button class="btn btn-primary" data-claim style="width:100%">Забрать розочку</button>'}
-    </div>`;
-    host.querySelector('[data-claim]')?.addEventListener('click', async (event) => {
-      const button = event.currentTarget;
-      button.disabled = true;
-      try {
-        await api.eventClaim();
-        info.claimed = true;
-        forget('event');
-        forget('season');
-        import('../app.js').then(({ refreshUser }) => refreshUser?.()).catch(() => {});
-        toast('Розочка на память и 100 монет ваши');
-        draw();
-      } catch (error) {
-        button.disabled = false;
-        toast(error.message || 'Не получилось');
-      }
-    });
-  };
-  draw();
-}
-
 
 const SEASON_HIDE = 'spokum.season.hidden';
 

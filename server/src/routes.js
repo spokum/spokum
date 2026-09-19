@@ -708,6 +708,19 @@ export const routes = [
     return { user: publicUser(getUserById(id)) };
   }],
 
+  ['POST', '/api/admin/users/:id/erase', (ctx) => {
+    const admin = requireAdmin(ctx);
+    const id = int(ctx.params.id, { min: 1 });
+    const target = getUserById(id);
+    if (target.username === BOOTSTRAP_ADMIN) throw new HttpError(403, 'Основателя удалить нельзя');
+    if (target.id === admin.id) throw new HttpError(403, 'Себя удалить нельзя');
+    const posts = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE author_id = ?').get(id).n;
+    const messages = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE user_id = ?').get(id).n;
+    audit(admin.id, 'admin.delete_user', { id, username: target.username, posts, messages });
+    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    return { ok: true, id, username: target.username, displayName: target.display_name, posts, messages };
+  }],
+
   ['GET', '/api/admin/actions', (ctx) => {
     requireAdmin(ctx);
     const rows = db.prepare('SELECT * FROM punishments ORDER BY id DESC LIMIT 150').all();

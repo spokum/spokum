@@ -170,6 +170,8 @@ export async function createSupabase(url, key) {
 
   let uid = null;
   let channel = null;
+  let leaving = false;
+  let restoring = null;
 
   const requireUid = () => {
     if (!uid) throw new Error('Нужен вход');
@@ -350,19 +352,158 @@ export async function createSupabase(url, key) {
     return null;
   };
 
+  // Своя копия входа. Живёт отдельно от хранилища библиотеки: если она потеряет
+  // сессию из-за обрыва связи, вход поднимется отсюда, а не превратится в выход.
+  const KEEP_SESSION = 'spokum.session.keep';
+  let sessionLost = false;
+
+  const keepSession = (session) => {
+    if (!session?.refresh_token) return;
+    try {
+      localStorage.setItem(KEEP_SESSION, JSON.stringify({
+        at: Date.now(),
+        id: session.user?.id || uid || '',
+        access_token: session.access_token || '',
+        refresh_token: session.refresh_token
+      }));
+      sessionLost = false;
+    } catch {}
+    // Держим приложение в курсе: у него своя копия ключа для фоновой проверки
+    // уведомлений. Если она отстанет, приложение и веб начнут обновлять вход
+    // по разным ключам — и вход сгорит.
+    if (window.SpokumHost?.setAuth) {
+      try {
+        window.SpokumHost.setAuth(url, key, session.refresh_token);
+      } catch {}
+    }
+  };
+
+  const keptSession = () => {
+    try {
+      const row = JSON.parse(localStorage.getItem(KEEP_SESSION) || 'null');
+      if (row?.refresh_token) return row;
+    } catch {}
+    return null;
+  };
+
+  const dropKeptSession = () => {
+    try {
+      localStorage.removeItem(KEEP_SESSION);
+    } catch {}
+  };
+
+  const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+
+  // Библиотека входа молча стирает сессию, если обновление ключа вернуло отказ
+  // («ключ уже использован», «сессия не найдена»). Снаружи это выглядит как
+  // выход из аккаунта. Поэтому всегда проверяем, живёт ли сессия на самом деле.
+  const liveSession = async () => {
+    try {
+      const { data } = await withTimeout(sb.auth.getSession(), 6000, { data: null });
+      return data?.session || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const restoreSession = async (tries = 3) => {
+    if (restoring) return restoring;
+    if (leaving || !navigator.onLine) return null;
+    const kept = keptSession();
+    if (!kept?.refresh_token) return null;
+    restoring = (async () => {
+      // Может быть, вход уже поднят — другой вкладкой того же устройства или
+      // самой библиотекой. Тогда ничего не обновляем: лишний запрос нового ключа
+      // как раз и приводит к «ключ уже использован».
+      const already = await liveSession();
+      if (already?.user?.id) {
+        uid = already.user.id;
+        keepSession(already);
+        sessionLost = false;
+        listen();
+        return uid;
+      }
+      for (let attempt = 1; attempt <= tries; attempt += 1) {
+        const copy = keptSession();
+        if (!copy?.refresh_token || leaving) return null;
+        try {
+          // Со ключом на месте просто возвращаем сессию в библиотеку. Если ключа
+          // доступа нет (или он уже старый), обновляем вход по ключу обновления —
+          // так тоже можно войти.
+          const { data, error } = copy.access_token
+            ? await sb.auth.setSession({ access_token: copy.access_token, refresh_token: copy.refresh_token })
+            : await sb.auth.refreshSession({ refresh_token: copy.refresh_token });
+          if (error) throw error;
+          const fresh = data?.session || null;
+          const who = fresh?.user?.id || data?.user?.id || null;
+          if (who) {
+            uid = who;
+            if (fresh) keepSession(fresh);
+            sessionLost = false;
+            listen();
+            return who;
+          }
+          return null;
+        } catch (error) {
+          const text = error?.message || '';
+          // «Ключ уже использован» — не повод выходить из аккаунта. Так бывает,
+          // когда в приложении вход обновляют сразу два места (веб и фоновая
+          // служба уведомлений). Сервер в этом случае отдаёт рабочий ключ, так
+          // что просто пробуем ещё раз, а не показываем экран входа.
+          if (/already used/i.test(text)) {
+            if (attempt < tries) await pause(2000 * attempt);
+            continue;
+          }
+          // Токен отозван или испорчен — повторять бессмысленно, нужен обычный вход.
+          if (/invalid|revoked|expired|not found|no such/i.test(text)) {
+            sessionLost = true;
+            return null;
+          }
+          // Это была связь, а не вход. Ждём и пробуем ещё.
+          if (attempt < tries) await pause(1500 * attempt);
+        }
+      }
+      return null;
+    })().finally(() => {
+      restoring = null;
+    });
+    return restoring;
+  };
+
   const sessionResult = await withTimeout(sb.auth.getSession(), 8000, { data: { session: null } });
-  uid = sessionResult?.data?.session?.user?.id || storedSession() || null;
+  const firstSession = sessionResult?.data?.session || null;
+  if (firstSession) keepSession(firstSession);
+  uid = firstSession?.user?.id || storedSession() || null;
+  if (!uid) uid = await restoreSession(navigator.onLine ? 2 : 0);
   if (uid) listen();
 
   sb.auth.onAuthStateChange((event, session) => {
-    if (!session && event !== 'SIGNED_OUT' && event !== 'USER_DELETED') return;
-    uid = session?.user?.id || null;
-    if (!uid) {
-      try {
-        localStorage.removeItem(KEEP_KEY);
-      } catch {}
+    if (session) {
+      keepSession(session);
+      uid = session.user?.id || uid;
+      listen();
+      return;
     }
-    if (uid) listen();
+    if (event === 'INITIAL_SESSION' && !session) {
+      // Библиотека не нашла вход. Он может лежать в нашей копии — поднимаем его,
+      // а профиль из кеша не трогаем, чтобы человека не выбрасывало на экран входа.
+      // Через setTimeout: внутри этого обработчика запросы к службе входа
+      // нельзя начинать сразу, библиотека держит замок и всё повиснет.
+      if (!leaving && !uid) setTimeout(() => restoreSession(2).catch(() => {}), 0);
+      return;
+    }
+    if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      if (leaving) {
+        uid = null;
+        return;
+      }
+      // Библиотека может считать сессию потерянной из-за обрыва связи или
+      // повтора запроса. Пробуем поднять её сами, а выходим только если человек
+      // сам нажал «Выйти» или сервер отказал во входе.
+      uid = null;
+      setTimeout(() => restoreSession(3).catch(() => {}), 0);
+      return;
+    }
   });
 
   return {
@@ -403,10 +544,14 @@ export async function createSupabase(url, key) {
       } catch {}
       const { data, error } = await sb.auth.signInWithPassword({ email: emailFor(handle), password });
       guard(error);
+      leaving = false;
       uid = data.user.id;
+      if (data.session) keepSession(data.session);
       const user = await profileById(uid);
       if (user.bannedUntil > Date.now()) {
-        await sb.auth.signOut();
+        leaving = true;
+        await sb.auth.signOut({ scope: 'local' });
+        dropKeptSession();
         throw new Error('Аккаунт заблокирован');
       }
       listen();
@@ -414,8 +559,20 @@ export async function createSupabase(url, key) {
     },
 
     async logout() {
-      await sb.auth.signOut();
+      leaving = true;
+      // Локальный выход: закрываем сессию только на этом устройстве. Раньше
+      // выход стирал сессии на всех устройствах сразу, и у людей «вылетал»
+      // аккаунт на телефоне после выхода с компьютера.
+      try {
+        await sb.auth.signOut({ scope: 'local' });
+      } catch {
+        await sb.auth.signOut().catch(() => {});
+      }
       uid = null;
+      dropKeptSession();
+      try {
+        localStorage.removeItem(KEEP_KEY);
+      } catch {}
       if (channel) {
         sb.removeChannel(channel);
         channel = null;
@@ -428,7 +585,14 @@ export async function createSupabase(url, key) {
       return kept && (!uid || kept.id === uid) ? kept : null;
     },
 
+    // true, когда сервер прямо отказал во входе (токен отозван), а не когда
+    // просто пропала связь. Экран входа показываем только в этом случае.
+    sessionGone() {
+      return sessionLost && !uid;
+    },
+
     async me() {
+      if (!uid && !leaving) await restoreSession(2);
       if (!uid) return { user: null };
       sb.rpc('touch_presence').catch(() => {});
       try {
@@ -528,8 +692,12 @@ export async function createSupabase(url, key) {
     },
 
     async dropSession() {
-      await sb.auth.signOut();
-      uid = null;
+      // Закрываем входы на других устройствах, но остаёмся в аккаунте здесь.
+      try {
+        await sb.auth.signOut({ scope: 'others' });
+      } catch {
+        return { ok: false };
+      }
       return { ok: true };
     },
 
@@ -556,6 +724,7 @@ export async function createSupabase(url, key) {
     async saveSession() {
       const { data } = await sb.auth.getSession();
       if (!data?.session) return null;
+      keepSession(data.session);
       return {
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token
@@ -569,12 +738,17 @@ export async function createSupabase(url, key) {
         refresh_token: tokens.refresh_token
       });
       guard(error);
+      leaving = false;
       uid = data?.user?.id || data?.session?.user?.id || null;
       if (!uid) throw new Error('Сессия устарела, войдите заново');
+      if (data?.session) keepSession(data.session);
+      sessionLost = false;
       listen();
       const user = await profileById(uid);
       if (user?.bannedUntil > Date.now()) {
-        await sb.auth.signOut();
+        leaving = true;
+        await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+        dropKeptSession();
         uid = null;
         throw new Error('Аккаунт заблокирован');
       }
@@ -1083,6 +1257,13 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('admin_wipe_posts', { target: userId });
       guard(error);
       return { removed: data || 0 };
+    },
+
+    // Удаление аккаунта целиком: записи, переписка, файлы и сам вход.
+    async adminDeleteUser(userId) {
+      const { data, error } = await sb.rpc('admin_delete_user', { target: userId });
+      guard(error);
+      return data || { ok: true };
     },
 
     async resetLook(userId) {

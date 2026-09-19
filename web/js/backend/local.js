@@ -192,8 +192,7 @@ export const GIFT_TYPES = [
   { id: 'acorn', title: 'Жёлудь', price: 70, rarity: 'common', art: 'acorn', hue: 32, season: 'autumn' },
   { id: 'maple', title: 'Кленовый лист', price: 130, rarity: 'rare', art: 'maple', hue: 18, season: 'autumn' },
   { id: 'plaid', title: 'Тёплый плед', price: 260, rarity: 'epic', art: 'plaid', hue: 8, season: 'autumn' },
-  { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' },
-  { id: 'rose', title: 'Розочка лета', price: 0, rarity: 'legend', art: 'rose', hue: 340, season: 'summer' }
+  { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' }
 ];
 
 const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];
@@ -207,6 +206,13 @@ function pickAlias() {
 function ensureNewTables() {
   for (const key of ['coinLog', 'gifts', 'campRooms', 'campSeats', 'campMessages', 'letters', 'capsules', 'mentorships', 'mentorReviews']) {
     if (!Array.isArray(state[key])) state[key] = [];
+  }
+  // Розочка лета удалена из продукта: убираем её у всех, у кого она успела появиться.
+  if (state.rosePurged !== '2026-09') {
+    state.gifts = state.gifts.filter((row) => row.typeId !== 'rose');
+    state.eventClaims = [];
+    state.rosePurged = '2026-09';
+    save();
   }
 }
 
@@ -942,6 +948,54 @@ export const local = {
     return { removed: before - state.posts.length };
   },
 
+  // Полное удаление аккаунта: записи, переписка, витрина, вход и входы.
+  async adminDeleteUser(userId) {
+    const admin = needAdmin();
+    const target = state.users.find((u) => u.id === userId);
+    if (!target) fail('Пользователь не найден');
+    if (target.username === 'vanya8') fail('Основателя удалить нельзя');
+    if (target.id === admin.id) fail('Себя удалить нельзя');
+
+    const counters = {
+      posts: state.posts.filter((p) => p.authorId === userId).length,
+      messages: (state.messages || []).filter((m) => m.userId === userId).length
+    };
+
+    // Чаты, где человек был, уходят целиком: вместе с участниками и перепиской.
+    const chats = new Set((state.members || []).filter((m) => m.userId === userId).map((m) => m.chatId));
+    state.chats = (state.chats || []).filter((c) => !chats.has(c.id));
+    state.members = (state.members || []).filter((m) => !chats.has(m.chatId));
+    state.messages = (state.messages || []).filter((m) => !chats.has(m.chatId));
+
+    // Всё остальное, где встречается его номер или его записи: лайки, ответы,
+    // подписки, подарки, жалобы, наказания, монеты, заметки, истории, игры.
+    const goneIds = new Set([userId]);
+    state.posts.forEach((p) => {
+      if (p.authorId === userId) goneIds.add(p.id);
+    });
+    state.comments.forEach((c) => {
+      if (c.authorId === userId || goneIds.has(c.postId)) goneIds.add(c.id);
+    });
+    const mentions = (row) => Object.values(row || {}).some((value) => goneIds.has(value));
+    for (const key of Object.keys(state)) {
+      if (!Array.isArray(state[key]) || key === 'users') continue;
+      state[key] = state[key].filter((row) => !mentions(row));
+    }
+    state.gifts = state.gifts.filter((g) => g.ownerId !== userId && g.fromId !== userId);
+    state.users = state.users.filter((u) => u.id !== userId);
+    state.sessions = state.sessions.filter((s) => s.userId !== userId);
+    state.deviceUsers = (state.deviceUsers || []).filter((row) => row.userId !== userId);
+
+    log(admin.id, 'admin.delete_user', {
+      id: userId,
+      username: target.username,
+      displayName: target.displayName,
+      ...counters
+    });
+    save();
+    return { ok: true, username: target.username, displayName: target.displayName, ...counters };
+  },
+
   async resetLook(userId) {
     const user = need();
     if (!user.isAdmin) fail('Нет прав');
@@ -1510,6 +1564,7 @@ export const local = {
     notMuted(user);
     const kind = giftType(typeId);
     if (!kind) fail('Подарок не найден');
+    if (!(kind.price > 0)) fail('Такой подарок не продаётся: его выдают за событие');
     const target = state.users.find((u) => u.id === userId);
     if (!target) fail('Человек не найден');
     if ((user.coins || 0) < kind.price) fail(`Не хватает монет: нужно ${kind.price}, у вас ${user.coins || 0}`);
@@ -1552,6 +1607,7 @@ export const local = {
     if (gift.ownerId !== user.id) fail('Это не ваш подарок');
     if (gift.sold) fail('Подарок уже продан');
     const kind = giftType(gift.typeId) || { price: 0, title: '' };
+    if (!(kind.price > 0)) fail('Такой подарок продать нельзя');
     const paid = Math.max(1, Math.floor((kind.price * 70) / 100));
     const fee = Math.max(1, Math.floor((kind.price * 15) / 100));
     gift.sold = true;
@@ -2087,35 +2143,14 @@ export const local = {
     };
   },
 
+  // Ивент «Последний день лета» и розочка удалены из продукта. Функции отвечают
+  // так же, как сервер, — старые версии приложения не должны сыпать ошибками.
   async eventState() {
-    const ends = Date.parse('2026-09-02T00:00:00+03:00');
-    if (Date.now() >= ends) return { active: false, id: 'summer26' };
-    const user = me();
-    if (!Array.isArray(state.eventClaims)) state.eventClaims = [];
-    return {
-      active: true,
-      id: 'summer26',
-      title: 'Последний день лета',
-      text: 'Лето уходит. Заберите розочку на память, она останется у вас навсегда. Ивент идёт до конца первого сентября',
-      endsAt: ends,
-      claimed: !!user && state.eventClaims.some((row) => row.eventId === 'summer26' && row.userId === user.id)
-    };
+    return { active: false, id: 'summer26' };
   },
 
   async eventClaim() {
-    ensureNewTables();
-    if (!Array.isArray(state.eventClaims)) state.eventClaims = [];
-    const user = need();
-    const ends = Date.parse('2026-09-02T00:00:00+03:00');
-    if (Date.now() >= ends) fail('Событие закончилось');
-    if (state.eventClaims.some((row) => row.eventId === 'summer26' && row.userId === user.id)) fail('Розочка уже ваша');
-    state.eventClaims.push({ eventId: 'summer26', userId: user.id, claimedAt: Date.now() });
-    const gift = { id: state.gifts.length + 1, typeId: 'rose', ownerId: user.id, fromId: null, note: 'В память о лете 2026', pinned: true, sold: false, createdAt: Date.now() };
-    state.gifts.push(gift);
-    user.coins = (user.coins || 0) + 100;
-    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: 100, reason: 'Подарок к концу лета', createdAt: Date.now() });
-    save();
-    return { ok: true, gift: gift.id };
+    fail('Событие закончилось');
   },
 
   async deleteComment(id, reason) {
@@ -2636,8 +2671,7 @@ export const local = {
       friends: (state.follows || []).filter((f) => f.followerId === user.id).length,
       gifts: (state.gifts || []).filter((g) => g.ownerId === user.id && !g.sold).length,
       streak: user.bestStreak || 0,
-      coins: user.coins || 0,
-      rose: (state.eventClaims || []).some((row) => row.eventId === 'summer26' && row.userId === user.id)
+      coins: user.coins || 0
     };
   },
 

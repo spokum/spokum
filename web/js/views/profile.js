@@ -398,11 +398,11 @@ async function openRecap(period = 'month') {
       <button class="btn btn-sm grow ${period === 'summer' ? 'btn-primary' : ''}" data-period="summer">Лето</button>
     </div>
     <div class="card recap-head">
-      <div class="event-rose">${icon(period === 'month' ? 'chart' : 'rose', 26)}</div>
+      <div class="event-rose">${icon('chart', 26)}</div>
       <div class="grow"><div class="strong">${period === 'month' ? esc(monthName) + ' 2026' : 'Лето 2026'}</div>
       <div class="tiny muted" style="margin-top:3px">${period === 'month'
         ? 'Что накопилось с первого числа'
-        : (data.rose ? 'Розочка лета осталась у вас на память' : 'Розочку лета вы не забрали')}</div></div>
+        : 'Что накопилось за три летних месяца'}</div></div>
     </div>
     <div class="card">
       ${rows.map(([glyph, label, value]) => `<div class="row between" style="padding:7px 0">
