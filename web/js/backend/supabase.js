@@ -407,15 +407,24 @@ export async function createSupabase(url, key) {
   };
 
   const restoreSession = async (tries = 3) => {
+    console.log('[restore] start, tries=', tries, 'restoring=', !!restoring, 'leaving=', leaving, 'online=', navigator.onLine);
     if (restoring) return restoring;
-    if (leaving || !navigator.onLine) return null;
+    if (leaving || !navigator.onLine) {
+      console.log('[restore] early return: leaving or offline');
+      return null;
+    }
     const kept = keptSession();
-    if (!kept?.refresh_token) return null;
+    console.log('[restore] keptSession:', { hasKept: !!kept, hasRefresh: !!kept?.refresh_token, hasAccess: !!kept?.access_token });
+    if (!kept?.refresh_token) {
+      console.log('[restore] no refresh_token in kept session');
+      return null;
+    }
     restoring = (async () => {
       // Может быть, вход уже поднят — другой вкладкой того же устройства или
       // самой библиотекой. Тогда ничего не обновляем: лишний запрос нового ключа
       // как раз и приводит к «ключ уже использован».
       const already = await liveSession();
+      console.log('[restore] liveSession:', { hasUser: !!already?.user, userId: already?.user?.id });
       if (already?.user?.id) {
         uid = already.user.id;
         keepSession(already);
@@ -425,17 +434,22 @@ export async function createSupabase(url, key) {
       }
       for (let attempt = 1; attempt <= tries; attempt += 1) {
         const copy = keptSession();
-        if (!copy?.refresh_token || leaving) return null;
+        if (!copy?.refresh_token || leaving) {
+          console.log('[restore] attempt', attempt, 'no refresh_token or leaving');
+          return null;
+        }
         try {
-          // Со ключом на месте просто возвращаем сессию в библиотеку. Если ключа
-          // доступа нет (или он уже старый), обновляем вход по ключу обновления —
-          // так тоже можно войти.
+          console.log('[restore] attempt', attempt, 'trying', copy.access_token ? 'setSession' : 'refreshSession');
           const { data, error } = copy.access_token
             ? await sb.auth.setSession({ access_token: copy.access_token, refresh_token: copy.refresh_token })
             : await sb.auth.refreshSession({ refresh_token: copy.refresh_token });
-          if (error) throw error;
+          if (error) {
+            console.log('[restore] attempt', attempt, 'error:', error.message);
+            throw error;
+          }
           const fresh = data?.session || null;
           const who = fresh?.user?.id || data?.user?.id || null;
+          console.log('[restore] attempt', attempt, 'success, who=', who);
           if (who) {
             uid = who;
             if (fresh) keepSession(fresh);
@@ -446,23 +460,19 @@ export async function createSupabase(url, key) {
           return null;
         } catch (error) {
           const text = error?.message || '';
-          // «Ключ уже использован» — не повод выходить из аккаунта. Так бывает,
-          // когда в приложении вход обновляют сразу два места (веб и фоновая
-          // служба уведомлений). Сервер в этом случае отдаёт рабочий ключ, так
-          // что просто пробуем ещё раз, а не показываем экран входа.
+          console.log('[restore] attempt', attempt, 'caught:', text);
           if (/already used/i.test(text)) {
             if (attempt < tries) await pause(2000 * attempt);
             continue;
           }
-          // Токен отозван или испорчен — повторять бессмысленно, нужен обычный вход.
           if (/invalid|revoked|expired|not found|no such/i.test(text)) {
             sessionLost = true;
             return null;
           }
-          // Это была связь, а не вход. Ждём и пробуем ещё.
           if (attempt < tries) await pause(1500 * attempt);
         }
       }
+      console.log('[restore] all attempts exhausted');
       return null;
     })().finally(() => {
       restoring = null;
@@ -608,14 +618,23 @@ export async function createSupabase(url, key) {
     },
 
     async me() {
-      if (!uid && !leaving) await restoreSession(2);
-      if (!uid) return { user: null };
+      console.log('[me] start, uid=', uid, 'leaving=', leaving);
+      if (!uid && !leaving) {
+        const restored = await restoreSession(2);
+        console.log('[me] restoreSession returned:', restored);
+      }
+      if (!uid) {
+        console.log('[me] no uid, returning null user. sessionLost=', sessionLost);
+        return { user: null };
+      }
       sb.rpc('touch_presence').catch(() => {});
       try {
         const user = await profileById(uid);
         if (user) keepProfile(user);
+        console.log('[me] profileById ok:', user?.username);
         return { user };
       } catch (error) {
+        console.log('[me] profileById threw:', error?.message);
         const kept = keptProfile();
         if (kept && kept.id === uid) return { user: kept };
         throw error;
