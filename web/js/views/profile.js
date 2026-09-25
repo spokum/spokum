@@ -491,6 +491,7 @@ export async function render(root) {
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">Бета: за что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-shop>${icon('star', 20)}<div class="grow"><div class="strong small">Купить себе подарок</div><div class="tiny muted">Сразу ляжет на вашу витрину</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
@@ -587,6 +588,10 @@ export async function render(root) {
   body.querySelector('[data-capsule]')?.addEventListener('click', async () => {
     const { openCapsules } = await import('./capsule.js');
     openCapsules();
+  });
+  body.querySelector('[data-gratitude]')?.addEventListener('click', async () => {
+    const { openGratitude } = await import('./gratitude.js');
+    openGratitude();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');
@@ -1237,6 +1242,9 @@ export async function openProfile(username) {
           <button class="btn grow" data-gift>${icon('gift', 17)} Подарить</button>
           <button class="btn grow" data-their-gifts>${icon('star', 17)} Подарки</button>
         </div>
+        ${state.user?.username === 'silver' ? `<div class="row" style="margin-top:8px;gap:8px">
+          <button class="btn grow" data-block style="color:#c98b8b">${icon('ban', 17)} Заблокировать</button>
+        </div>` : ''}
         ${state.user?.isModerator || state.user?.isAdmin ? `<div class="col" style="margin-top:8px;gap:8px">
           <button class="btn" data-info style="width:100%">${icon('device', 17)} Информация о человеке</button>
           <button class="btn" data-punish style="width:100%;color:#c98b8b">${icon('warn', 17)} Наказать</button>
@@ -1323,6 +1331,22 @@ export async function openProfile(username) {
     body.querySelector('[data-punish]')?.addEventListener('click', async () => {
       const { openPunish } = await import('./mod.js');
       openPunish(user, () => openProfile(username));
+    });
+    body.querySelector('[data-block]')?.addEventListener('click', async () => {
+      const ok = await confirmSheet({
+        title: 'Заблокировать пользователя',
+        text: `@${user.username} не сможет писать вам, видеть ваши посты и профиль. В любой момент можно разблокировать в Настройках.`,
+        confirm: 'Заблокировать',
+        danger: true
+      });
+      if (!ok) return;
+      try {
+        await api.blockUser(user.id);
+        toast(`@${user.username} заблокирован`);
+        sheet?.close?.();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
     });
     const noteBox = body.querySelector('[data-note-text]');
     const paintNote = (text) => {

@@ -1082,10 +1082,25 @@ export async function openComments(post, refresh) {
   const body = el(`
     <div class="col">
       <div class="col" data-list style="gap:10px"></div>
+      ${state.user ? `<div class="col" data-reply-bar style="display:none;font-size:12px;color:var(--muted);margin-bottom:4px"><span data-reply-text></span> <button class="btn btn-sm" data-reply-cancel style="padding:2px 8px">отмена</button></div>` : ''}
       ${state.user ? `<div class="row"><input class="input grow" placeholder="Поддержать словом" maxlength="500"><button class="btn btn-primary btn-icon" data-send>${icon('send', 17)}</button></div>` : '<div class="small muted">Войдите, чтобы отвечать</div>'}
     </div>`);
   const sheet = openSheet(plural(post.comments, 'ответ', 'ответа', 'ответов'), body, { onClose: () => refresh?.(post) });
   const list = body.querySelector('[data-list]');
+  const replyBar = body.querySelector('[data-reply-bar]');
+  const replyText = body.querySelector('[data-reply-text]');
+  let replyTarget = null;
+
+  const setReply = (comment) => {
+    replyTarget = comment;
+    if (comment) {
+      replyBar.style.display = 'flex';
+      replyText.textContent = `Ответ для @${comment.author?.username || 'пользователя'}`;
+    } else {
+      replyBar.style.display = 'none';
+    }
+  };
+  body.querySelector('[data-reply-cancel]')?.addEventListener('click', () => setReply(null));
 
   const draw = async () => {
     const { comments } = await api.listComments(post.id);
@@ -1099,15 +1114,24 @@ export async function openComments(post, refresh) {
     comments.forEach((c) => {
       const mine = state.user && c.author?.id === state.user.id;
       const host = state.user && post.author?.id === state.user.id;
+      const replyBadge = c.replyToUsername
+        ? `<span class="tiny muted" style="margin-left:4px">↩ @${esc(c.replyToUsername)}</span>`
+        : '';
       const row = el(`<div class="row" style="align-items:flex-start">${avatar(c.author, 40)}
         <div class="grow" style="min-width:0">
-          <div class="row" style="gap:6px"><span class="strong small truncate">${esc(c.author.displayName)}</span>${badges(c.author)}<span class="tiny muted">${esc(timeAgo(c.createdAt))}</span></div>
+          <div class="row" style="gap:6px"><span class="strong small truncate">${esc(c.author.displayName)}</span>${badges(c.author)}<span class="tiny muted">${esc(timeAgo(c.createdAt))}</span>${replyBadge}</div>
           ${c.removed
             ? `<div class="tiny" style="margin-top:3px;color:#c98b8b">Снят модератором${c.removedReason ? ': ' + esc(c.removedReason) : ''}</div>`
             : `<div class="small" style="margin-top:2px;line-height:1.45;word-break:break-word">${esc(c.text)}</div>`}
+          ${state.user && !c.removed ? `<button class="btn btn-sm" data-reply style="padding:2px 10px;margin-top:4px;font-size:12px">Ответить</button>` : ''}
         </div>
         ${c.removed ? '' : `<button class="btn btn-icon btn-ghost" data-comment-menu style="width:30px;height:30px;flex:none">${icon('more', 15)}</button>`}
       </div>`);
+
+      row.querySelector('[data-reply]')?.addEventListener('click', () => {
+        setReply(c);
+        body.querySelector('input')?.focus();
+      });
 
       row.querySelector('[data-comment-menu]')?.addEventListener('click', () => {
         const menu = el(`<div class="col" style="gap:6px">
@@ -1171,8 +1195,10 @@ export async function openComments(post, refresh) {
     input.disabled = true;
     if (button) button.disabled = true;
     try {
-      await api.addComment(post.id, text);
+      const replyTo = replyTarget ? { commentId: replyTarget.id, userId: replyTarget.author?.id } : null;
+      await api.addComment(post.id, text, replyTo);
       post.comments += 1;
+      setReply(null);
       await draw();
     } catch (error) {
       input.value = text;

@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v63';
+const VERSION = 'spokum-v64';
 const CORE = [
   './',
   './index.html',
@@ -30,6 +30,7 @@ const CORE = [
   './js/views/stories.js',
   './js/views/safe.js',
   './js/views/journal.js',
+  './js/views/gratitude.js',
   './vendor/supabase.js',
   './fonts/inter-cyrillic-400.woff2',
   './fonts/inter-cyrillic-500.woff2',
@@ -62,14 +63,43 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
 
+  // config.js — всегда свежий (там ключи API)
   if (sameOrigin && url.pathname.endsWith('/config.js')) {
     event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(request)));
     return;
   }
+
+  // ─── БАГФИКС: вылет аккаунта при перезагрузке ───
+  // Navigation (перезагрузка, переход) — NETWORK-FIRST.
+  // Раньше был cache-first: браузер получал устаревший index.html,
+  // supabase.js при загрузке не находил свежей сессии → SIGNED_OUT → вылет.
+  // Теперь всегда тянем свежий HTML, кэш — только fallback для offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' })
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(VERSION).then((cache) => cache.put('./index.html', copy)).catch(() => {});
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(VERSION);
+          const fallback = await cache.match('./index.html');
+          return fallback || new Response('offline', { status: 503 });
+        })
+    );
+    return;
+  }
+
   const isModuleCdn = url.hostname === 'esm.sh' || url.hostname === 'cdn.jsdelivr.net';
 
+  // Cross-origin запросы (api.spokum.ru: auth, rest, storage, realtime) —
+  // не перехватываем вообще. Кэширование ответов /auth/v1/token ломает сессию:
+  // refresh_token инвалидируется после первого использования, а кэш вернул бы
+  // старый ответ → следующий запрос → 401 → SIGNED_OUT → вылет.
   if (!sameOrigin && !isModuleCdn) return;
 
+  // Статика того же origin — stale-while-revalidate
   event.respondWith(
     caches.open(VERSION).then(async (cache) => {
       const cached = await cache.match(request, { ignoreSearch: sameOrigin });
@@ -90,10 +120,6 @@ self.addEventListener('fetch', (event) => {
       const response = await network;
       if (response) return response;
 
-      if (request.mode === 'navigate') {
-        const fallback = await cache.match('./index.html');
-        if (fallback) return fallback;
-      }
       return new Response('', { status: 504, statusText: 'offline' });
     })
   );

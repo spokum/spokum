@@ -34,7 +34,10 @@ const THEMES = [
   ['noir', 'Нуар', 'linear-gradient(140deg,#0b0b0c,#1e1e21)', '#ececed', false],
   ['plum', 'Слива', 'linear-gradient(140deg,#17101a,#35234a)', '#ead9f0', true],
   ['copper', 'Медь', 'linear-gradient(140deg,#16110d,#3d2a1b)', '#f0dfd0', true],
-  ['sakura', 'Сакура', 'linear-gradient(140deg,#fffbfc,#f6dde3)', '#3d2730', true]
+  ['sakura', 'Сакура', 'linear-gradient(140deg,#fffbfc,#f6dde3)', '#3d2730', true],
+  ['frost', 'Мороз', 'linear-gradient(140deg,#0d1620,#1c3346)', '#dceaf2', false],
+  ['pomegranate', 'Гранат', 'linear-gradient(140deg,#1c0a10,#4a1525)', '#f0d4d8', false],
+  ['lavender', 'Лаванда', 'linear-gradient(140deg,#1a1426,#3a2c5c)', '#e0d6f0', false]
 ];
 
 const ACCENTS = [
@@ -173,6 +176,7 @@ export async function render(root) {
       <button class="list-item" data-pin>${icon('lock', 18)}<div class="grow"><div class="small strong">Код на вход</div><div class="tiny muted" data-pin-state>Спрашивать код при запуске</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
+      ${state.user?.username === 'silver' ? `<button class="list-item" data-blocks>${icon('ban', 18)}<div class="grow"><div class="small strong">Чёрный список</div><div class="tiny muted" data-blocks-state>Заблокированные пользователи</div></div>${icon('forward', 15)}</button>` : ''}
     </div>
 
     <div class="card appear">
@@ -430,6 +434,7 @@ export async function render(root) {
 
   root.querySelector('[data-password]').onclick = openPassword;
   root.querySelector('[data-sessions]').onclick = openSessions;
+  root.querySelector('[data-blocks]')?.addEventListener('click', () => openBlocks(() => render(root)));
   root.querySelector('[data-reset]')?.addEventListener('click', async () => {
     if (!(await confirmSheet({ title: 'Стереть данные', text: 'Все локальные аккаунты, посты и чаты будут удалены', confirm: 'Стереть', danger: true }))) return;
     const { local } = await import('../backend/local.js');
@@ -803,4 +808,46 @@ function shortAgent(agent) {
   if (/Chrome/i.test(agent)) return 'Chrome';
   if (/Safari/i.test(agent)) return 'Safari';
   return agent.slice(0, 28);
+}
+
+
+async function openBlocks(done) {
+  const body = el('<div class="col" style="gap:8px"></div>');
+  const sheet = openSheet('Чёрный список', body);
+
+  const draw = async () => {
+    body.innerHTML = `<div class="card"><p class="muted center">Загрузка...</p></div>`;
+    try {
+      const { blocks } = await api.myBlocks();
+      if (!blocks.length) {
+        body.innerHTML = emptyState('ban', 'Список пуст', 'Заблокированные пользователи появятся здесь');
+        return;
+      }
+      body.innerHTML = blocks.map((u) => `
+        <div class="card list-item" style="padding:10px">
+          ${avatar(u, 40)}
+          <div class="grow" style="text-align:left">
+            <div class="strong small">${esc(u.display_name || u.username)}</div>
+            <div class="tiny muted">@${esc(u.username)}</div>
+          </div>
+          <button class="btn btn-sm" data-unblock="${u.id}">${icon('restore', 15)} Разблокировать</button>
+        </div>
+      `).join('');
+      body.querySelectorAll('[data-unblock]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api.unblockUser(btn.dataset.unblock);
+            toast('Разблокирован');
+            draw();
+            done?.();
+          } catch (error) {
+            toast(error.message, 'err');
+          }
+        };
+      });
+    } catch (error) {
+      body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    }
+  };
+  await draw();
 }

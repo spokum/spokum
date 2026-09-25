@@ -5294,6 +5294,214 @@ function chain(canvas, report) {
   });
 }
 
+// ─── НОВЫЕ ИГРЫ ───
+
+// Светлячки: тапать по появляющимся огонькам, пока не погасли
+function fireflies(canvas, report) {
+  return runner(canvas, () => {
+    let state = { flies: [], score: 0, spawn: 0, dist: 0, miss: 0, over: false };
+    const reset = () => { state = { flies: [], score: 0, spawn: 0.5, dist: 0, miss: 0, over: false }; };
+    reset();
+    return {
+      score: () => state.score,
+      bind(bind, canvas) {
+        const tap = (event) => {
+          if (state.over) { reset(); return; }
+          const rect = canvas.getBoundingClientRect();
+          const x = (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
+          const y = (event.touches?.[0]?.clientY ?? event.clientY) - rect.top;
+          for (const f of state.flies) {
+            const dx = (f.x - x / canvas.getBoundingClientRect().width);
+            const dy = (f.y - y / canvas.getBoundingClientRect().height);
+            if (Math.sqrt(dx * dx + dy * dy) < 0.06) {
+              f.caught = true;
+              state.score += 5;
+              return;
+            }
+          }
+        };
+        bind('pointerdown', tap);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.35, 0.9 - state.dist * 0.005);
+          state.flies.push({ x: 0.1 + Math.random() * 0.8, y: 0.15 + Math.random() * 0.7, life: 1.4, caught: false });
+        }
+        state.flies.forEach((f) => { f.life -= dt; });
+        const expired = state.flies.filter((f) => f.life <= 0 && !f.caught);
+        if (expired.length) state.miss += expired.length;
+        state.flies = state.flies.filter((f) => f.life > 0 && !f.caught);
+        if (state.miss >= 7) { state.over = true; report(state.score); }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a1410', '#1a2a22']);
+        // фон-звёзды
+        ctx.fillStyle = 'rgba(255,255,255,.18)';
+        for (let i = 0; i < 30; i++) {
+          const sx = ((i * 173 + state.dist * 8) % w);
+          const sy = ((i * 91) % h);
+          ctx.fillRect(sx, sy, 1.5, 1.5);
+        }
+        // светлячки
+        state.flies.forEach((f) => {
+          const alpha = Math.min(1, f.life);
+          const r = 8 + Math.sin(state.dist * 8 + f.x * 10) * 2;
+          const grd = ctx.createRadialGradient(f.x * w, f.y * h, 0, f.x * w, f.y * h, r * 3);
+          grd.addColorStop(0, `rgba(255,240,150,${alpha})`);
+          grd.addColorStop(0.4, `rgba(255,200,80,${alpha * 0.5})`);
+          grd.addColorStop(1, 'rgba(255,180,40,0)');
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(f.x * w, f.y * h, r * 3, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,255,220,${alpha})`;
+          ctx.beginPath(); ctx.arc(f.x * w, f.y * h, 3, 0, Math.PI * 2); ctx.fill();
+        });
+        hud(ctx, w, [`Очки ${state.score}`, `Промахов ${state.miss}/7`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
+// Град: уклоняться от падающих камней, двигая платформу
+function hail(canvas, report) {
+  return runner(canvas, () => {
+    let state = { x: 0.5, stones: [], score: 0, spawn: 0, dist: 0, over: false };
+    const reset = () => { state = { x: 0.5, stones: [], score: 0, spawn: 0.6, dist: 0, over: false }; };
+    reset();
+    let target = 0.5;
+    return {
+      score: () => state.score,
+      bind(bind, canvas) {
+        bind('pointermove', (event) => {
+          const rect = canvas.getBoundingClientRect();
+          target = ((event.touches?.[0]?.clientX ?? event.clientX) - rect.left) / rect.width;
+          target = Math.max(0.05, Math.min(0.95, target));
+        });
+        bind('pointerdown', (event) => {
+          if (state.over) { reset(); return; }
+          const rect = canvas.getBoundingClientRect();
+          target = (event.clientX - rect.left) / rect.width;
+        });
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.x += (target - state.x) * Math.min(1, dt * 12);
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.18, 0.65 - state.dist * 0.006);
+          state.stones.push({ x: Math.random(), y: -0.05, v: 0.4 + Math.random() * 0.3 + state.dist * 0.003, r: 0.025 + Math.random() * 0.02 });
+        }
+        state.stones.forEach((s) => { s.y += s.v * dt; });
+        state.stones = state.stones.filter((s) => {
+          if (s.y > 1.05) { state.score += 1; return false; }
+          const dx = s.x - state.x;
+          const dy = s.y - 0.9;
+          if (Math.sqrt(dx * dx + dy * dy) < s.r + 0.04) { state.over = true; report(state.score); }
+          return true;
+        });
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#151d23', '#283a45']);
+        // камни
+        state.stones.forEach((s) => {
+          ctx.fillStyle = '#8a9aa5';
+          ctx.beginPath();
+          ctx.arc(s.x * w, s.y * h, s.r * w, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.2)';
+          ctx.beginPath();
+          ctx.arc(s.x * w - s.r * w * 0.3, s.y * h - s.r * w * 0.3, s.r * w * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        // платформа
+        ctx.fillStyle = '#dde8ef';
+        ctx.beginPath();
+        ctx.roundRect(state.x * w - 24, h * 0.9 - 8, 48, 14, 7);
+        ctx.fill();
+        hud(ctx, w, [`Очки ${state.score}`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
+// Реакция: тапать по загорающимся кругам, чем дольше — тем быстрее
+function reaction(canvas, report) {
+  return runner(canvas, () => {
+    let state = { target: null, score: 0, miss: 0, dist: 0, over: false, spawn: 0 };
+    const reset = () => { state = { target: null, score: 0, miss: 0, dist: 0, over: false, spawn: 0.3 }; };
+    reset();
+    return {
+      score: () => state.score,
+      bind(bind, canvas) {
+        const tap = (event) => {
+          if (state.over) { reset(); return; }
+          if (!state.target) return;
+          const rect = canvas.getBoundingClientRect();
+          const x = (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
+          const y = (event.touches?.[0]?.clientY ?? event.clientY) - rect.top;
+          const dx = (state.target.x - x / rect.width);
+          const dy = (state.target.y - y / rect.height);
+          if (Math.sqrt(dx * dx + dy * dy) < state.target.r + 0.04) {
+            state.score += 1;
+            state.target = null;
+          } else {
+            state.miss += 1;
+          }
+        };
+        bind('pointerdown', tap);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        if (!state.target) {
+          state.spawn -= dt;
+          if (state.spawn <= 0) {
+            state.target = {
+              x: 0.15 + Math.random() * 0.7,
+              y: 0.2 + Math.random() * 0.6,
+              r: 0.06,
+              life: Math.max(0.55, 1.4 - state.dist * 0.008)
+            };
+          }
+        } else {
+          state.target.life -= dt;
+          if (state.target.life <= 0) {
+            state.target = null;
+            state.miss += 1;
+            state.spawn = Math.max(0.1, 0.4 - state.dist * 0.003);
+          }
+        }
+        if (state.miss >= 5) { state.over = true; report(state.score); }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#161025', '#2c1d4a']);
+        if (state.target) {
+          const t = state.target;
+          const r = t.r * w * (0.8 + Math.sin(state.dist * 12) * 0.1);
+          const alpha = Math.min(1, t.life * 2);
+          const grd = ctx.createRadialGradient(t.x * w, t.y * h, 0, t.x * w, t.y * h, r);
+          grd.addColorStop(0, `rgba(180,255,200,${alpha})`);
+          grd.addColorStop(1, `rgba(80,200,140,${alpha * 0.4})`);
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+          ctx.beginPath(); ctx.arc(t.x * w, t.y * h, r * 0.4, 0, Math.PI * 2); ctx.fill();
+        }
+        hud(ctx, w, [`Очки ${state.score}`, `Промахов ${state.miss}/5`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -5513,5 +5721,26 @@ export const GAMES = [
     desc: 'Собирать одинаковые',
     tint: ['#10121c', '#262d4d'],
     mount: chain
+  },
+  {
+    id: 'fireflies',
+    title: 'Светлячки',
+    desc: 'Лови огоньки, пока не погасли',
+    tint: ['#0a1410', '#1a2a22'],
+    mount: fireflies
+  },
+  {
+    id: 'hail',
+    title: 'Град',
+    desc: 'Уворачивайся от падающих камней',
+    tint: ['#151d23', '#283a45'],
+    mount: hail
+  },
+  {
+    id: 'reaction',
+    title: 'Реакция',
+    desc: 'Тапай по кругам, пока не промахнулся',
+    tint: ['#161025', '#2c1d4a'],
+    mount: reaction
   }
 ];

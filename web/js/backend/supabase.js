@@ -497,11 +497,20 @@ export async function createSupabase(url, key) {
         uid = null;
         return;
       }
-      // Библиотека может считать сессию потерянной из-за обрыва связи или
-      // повтора запроса. Пробуем поднять её сами, а выходим только если человек
-      // сам нажал «Выйти» или сервер отказал во входе.
-      uid = null;
-      setTimeout(() => restoreSession(3).catch(() => {}), 0);
+      // ─── БАГФИКС: вылет аккаунта при перезагрузке/обрыве связи ───
+      // Раньше здесь сразу было `uid = null`, и приложение мгновенно теряло
+      // пользователя, даже если restoreSession ещё не успел отработать.
+      // Теперь НЕ сбрасываем uid мгновенно: даём restoreSession шанс.
+      // Сбросим только если восстановление реально не удалось.
+      setTimeout(async () => {
+        const restored = await restoreSession(3).catch(() => null);
+        // restoreSession возвращает uid при успехе, null при провале.
+        // Если удалось — uid уже обновлён внутри. Если нет — сбрасываем.
+        if (!restored && !leaving) {
+          uid = null;
+          sessionLost = true;
+        }
+      }, 0);
       return;
     }
   });
@@ -1032,9 +1041,9 @@ export async function createSupabase(url, key) {
     async listComments(id) {
       const grab = (columns) =>
         sb.from('comments').select(columns).eq('post_id', id).order('id', { ascending: true }).limit(200);
-      let { data, error } = await grab(`id, body, created_at, removed, removed_reason, removed_auto, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`);
+      let { data, error } = await grab(`id, body, created_at, removed, removed_reason, removed_auto, reply_to_id, reply_to_user, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS}), replyTo:profiles!comments_reply_to_user_fkey(username, display_name)`);
       if (missingColumn(error)) {
-        ({ data, error } = await grab(`id, body, created_at, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`));
+        ({ data, error } = await grab(`id, body, created_at, removed, removed_reason, removed_auto, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`));
       }
       guard(error);
       return {
@@ -1045,12 +1054,14 @@ export async function createSupabase(url, key) {
           removed: !!row.removed,
           removedReason: row.removed_reason || '',
           removedAuto: !!row.removed_auto,
-          author: shapeProfile(row.author)
+          author: shapeProfile(row.author),
+          replyToId: row.reply_to_id || null,
+          replyToUsername: row.replyTo?.username || null
         }))
       };
     },
 
-    async addComment(id, text) {
+    async addComment(id, text, replyTo) {
       const me = requireUid();
       const body = String(text || '').trim().slice(0, 500);
       if (!body) throw new Error('Пустой комментарий');
@@ -1063,7 +1074,12 @@ export async function createSupabase(url, key) {
         .gt('created_at', new Date(Date.now() - 10000).toISOString())
         .limit(1);
       if (!recent.data?.length) {
-        const { error } = await sb.from('comments').insert({ post_id: id, author_id: me, body });
+        const payload = { post_id: id, author_id: me, body };
+        if (replyTo && typeof replyTo === 'object') {
+          if (replyTo.commentId) payload.reply_to_id = replyTo.commentId;
+          if (replyTo.userId) payload.reply_to_user = replyTo.userId;
+        }
+        const { error } = await sb.from('comments').insert(payload);
         guard(error);
       }
       const { data } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
@@ -2186,6 +2202,51 @@ export async function createSupabase(url, key) {
         if (!current || current.score < row.score) best.set(row.profile.id, { ...shapeProfile(row.profile), score: row.score });
       }
       return { leaderboard: [...best.values()].sort((a, b) => b.score - a.score).slice(0, 20) };
+    },
+
+    // ─── НОВОЕ: Стена благодарности ───
+    async gratitudeAdd(body, anonymous = false) {
+      const { data, error } = await sb.rpc('gratitude_add', { p_body: body, p_anonymous: anonymous });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async gratitudeList(limit = 30, offset = 0) {
+      const { data, error } = await sb.rpc('gratitude_list', { p_limit: limit, p_offset: offset });
+      guard(error);
+      return { entries: data || [] };
+    },
+
+    // ─── НОВОЕ: Чёрный список ───
+    async blockUser(targetId) {
+      const { data, error } = await sb.rpc('block_user', { p_target: targetId });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async unblockUser(targetId) {
+      const { data, error } = await sb.rpc('unblock_user', { p_target: targetId });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async myBlocks() {
+      const { data, error } = await sb.rpc('my_blocks');
+      guard(error);
+      return { blocks: data || [] };
+    },
+
+    async amIBlocked(targetId) {
+      const { data, error } = await sb.rpc('am_i_blocked', { p_target: targetId });
+      guard(error);
+      return { blocked: !!data };
+    },
+
+    // ─── НОВОЕ: Кастомные темы (премиум) ───
+    async saveCustomTheme(theme) {
+      const { data, error } = await sb.rpc('save_custom_theme', { p_theme: theme });
+      guard(error);
+      return data || { ok: true };
     }
   };
 }
