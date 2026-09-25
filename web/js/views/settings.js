@@ -873,8 +873,8 @@ async function openPromo(done) {
     <div class="col" style="gap:10px">
       <p class="tiny muted" style="line-height:1.5">Введите промокод, чтобы получить монеты или премиум-подписку.</p>
       <div class="row" style="gap:8px">
-        <input class="input grow" data-code placeholder="Например, WELCOME2026" maxlength="32" style="text-transform:uppercase">
-        <button class="btn btn-primary" data-redeem>${icon('gift', 16)} Активировать</button>
+        <input class="input grow" data-code placeholder="Например, WELCOME2026" maxlength="32" style="text-transform:uppercase" autocomplete="off">
+        <button type="button" class="btn btn-primary" data-redeem>${icon('gift', 16)} Активировать</button>
       </div>
       <div data-result></div>
     </div>
@@ -884,7 +884,8 @@ async function openPromo(done) {
   const redeem = body.querySelector('[data-redeem]');
   const result = body.querySelector('[data-result]');
 
-  const submit = async () => {
+  const submit = async (event) => {
+    event?.preventDefault?.();
     const c = code.value.trim().toUpperCase();
     if (!c) { toast('Введите код', 'err'); return; }
     redeem.disabled = true;
@@ -914,7 +915,7 @@ async function openPromo(done) {
     }
   };
 
-  redeem.onclick = submit;
-  code.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
-  code.focus();
+  redeem.addEventListener('click', submit);
+  code.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e); } });
+  setTimeout(() => code.focus(), 100);
 }
