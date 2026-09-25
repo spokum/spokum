@@ -3,10 +3,16 @@ import { el, esc, timeAgo, fullDate, debounce, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, promptSheet, emptyState } from '../ui.js';
 import { openProfile } from './profile.js';
+import { RANKS } from '../store.js';
 
 const TABS = [
   ['stats', 'Аналитика'],
+  ['health', 'Здоровье'],
   ['users', 'Люди'],
+  ['team', 'Модераторы'],
+  ['content', 'Контент'],
+  ['announce', 'Эфир'],
+  ['guard', 'Автофильтр'],
   ['actions', 'Наказания'],
   ['audit', 'Журнал']
 ];
@@ -51,7 +57,12 @@ export async function openAdmin() {
     body.innerHTML = '<div class="card" style="height:140px;opacity:.35"></div>';
     try {
       if (active === 'stats') await drawStats(body);
+      if (active === 'health') await drawHealth(body);
       if (active === 'users') await drawUsers(body);
+      if (active === 'team') await drawTeam(body);
+      if (active === 'content') await drawContent(body);
+      if (active === 'announce') await drawAnnounce(body);
+      if (active === 'guard') await drawGuard(body);
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
     } catch (error) {
@@ -61,6 +72,311 @@ export async function openAdmin() {
 
   drawTabs();
   draw();
+}
+
+
+
+const GUARD_KINDS = [
+  ['insult', 'Оскорбление'],
+  ['threat', 'Угроза'],
+  ['spam', 'Спам'],
+  ['link', 'Ссылки']
+];
+
+async function drawGuard(body) {
+  const paint = async () => {
+    body.innerHTML = '<div class="card" style="height:140px;opacity:.35"></div>';
+    const [cfg, stats, words] = await Promise.all([api.guardConfig(), api.guardStats(), api.guardWords()]);
+    const rows = words.words || [];
+    body.innerHTML = `
+      <div class="card" style="padding:14px">
+        <div class="row" style="gap:8px">
+          <span style="flex:0 0 auto;opacity:.6">${icon('shield', 18)}</span>
+          <div class="grow" style="min-width:0">
+            <div class="strong small">Автофильтр</div>
+            <div class="tiny muted">Разбирает записи сам, без внешних сервисов</div>
+          </div>
+          <button class="btn btn-sm ${cfg.live ? 'btn-danger' : ''}" data-live>${cfg.live ? 'Выключить' : 'Включить'}</button>
+        </div>
+        <div class="stat-grid" style="margin-top:12px">
+          <div class="stat"><div class="v">${stats.week_hidden || 0}</div><div class="k">скрыто за неделю</div></div>
+          <div class="stat"><div class="v">${stats.week_undone || 0}</div><div class="k">вернули</div></div>
+          <div class="stat"><div class="v">${stats.miss || 0}%</div><div class="k">ошибок</div></div>
+        </div>
+        ${(stats.miss || 0) > 25 ? '<div class="tiny muted" style="margin-top:10px;line-height:1.5">Возвращают слишком часто. Поднимите порог, чтобы фильтр стал мягче</div>' : ''}
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="strong small" style="margin-bottom:10px">Строгость</div>
+        <div class="row" style="gap:10px">
+          <div class="grow tiny">Прятать при весе</div>
+          <button class="btn btn-icon btn-ghost btn-sm" data-less>${icon('minus', 16)}</button>
+          <span class="strong" style="min-width:26px;text-align:center">${cfg.hide_at}</span>
+          <button class="btn btn-icon btn-ghost btn-sm" data-more>${icon('plus', 16)}</button>
+        </div>
+        <div class="tiny muted" style="margin-top:6px;line-height:1.5">Одно оскорбление весит три, обращение на «ты» добавляет два, угроза шесть. Чем выше порог, тем мягче фильтр</div>
+        <div class="row" style="gap:10px;margin-top:14px">
+          <div class="grow tiny">Прятать после жалоб</div>
+          <button class="btn btn-icon btn-ghost btn-sm" data-mass-less>${icon('minus', 16)}</button>
+          <span class="strong" style="min-width:26px;text-align:center">${cfg.mass_at}</span>
+          <button class="btn btn-icon btn-ghost btn-sm" data-mass-more>${icon('plus', 16)}</button>
+        </div>
+        <div class="col" style="gap:0;margin-top:12px">
+          <label class="row between" style="padding:8px 0"><span class="small">Ссылки с новых аккаунтов</span><input type="checkbox" data-links ${cfg.watch_links ? 'checked' : ''}></label>
+          <label class="row between" style="padding:8px 0"><span class="small">Сплошные заглавные</span><input type="checkbox" data-caps ${cfg.watch_caps ? 'checked' : ''}></label>
+          <label class="row between" style="padding:8px 0"><span class="small">Повторы и частые публикации</span><input type="checkbox" data-flood ${cfg.watch_flood ? 'checked' : ''}></label>
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="strong small" style="margin-bottom:4px">Проверить текст</div>
+        <div class="tiny muted" style="margin-bottom:10px">Напишите что-нибудь и посмотрите, что решит фильтр. Запись никуда не уйдёт</div>
+        <textarea class="input" data-try rows="2" placeholder="Например: ты дебил"></textarea>
+        <button class="btn btn-sm" style="margin-top:8px" data-try-go>Проверить</button>
+        <div class="tiny" data-try-out style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="strong small" style="margin-bottom:4px">Словарь · ${rows.length}</div>
+        <div class="tiny muted" style="margin-bottom:10px">Слово пишется в начальной части, окончания подбираются сами. Маты сюда не добавляем, только оскорбления и угрозы</div>
+        <input class="input" data-word placeholder="новое слово">
+        <div class="chips wrap" style="margin-top:8px" data-kinds>
+          ${GUARD_KINDS.map(([key, label], index) => `<button class="chip" aria-pressed="${index === 0}" data-kind="${key}">${label}</button>`).join('')}
+        </div>
+        <button class="btn btn-sm" style="margin-top:8px" data-word-add>${icon('plus', 15)} Добавить</button>
+        <div class="chips wrap" style="margin-top:12px">
+          ${rows.map((row) => `<button class="chip" data-drop="${row.id}" title="убрать">${esc(row.word)} · ${row.weight}</button>`).join('')}
+        </div>
+      </div>`;
+
+    const save = async (patch) => {
+      try {
+        await api.guardConfigSave(patch);
+        paint();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+
+    body.querySelector('[data-live]').onclick = () => save({ live: !cfg.live });
+    body.querySelector('[data-more]').onclick = () => save({ hide_at: cfg.hide_at + 1 });
+    body.querySelector('[data-less]').onclick = () => save({ hide_at: cfg.hide_at - 1 });
+    body.querySelector('[data-mass-more]').onclick = () => save({ mass_at: cfg.mass_at + 1 });
+    body.querySelector('[data-mass-less]').onclick = () => save({ mass_at: cfg.mass_at - 1 });
+    body.querySelector('[data-links]').onchange = (event) => save({ watch_links: event.target.checked });
+    body.querySelector('[data-caps]').onchange = (event) => save({ watch_caps: event.target.checked });
+    body.querySelector('[data-flood]').onchange = (event) => save({ watch_flood: event.target.checked });
+
+    const out = body.querySelector('[data-try-out]');
+    body.querySelector('[data-try-go]').onclick = async () => {
+      const text = body.querySelector('[data-try]').value.trim();
+      if (!text) return;
+      try {
+        const verdict = await api.guardTry(text);
+        out.innerHTML = `
+          <span class="pill ${verdict.hide ? 'bad' : 'good'}">${verdict.hide ? 'спрятал бы' : 'пропустил бы'}</span>
+          <span class="muted" style="margin-left:8px">вес ${verdict.score}</span>
+          ${(verdict.notes || []).length ? `<div class="chips wrap" style="margin-top:8px">${verdict.notes.map((note) => `<span class="chip">${esc(note)}</span>`).join('')}</div>` : ''}`;
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+
+    let kind = 'insult';
+    body.querySelectorAll('[data-kind]').forEach((button) => {
+      button.onclick = () => {
+        kind = button.dataset.kind;
+        body.querySelectorAll('[data-kind]').forEach((other) => other.setAttribute('aria-pressed', String(other === button)));
+      };
+    });
+
+    body.querySelector('[data-word-add]').onclick = async () => {
+      const word = body.querySelector('[data-word]').value.trim();
+      if (!word) return;
+      try {
+        await api.guardWordAdd(word, kind, kind === 'threat' ? 6 : 3);
+        toast('Добавлено', 'ok');
+        paint();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+
+    body.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = async () => {
+        if (!(await confirmSheet('Убрать слово?', button.textContent.trim(), 'Убрать'))) return;
+        try {
+          await api.guardWordDrop(Number(button.dataset.drop));
+          paint();
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  };
+
+  await paint();
+}
+
+async function drawHealth(body) {
+  if (!api.adminHealth) {
+    body.innerHTML = emptyState('warn', 'Раздел недоступен', 'Прогоните схему, и здоровье сети появится');
+    return;
+  }
+  let health = {};
+  try {
+    const answer = await api.adminHealth();
+    health = answer.health || {};
+  } catch (error) {
+    body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
+    return;
+  }
+
+  const alarm = [];
+  if ((health.openReports || 0) > 10) alarm.push(`Жалоб без ответа: ${health.openReports}`);
+  if ((health.reportsDay || 0) > (health.reportsWeek || 0) / 7 * 3 && (health.reportsDay || 0) > 5) {
+    alarm.push('Жалоб за сутки втрое больше обычного');
+  }
+  if ((health.freshUsers || 0) > 40) alarm.push(`Регистраций за сутки: ${health.freshUsers}`);
+  if ((health.crowdedDevices || []).length) alarm.push('Есть телефоны, с которых заходят три и больше аккаунтов');
+  if ((health.openAppeals || 0) > 0) alarm.push(`Споров ждут решения: ${health.openAppeals}`);
+
+  const tile = (label, value, tone) => `<div class="health-tile ${tone || ''}">
+    <div class="v">${value}</div><div class="k">${esc(label)}</div></div>`;
+
+  body.innerHTML = `<div class="col">
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">${icon('spark', 18)}<span class="strong small">Что происходит прямо сейчас</span></div>
+      <div class="health-grid">
+        ${tile('новых людей за сутки', health.freshUsers ?? 0)}
+        ${tile('жалоб за сутки', health.reportsDay ?? 0, (health.reportsDay || 0) > 10 ? 'warn' : '')}
+        ${tile('снято записей', health.removedDay ?? 0)}
+        ${tile('наказаний', health.punishDay ?? 0)}
+        ${tile('жалоб открыто', health.openReports ?? 0, (health.openReports || 0) > 10 ? 'warn' : '')}
+        ${tile('споров открыто', health.openAppeals ?? 0, (health.openAppeals || 0) ? 'warn' : '')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">${icon('warn', 18)}<span class="strong small">На что посмотреть</span></div>
+      ${alarm.length
+        ? alarm.map((line) => `<div class="small" style="padding:5px 0;line-height:1.5">${esc(line)}</div>`).join('')
+        : '<div class="tiny muted">Всё ровно, ничего необычного</div>'}
+    </div>
+
+    ${(health.silentMods || []).length
+      ? `<div class="card">
+          <div class="row" style="margin-bottom:8px">${icon('shield', 18)}<span class="strong small">Молчат неделю</span></div>
+          <div class="chips">${health.silentMods.map((row) => `<span class="chip">@${esc(row.username)}</span>`).join('')}</div>
+          <div class="tiny muted" style="margin-top:8px">Модераторы без единого действия за семь дней. Может, им просто нечего разбирать</div>
+        </div>`
+      : ''}
+
+    ${(health.nightOwls || []).length
+      ? `<div class="card">
+          <div class="row" style="margin-bottom:8px">${icon('moon', 18)}<span class="strong small">Кто не спит</span></div>
+          <div class="chips">${health.nightOwls.map((row) => `<span class="chip">@${esc(row.username)}</span>`).join('')}</div>
+          <div class="tiny muted" style="margin-top:8px">Заходили между двумя и шестью утра. Может, стоит позвать их подышать</div>
+        </div>`
+      : ''}
+
+    ${(health.quietest || []).length
+      ? `<div class="card">
+          <div class="row" style="margin-bottom:8px">${icon('leaf', 18)}<span class="strong small">Давно не заходили</span></div>
+          ${health.quietest.map((row) => `<div class="row between" style="padding:5px 0"><span class="small">@${esc(row.username)}</span><span class="tiny muted">${row.days} дней</span></div>`).join('')}
+        </div>`
+      : ''}
+
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">${icon('heart', 18)}<span class="strong small">Приятные кнопки</span></div>
+      <button class="list-item" data-praise>${icon('gift', 18)}<div class="grow" style="text-align:left"><div class="small strong">Похвалить случайного человека</div><div class="tiny muted">Спасибо и монеты тому, кто ведёт себя тихо и хорошо</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-quiet>${icon('leaf', 18)}<div class="grow" style="text-align:left"><div class="small strong">Объявить пять минут тишины</div><div class="tiny muted">Всем прилетит спокойное объявление на два часа</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-copy>${icon('share', 18)}<div class="grow" style="text-align:left"><div class="small strong">Скопировать сводку</div><div class="tiny muted">Цифры текстом, чтобы кинуть себе в заметки</div></div>${icon('forward', 15)}</button>
+    </div>
+  </div>`;
+
+  body.querySelector('[data-praise]').onclick = () => openPraise(body);
+  body.querySelector('[data-quiet]').onclick = async () => {
+    const { promptSheet } = await import('../ui.js');
+    const text = await promptSheet({
+      title: 'Пять минут тишины',
+      label: 'Что написать, можно оставить пустым',
+      placeholder: 'Отложите телефон и просто подышите',
+      multiline: true,
+      confirm: 'Объявить'
+    });
+    if (text === null) return;
+    try {
+      await api.quietCall(text);
+      toast('Объявление ушло всем');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+  body.querySelector('[data-copy]').onclick = () => {
+    const lines = [
+      `Новых людей за сутки: ${health.freshUsers ?? 0}`,
+      `Жалоб за сутки: ${health.reportsDay ?? 0}, за неделю: ${health.reportsWeek ?? 0}`,
+      `Снято записей за сутки: ${health.removedDay ?? 0}`,
+      `Наказаний за сутки: ${health.punishDay ?? 0}`,
+      `Открытых жалоб: ${health.openReports ?? 0}, споров: ${health.openAppeals ?? 0}`
+    ];
+    navigator.clipboard?.writeText(lines.join('\n'));
+    toast('Скопировано');
+  };
+}
+
+async function openPraise(body) {
+  let who = null;
+  try {
+    const answer = await api.praisePick();
+    who = answer.who;
+  } catch (error) {
+    return toast(error.message, 'err');
+  }
+  if (!who) return toast('Пока некого хвалить', 'err');
+
+  const sheetBody = el(`<div class="col">
+    <div class="row" style="gap:10px">${avatar(who, 46)}
+      <div class="grow"><div class="strong">${esc(who.displayName)}</div>
+      <div class="tiny muted">@${esc(who.username)} · за неделю ${who.posts || 0} записей и ${who.answers || 0} ответов</div></div>
+    </div>
+    <textarea class="textarea" data-note placeholder="За что спасибо, можно не писать"></textarea>
+    <div class="row" style="gap:8px">
+      <button class="btn grow" data-coins="50">50 монет</button>
+      <button class="btn grow btn-primary" data-coins="150">150 монет</button>
+      <button class="btn grow" data-coins="300">300 монет</button>
+    </div>
+    <button class="btn btn-primary" data-send>${icon('heart', 17)} Сказать спасибо</button>
+    <button class="btn btn-ghost" data-again>${icon('refresh', 16)} Другой человек</button>
+  </div>`);
+  const sheet = openSheet('Похвалить', sheetBody);
+  let coins = 150;
+  const paint = () => {
+    sheetBody.querySelectorAll('[data-coins]').forEach((button) => {
+      button.classList.toggle('btn-primary', Number(button.dataset.coins) === coins);
+    });
+  };
+  sheetBody.querySelectorAll('[data-coins]').forEach((button) => {
+    button.onclick = () => {
+      coins = Number(button.dataset.coins);
+      paint();
+    };
+  });
+  sheetBody.querySelector('[data-again]').onclick = () => {
+    sheet.close();
+    openPraise(body);
+  };
+  sheetBody.querySelector('[data-send]').onclick = async () => {
+    try {
+      await api.praise(who.id, sheetBody.querySelector('[data-note]').value, coins);
+      sheet.close();
+      toast(`${who.displayName} получил спасибо и ${coins} монет`);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+  paint();
 }
 
 async function drawStats(body) {
@@ -78,6 +394,11 @@ async function drawStats(body) {
       <div class="stat"><div class="v">${stats.reportsOpen}</div><div class="k">открытых жалоб</div></div>
       <div class="stat"><div class="v">${stats.banned}</div><div class="k">в блокировке</div></div>
       <div class="stat"><div class="v">${stats.moderators}</div><div class="k">модераторов</div></div>
+    </div>
+
+    <div class="row" style="gap:8px;margin-top:12px">
+      <button class="btn grow" data-export>${icon('download', 16)} Выгрузить CSV</button>
+      <button class="btn grow" data-copy-stats>${icon('share', 16)} Скопировать сводку</button>
     </div>
 
     <div class="card appear" style="margin-top:12px">
@@ -104,6 +425,179 @@ async function drawStats(body) {
           : '<div class="small muted">Нет данных</div>'}
       </div>
     </div>`;
+
+  const summary = [
+    `СпокУм, сводка на ${new Date().toLocaleString('ru-RU')}`,
+    `Пользователей: ${stats.users}, онлайн: ${stats.online}, новых за сутки: ${stats.newToday}`,
+    `Постов: ${stats.posts}, сообщений: ${stats.messages}, чатов: ${stats.chats}`,
+    `Открытых жалоб: ${stats.reportsOpen}, в блокировке: ${stats.banned}, модераторов: ${stats.moderators}`
+  ].join('\n');
+
+  body.querySelector('[data-copy-stats]').onclick = () => {
+    navigator.clipboard?.writeText(summary);
+    toast('Сводка скопирована');
+  };
+
+  body.querySelector('[data-export]').onclick = async () => {
+    try {
+      const { users } = await api.adminUsers('');
+      const rows = [['username', 'display_name', 'posts', 'likes', 'admin', 'moderator', 'verified', 'premium', 'banned', 'muted', 'last_seen']];
+      for (const user of users) {
+        rows.push([
+          user.username,
+          user.displayName,
+          user.posts,
+          user.likes,
+          user.isAdmin ? 1 : 0,
+          user.isModerator ? 1 : 0,
+          user.isVerified ? 1 : 0,
+          isPremium(user) ? 1 : 0,
+          user.bannedUntil > Date.now() ? 1 : 0,
+          user.mutedUntil > Date.now() ? 1 : 0,
+          new Date(user.lastSeen || 0).toISOString()
+        ]);
+      }
+      const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+      link.download = `spokum-users-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      toast('Файл готов');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+}
+
+async function drawContent(body) {
+  body.innerHTML = `
+    <div class="chips" data-kinds style="margin-bottom:12px">
+      <button class="chip" data-kind="" aria-pressed="true">Всё</button>
+      <button class="chip" data-kind="video" aria-pressed="false">Видео</button>
+      <button class="chip" data-kind="feed" aria-pressed="false">Лента</button>
+    </div>
+    <div class="col" data-list style="gap:8px"></div>`;
+
+  const list = body.querySelector('[data-list]');
+  const load = async (kind) => {
+    list.innerHTML = '<div class="card" style="height:90px;opacity:.3"></div>';
+    const { posts } = await api.listPosts({ kind: kind || undefined, limit: 30 });
+    if (!posts.length) {
+      list.innerHTML = emptyState('feed', 'Пусто', 'Записей ещё нет');
+      return;
+    }
+    list.innerHTML = posts
+      .map(
+        (post) => `<div class="card" style="padding:12px" data-post="${post.id}">
+          <div class="row" style="gap:8px">${avatar(post.author, 36)}
+            <div class="grow" style="min-width:0">
+              <div class="small strong truncate">${esc(post.author.displayName)}</div>
+              <div class="tiny muted">@${esc(post.author.username)} · ${timeAgo(post.createdAt)} · ${plural(post.likes, 'лайк', 'лайка', 'лайков')}</div>
+            </div>
+            ${post.kind === 'video' ? `<span class="pill">видео</span>` : post.kind === 'album' ? '<span class="pill">альбом</span>' : ''}
+          </div>
+          ${post.text ? `<div class="small" style="margin-top:8px;line-height:1.45">${esc(post.text.slice(0, 180))}</div>` : ''}
+          <div class="row" style="margin-top:10px;gap:8px">
+            <button class="btn btn-sm grow" data-open="${esc(post.author.username)}">${icon('profile', 15)} Автор</button>
+            <button class="btn btn-sm btn-danger grow" data-drop="${post.id}">${icon('trash', 15)} Удалить</button>
+          </div>
+        </div>`
+      )
+      .join('');
+    list.querySelectorAll('[data-open]').forEach((button) => {
+      button.onclick = () => openProfile(button.dataset.open);
+    });
+    list.querySelectorAll('[data-drop]').forEach((button) => {
+      button.onclick = async () => {
+        if (!(await confirmSheet({ title: 'Удалить запись', text: 'Запись исчезнет навсегда', confirm: 'Удалить', danger: true }))) return;
+        try {
+          await api.deletePost(Number(button.dataset.drop) || button.dataset.drop);
+          toast('Удалено');
+          load(kind);
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  };
+
+  body.querySelectorAll('[data-kind]').forEach((chip) => {
+    chip.onclick = () => {
+      body.querySelectorAll('[data-kind]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      load(chip.dataset.kind);
+    };
+  });
+  await load('');
+}
+
+async function drawAnnounce(body) {
+  const { announcements } = await api.listAnnouncements();
+  body.innerHTML = `
+    <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('megaphone', 18)}<span class="strong small">Объявление в ленте</span></div>
+      <input class="input" data-title placeholder="Заголовок" maxlength="80">
+      <textarea class="textarea" data-body placeholder="Текст объявления" maxlength="600" style="margin-top:10px"></textarea>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <select class="select grow" data-tone>
+          <option value="info">Обычное</option>
+          <option value="warn">Важное</option>
+          <option value="bad">Тревожное</option>
+        </select>
+        <select class="select grow" data-days>
+          <option value="1">1 день</option>
+          <option value="3">3 дня</option>
+          <option value="7" selected>Неделя</option>
+          <option value="30">Месяц</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" data-send style="margin-top:12px">${icon('send', 16)} Опубликовать</button>
+    </div>
+    <div class="col" data-live style="gap:8px;margin-top:12px">
+      ${announcements.length
+        ? announcements
+            .map(
+              (row) => `<div class="card announce tone-${esc(row.tone)}" style="margin:0">
+                <div class="row" style="align-items:flex-start;gap:10px">${icon('megaphone', 18)}
+                <div class="grow"><div class="strong small">${esc(row.title)}</div>
+                <div class="tiny muted" style="margin-top:4px;line-height:1.5">${esc(row.body)}</div>
+                <div class="tiny muted" style="margin-top:6px">до ${esc(fullDate(row.until))}</div></div>
+                <button class="btn btn-icon btn-ghost" data-drop="${row.id}">${icon('trash', 16)}</button></div>
+              </div>`
+            )
+            .join('')
+        : emptyState('megaphone', 'Эфир пуст', 'Объявления появятся здесь')}
+    </div>`;
+
+  body.querySelector('[data-send]').onclick = async () => {
+    const title = body.querySelector('[data-title]').value.trim();
+    const text = body.querySelector('[data-body]').value.trim();
+    if (!title || !text) return toast('Заполните заголовок и текст', 'err');
+    try {
+      await api.createAnnouncement({
+        title,
+        body: text,
+        tone: body.querySelector('[data-tone]').value,
+        days: Number(body.querySelector('[data-days]').value)
+      });
+      toast('Объявление в эфире');
+      drawAnnounce(body);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelectorAll('[data-drop]').forEach((button) => {
+    button.onclick = async () => {
+      try {
+        await api.deleteAnnouncement(Number(button.dataset.drop));
+        toast('Снято с эфира');
+        drawAnnounce(body);
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
 }
 
 async function drawUsers(body) {
@@ -156,7 +650,10 @@ function openUserActions(user, refresh) {
         <div class="grow"><div class="row" style="gap:6px"><span class="strong">${esc(user.displayName)}</span>${badges(user)}</div>
         <div class="tiny muted">@${esc(user.username)}${user.strikes ? ` · предупреждений ${user.strikes}/3` : ''}</div>
         ${isPremium(user) ? `<div class="pill warn" style="margin-top:4px;display:inline-block">Премиум до ${esc(new Date(user.premiumUntil).toLocaleDateString('ru-RU'))}</div>` : ''}</div></div>
+      <button class="list-item" data-info>${icon('device', 18)}<span>Информация: устройства и страна</span></button>
       <button class="list-item" data-open>${icon('profile', 18)}<span>Открыть профиль</span></button>
+      <button class="list-item" data-write>${icon('chats', 18)}<span>Написать сообщение</span></button>
+      <button class="list-item" data-copy-id>${icon('share', 18)}<span>Скопировать ID</span></button>
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-flag="isVerified">${icon('verified', 18)}<span>${user.isVerified ? 'Снять галочку' : 'Выдать галочку'}</span></button>
       <button class="list-item" data-flag="isModerator">${icon('shield', 18)}<span>${user.isModerator ? 'Снять щит модератора' : 'Выдать щит модератора'}</span></button>
@@ -164,11 +661,20 @@ function openUserActions(user, refresh) {
       <button class="list-item" data-flag="isAdmin">${icon('star', 18)}<span>${user.isAdmin ? 'Снять админку' : 'Выдать админку'}</span></button>
       <button class="list-item" data-clear>${icon('close', 18)}<span>Снять все статусы</span></button>
       <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-beta>${icon('spark', 18)}<span>${user.isBeta ? 'Убрать из беты' : 'Пустить в бету'}</span></button>
+      <button class="list-item" data-coins>${icon('coin', 18)}<span>Начислить монеты (сейчас ${user.coins || 0})</span></button>
+      <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-premium style="color:#c6b083">${icon('crown', 18)}<span>Выдать СпокУм Премиум</span></button>
       ${isPremium(user) ? `<button class="list-item" data-premium-off>${icon('close', 18)}<span>Забрать премиум</span></button>` : ''}
       <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-rename>${icon('edit', 18)}<span>Сменить отображаемое имя</span></button>
+      <button class="list-item" data-look>${icon('image', 18)}<span>Сбросить оформление</span></button>
+      <button class="list-item" data-wipe style="color:#c98b8b">${icon('trash', 18)}<span>Удалить все записи</span></button>
+      <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-mute style="color:#c6b083">${icon('mute', 18)}<span>${user.mutedUntil > Date.now() ? 'Снять мут' : 'Замутить'}</span></button>
       <button class="list-item" data-ban style="color:#c98b8b">${icon('ban', 18)}<span>${user.bannedUntil > Date.now() ? 'Разблокировать' : 'Заблокировать'}</span></button>
+      <div class="divider" style="margin:6px 0"></div>
+      <button class="list-item" data-erase style="color:#e07a7a">${icon('trash', 18)}<span>Удалить аккаунт навсегда</span></button>
     </div>`);
   const sheet = openSheet('', body);
 
@@ -181,6 +687,38 @@ function openUserActions(user, refresh) {
     } catch (error) {
       toast(error.message, 'err');
     }
+  };
+
+  body.querySelector('[data-beta]').onclick = async () => {
+    try {
+      await api.setBeta(user.id, !user.isBeta);
+      sheet.close();
+      toast(user.isBeta ? 'Убран из беты' : 'Пущен в бету');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-coins]').onclick = async () => {
+    const value = await promptSheet({ title: 'Монеты', label: 'Сколько начислить, можно минус', placeholder: '100', value: '100' });
+    if (!value) return;
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || !amount) return toast('Нужно число', 'err');
+    try {
+      const result = await api.giveCoins(user.id, Math.round(amount));
+      sheet.close();
+      toast(`Теперь монет: ${result.coins}`);
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-info]').onclick = async () => {
+    sheet.close();
+    const { openUserInfo } = await import('./userinfo.js');
+    openUserInfo(user.id);
   };
 
   body.querySelector('[data-open]').onclick = () => {
@@ -256,8 +794,94 @@ function openUserActions(user, refresh) {
     }
   });
 
+  body.querySelector('[data-copy-id]').onclick = () => {
+    navigator.clipboard?.writeText(String(user.id));
+    toast('ID скопирован');
+  };
+
+  body.querySelector('[data-write]').onclick = async () => {
+    sheet.close();
+    try {
+      const { chat } = await api.createChat({ kind: 'dm', members: [user.id] });
+      const { openChat } = await import('./chats.js');
+      openChat(chat.id);
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-rename]').onclick = async () => {
+    sheet.close();
+    const name = await promptSheet({ title: 'Новое имя', label: 'Видно всем', value: user.displayName, placeholder: 'Имя' });
+    if (!name) return;
+    try {
+      await api.renameUser(user.id, name);
+      toast('Имя обновлено');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-look]').onclick = async () => {
+    sheet.close();
+    if (!(await confirmSheet({ title: 'Сбросить оформление', text: 'Аватар, баннер, пины, статус и описание будут очищены', confirm: 'Сбросить', danger: true }))) return;
+    try {
+      await api.resetLook(user.id);
+      toast('Оформление сброшено');
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
+  body.querySelector('[data-wipe]').onclick = async () => {
+    sheet.close();
+    if (!(await confirmSheet({ title: 'Удалить все записи', text: `Все посты и видео ${user.displayName} исчезнут навсегда`, confirm: 'Удалить', danger: true }))) return;
+    try {
+      const { removed } = await api.wipePosts(user.id);
+      toast(`Удалено записей: ${removed}`);
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
+
   body.querySelector('[data-mute]').onclick = () => restrict('mute', user.mutedUntil > Date.now() ? 'unmute' : null);
   body.querySelector('[data-ban]').onclick = () => restrict('ban', user.bannedUntil > Date.now() ? 'unban' : null);
+
+  // Полное удаление: профиль, записи, переписка, подарки и сам вход.
+  // Два подтверждения и ввод @имени — чтобы не удалить человека случайно.
+  body.querySelector('[data-erase]').onclick = async () => {
+    sheet.close();
+    if (!api.adminDeleteUser) {
+      return toast('Обновите базу: прогоните schema.sql заново', 'err');
+    }
+    const sure = await confirmSheet({
+      title: 'Удалить аккаунт навсегда',
+      text: `«${user.displayName}» (@${user.username}) исчезнет целиком: профиль, записи, переписка, подарки и сам вход. Вернуть это будет нельзя.`,
+      confirm: 'Продолжить',
+      danger: true
+    });
+    if (!sure) return;
+    const typed = await promptSheet({
+      title: 'Последний шаг',
+      label: `Чтобы подтвердить, напишите @${user.username} в поле ниже`,
+      placeholder: user.username,
+      confirm: 'Удалить навсегда'
+    });
+    if (!typed) return;
+    if (typed.toLowerCase().replace(/^@/, '').trim() !== String(user.username).toLowerCase()) {
+      return toast('Имя не совпало, ничего не удалено', 'err');
+    }
+    try {
+      const result = await api.adminDeleteUser(user.id);
+      toast(`@${result?.username || user.username} удалён навсегда`);
+      refresh();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 }
 
 export function pickPremiumDays() {
@@ -288,7 +912,73 @@ export function pickPremiumDays() {
   });
 }
 
-export function pickDuration() {
+async function drawTeam(body) {
+  const { team } = await api.modTeam();
+  if (!team.length) {
+    body.innerHTML = emptyState('shield', 'Модераторов нет', 'Выдайте щит на вкладке «Люди»');
+    return;
+  }
+
+  body.innerHTML = `
+    <p class="tiny muted" style="margin:0 0 12px;line-height:1.5">Звание видно всем на профиле модератора. «Заслуживает» считается по разобранным жалобам, снятым записям и наказаниям; два и больше предупреждений сбрасывают предложение до стажёра. Начальника модераторов назначает только админ, автоматически это звание не предлагается.</p>
+    <div class="col" data-list style="gap:8px"></div>`;
+
+  const list = body.querySelector('[data-list]');
+  team.forEach((mod) => {
+    const grown = mod.deserved > mod.rank;
+    const card = el(`<div class="card team-card" style="padding:14px">
+      <div class="team-head">
+        ${avatar(mod, 38)}
+        <span class="strong small">${esc(mod.displayName)}</span>
+        <span class="tiny muted">@${esc(mod.username)}</span>
+        <span class="rank-pill">${icon('shield', 13)}<span>${esc(mod.rankName)}</span></span>
+        ${mod.isAdmin ? '<span class="pill">админ</span>' : ''}
+        ${grown ? `<span class="rank-pill up">${icon('spark', 13)}<span>заслуживает: ${esc(RANKS[mod.deserved])}</span></span>` : ''}
+        ${mod.strikes ? `<span class="pill bad">${mod.strikes} предупр.</span>` : ''}
+      </div>
+      <div class="info-grid" style="margin-top:13px">
+        <div><span class="tiny muted">Жалоб разобрано</span><span class="small strong">${mod.reports}</span></div>
+        <div><span class="tiny muted">Записей снято</span><span class="small strong">${mod.removals}</span></div>
+        <div><span class="tiny muted">Наказаний</span><span class="small strong">${mod.punishments}</span></div>
+        <div><span class="tiny muted">За 30 дней</span><span class="small strong">${mod.recent}</span></div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <button class="btn btn-sm grow" data-rank>${icon('crown', 15)} Звание</button>
+        <button class="btn btn-sm grow" data-open>${icon('profile', 15)} Профиль</button>
+      </div>
+    </div>`);
+
+    card.querySelector('[data-open]').onclick = () => openProfile(mod.username);
+    card.querySelector('[data-rank]').onclick = () => openRankPicker(mod, () => drawTeam(body));
+    list.appendChild(card);
+  });
+}
+
+function openRankPicker(mod, done) {
+  const body = el(`<div class="col" style="gap:6px">
+    <p class="tiny muted" style="margin:0 0 6px;line-height:1.5">Сейчас: ${esc(mod.rankName)}. По работе заслуживает: ${esc(RANKS[mod.deserved])}.</p>
+    ${RANKS.map(
+      (label, index) => `<button class="list-item" data-rank="${index}" ${index === mod.rank ? 'style="color:var(--accent)"' : ''}>${icon('shield', 18)}<span class="grow" style="text-align:left">${label}</span>${
+        index === mod.deserved ? '<span class="rule-pun">по работе</span>' : ''
+      }</button>`
+    ).join('')}
+  </div>`);
+  const sheet = openSheet('Звание модератора', body);
+  body.querySelectorAll('[data-rank]').forEach((button) => {
+    button.onclick = async () => {
+      try {
+        const result = await api.setRank(mod.id, Number(button.dataset.rank));
+        toast('Теперь ' + (result?.rankName || 'звание изменено'));
+        sheet.close();
+        done();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+}
+
+export function pickDuration(suggested) {
   return new Promise((done) => {
     const options = [
       [60, '1 час'],
@@ -299,7 +989,11 @@ export function pickDuration() {
       [525600, 'Год']
     ];
     const body = el(`<div class="col" style="gap:6px">${options
-      .map(([value, label]) => `<button class="list-item" data-value="${value}">${icon('clock', 18)}<span>${label}</span></button>`)
+      .map(
+        ([value, label]) => `<button class="list-item" data-value="${value}">${icon('clock', 18)}<span class="grow" style="text-align:left">${label}</span>${
+          value === suggested ? '<span class="rule-pun">по правилам</span>' : ''
+        }</button>`
+      )
       .join('')}</div>`);
     const sheet = openSheet('На сколько', body, { onClose: () => done(null) });
     body.querySelectorAll('[data-value]').forEach((button) => {

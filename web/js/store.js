@@ -13,26 +13,67 @@ export const api = new Proxy({}, {
   }
 });
 
+let starting = null;
+
 export async function initBackend() {
   const params = new URLSearchParams(location.search);
+  if (window.SPOKUM_FORCE_LOCAL || params.get('local') === '1') return backend.mode;
   const supabaseUrl = window.SPOKUM_SUPABASE_URL || params.get('supabaseUrl') || '';
   const supabaseKey = window.SPOKUM_SUPABASE_KEY || params.get('supabaseKey') || '';
   const apiBase = window.SPOKUM_API || params.get('api') || '';
 
   if (supabaseUrl && supabaseKey) {
-    try {
-      const { createSupabase } = await import('./backend/supabase.js');
-      backend = await createSupabase(supabaseUrl, supabaseKey);
-      return backend.mode;
-    } catch (error) {
-      console.error(error);
-      backend = local;
-      return 'local';
-    }
+    if (backend.mode === 'supabase') return backend.mode;
+    // Повторный запуск не должен поднимать вторую копию службы входа:
+    // две копии одновременно обновляют один и тот же ключ, и вход вылетает.
+    if (starting) return starting;
+    starting = (async () => {
+      try {
+        const { createSupabase } = await import('./backend/supabase.js');
+        const made = await createSupabase(supabaseUrl, supabaseKey);
+        if (backend.mode !== 'supabase') backend = made;
+        return backend.mode;
+      } catch (error) {
+        console.error(error);
+        return backend.mode;
+      } finally {
+        starting = null;
+      }
+    })();
+    return starting;
   }
 
   if (apiBase) backend = createRemote(apiBase);
   return backend.mode;
+}
+
+const memo = new Map();
+
+export async function cached(key, ttl, make) {
+  const now = Date.now();
+  const hit = memo.get(key);
+  if (hit && now - hit.at < ttl) return hit.value;
+  const value = await make();
+  memo.set(key, { at: now, value });
+  return value;
+}
+
+export function forget(key) {
+  if (key) memo.delete(key);
+  else memo.clear();
+}
+
+export function isBeta(user) {
+  const who = user || state.user;
+  return !!(who && (who.isBeta || who.username === 'silver'));
+}
+
+export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
+
+export function rankName(user) {
+  if (!user) return '';
+  if (user.isAdmin && !user.modRank) return 'Администратор';
+  return RANKS[Math.min(Math.max(user.modRank || 0, 0), RANKS.length - 1)];
 }
 
 export const state = {
@@ -71,8 +112,8 @@ export function isPremium(user) {
   return !!(user && user.premiumUntil && user.premiumUntil > Date.now());
 }
 
-export const PREMIUM_THEMES = ['aurora', 'sunset'];
-export const PREMIUM_ACCENTS = ['gold', 'rose'];
+export const PREMIUM_THEMES = ['aurora', 'sunset', 'royal', 'abyss', 'ink', 'rose', 'gold', 'pearl', 'emerald', 'nebula', 'plum', 'copper', 'sakura', 'mine'];
+export const PREMIUM_ACCENTS = ['gold', 'rose', 'ice'];
 
 export const PREMIUM_PERKS = [
   ['crown', 'Значок премиума', 'Корона рядом с ником во всей сети'],
@@ -80,11 +121,13 @@ export const PREMIUM_PERKS = [
   ['star', 'Свои стикеры', 'Загружайте картинки и шлите их в чатах'],
   ['image', 'Пины', 'Четыре картинки по углам вашего аватара'],
   ['smile', 'Статус у ника', 'Своя маленькая картинка рядом с именем'],
-  ['palette', 'Закрытые темы', 'Аврора и Закат, недоступные остальным'],
-  ['spark', 'Особые акценты', 'Золотой и розовый цвета интерфейса'],
+  ['palette', 'Закрытые темы', 'Аврора, Закат, Королевская и Бездна'],
+  ['spark', 'Особые акценты', 'Золото, роза и лёд в интерфейсе'],
   ['profile', 'Свечение аватара', 'Мягкая подсветка вокруг фото профиля'],
   ['feed', 'Длинные записи', 'До 5000 символов в посте вместо 2000'],
-  ['eye', 'Фото без потерь', 'Снимки грузятся в максимальном качестве']
+  ['eye', 'Фото без потерь', 'Снимки грузятся в максимальном качестве'],
+  ['key', 'Больше юзернеймов', 'До восьми имён на аккаунт вместо трёх'],
+  ['play', 'Премиум игры', 'Небесный каньон и Шарик открыты только по подписке']
 ];
 
 export function isOffline() {
@@ -112,12 +155,103 @@ export function setUser(user) {
   emit('user', user);
 }
 
+const MINE_KEY = 'spokum.theme.mine';
+
+export function myTheme() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MINE_KEY));
+    if (saved && typeof saved.hue === 'number') return saved;
+  } catch {}
+  return { dark: true, hue: 210, tint: 14, accent: '#87b7a3' };
+}
+
+export function saveMyTheme(patch) {
+  const next = { ...myTheme(), ...patch };
+  localStorage.setItem(MINE_KEY, JSON.stringify(next));
+  paintMyTheme();
+  return next;
+}
+
+export function paintMyTheme() {
+  const mine = myTheme();
+  let tag = document.getElementById('spokum-mine');
+  if (!tag) {
+    tag = document.createElement('style');
+    tag.id = 'spokum-mine';
+    document.head.appendChild(tag);
+  }
+  const hue = mine.hue;
+  const tint = Math.max(0, Math.min(40, mine.tint ?? 14));
+  const ink = mine.dark
+    ? {
+        bg: `hsl(${hue} ${tint}% 7%)`,
+        bg2: `hsl(${hue} ${tint}% 11%)`,
+        surface: 'rgba(255,255,255,.04)',
+        surface2: 'rgba(255,255,255,.07)',
+        line: 'rgba(255,255,255,.08)',
+        lineStrong: 'rgba(255,255,255,.15)',
+        text: `hsl(${hue} 18% 90%)`,
+        muted: `hsl(${hue} 12% 60%)`,
+        shadow: '0 16px 40px rgba(0,0,0,.5)',
+        glow: '.55'
+      }
+    : {
+        bg: `hsl(${hue} ${Math.min(30, tint + 8)}% 95%)`,
+        bg2: `hsl(${hue} ${Math.min(30, tint + 8)}% 99%)`,
+        surface: 'rgba(20,25,35,.035)',
+        surface2: 'rgba(20,25,35,.06)',
+        line: 'rgba(20,25,35,.1)',
+        lineStrong: 'rgba(20,25,35,.17)',
+        text: `hsl(${hue} 22% 16%)`,
+        muted: `hsl(${hue} 12% 44%)`,
+        shadow: '0 14px 34px rgba(40,50,70,.1)',
+        glow: '.7'
+      };
+  tag.textContent = `[data-theme='mine']{--bg:${ink.bg};--bg-2:${ink.bg2};--surface:${ink.surface};--surface-2:${ink.surface2};--line:${ink.line};--line-strong:${ink.lineStrong};--text:${ink.text};--muted:${ink.muted};--shadow:${ink.shadow};--glow-1:${mine.accent}1f;--glow-2:${mine.accent}14;--glow:${ink.glow};}
+[data-theme='mine'][data-accent]{--accent:${mine.accent};--accent-soft:${mine.accent}2b;--accent-ink:${mine.dark ? '#08110e' : '#ffffff'};}`;
+}
+
 export function applyAppearance(user) {
   const root = document.documentElement;
-  root.dataset.theme = user?.theme || localStorage.getItem('spokum.theme') || 'calm';
-  root.dataset.accent = user?.accent || localStorage.getItem('spokum.accent') || 'mint';
-  localStorage.setItem('spokum.theme', root.dataset.theme);
-  localStorage.setItem('spokum.accent', root.dataset.accent);
+  let theme = user?.theme || localStorage.getItem('spokum.theme') || 'calm';
+  let accent = user?.accent || localStorage.getItem('spokum.accent') || 'mint';
+  const premium = user ? isPremium(user) : localStorage.getItem('spokum.premium') === '1';
+  const patch = {};
+  if (!premium) {
+    if (PREMIUM_THEMES.includes(theme)) {
+      theme = 'calm';
+      patch.theme = theme;
+    }
+    if (PREMIUM_ACCENTS.includes(accent)) {
+      accent = 'mint';
+      patch.accent = accent;
+    }
+  }
+  if (theme === 'mine') paintMyTheme();
+  root.dataset.theme = theme;
+  root.dataset.accent = accent;
+  const skin = localStorage.getItem('spokum.skin') || 'classic';
+  if (skin === 'soft') root.dataset.skin = 'soft';
+  else delete root.dataset.skin;
+  localStorage.setItem('spokum.theme', theme);
+  localStorage.setItem('spokum.accent', accent);
+  localStorage.setItem('spokum.premium', premium ? '1' : '0');
+  if (user && Object.keys(patch).length) {
+    Object.assign(user, patch);
+    api.updateMe(patch).catch(() => {});
+  }
+}
+
+export function setSkin(name) {
+  const skin = name === 'soft' ? 'soft' : 'classic';
+  localStorage.setItem('spokum.skin', skin);
+  if (skin === 'soft') document.documentElement.dataset.skin = 'soft';
+  else delete document.documentElement.dataset.skin;
+  return skin;
+}
+
+export function currentSkin() {
+  return localStorage.getItem('spokum.skin') === 'soft' ? 'soft' : 'classic';
 }
 
 export const MOODS = {

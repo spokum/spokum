@@ -6,6 +6,7 @@ import { renderAuth } from './views/auth.js';
 
 const TABS = [
   ['feed', 'Лента', 'feed'],
+  ['videos', 'Видео', 'video'],
   ['chats', 'Чаты', 'chats'],
   ['games', 'Игры', 'games'],
   ['settings', 'Настройки', 'settings'],
@@ -14,6 +15,7 @@ const TABS = [
 
 const views = {
   feed: () => import('./views/feed.js'),
+  videos: () => import('./views/videos.js'),
   chats: () => import('./views/chats.js'),
   games: () => import('./views/games.js'),
   settings: () => import('./views/settings.js'),
@@ -42,14 +44,22 @@ function tryLogo(url) {
 
 function networkBar() {
   let bar = document.querySelector('.offline-bar');
-  if (navigator.onLine) {
+  const broken = !navigator.onLine || sessionPending;
+  if (!broken) {
     bar?.remove();
     delete document.documentElement.dataset.offline;
     return;
   }
+  const text = navigator.onLine
+    ? 'Связь с базой пропала. Показываем сохранённое'
+    : 'Нет интернета. Показываем сохранённое';
   document.documentElement.dataset.offline = 'yes';
-  if (bar) return;
-  bar = el(`<div class="offline-bar">${icon('warn', 15)}<span>Нет интернета. Показываем сохранённое</span></div>`);
+  if (bar) {
+    const span = bar.querySelector('span');
+    if (span) span.textContent = text;
+    return;
+  }
+  bar = el(`<div class="offline-bar">${icon('warn', 15)}<span>${text}</span></div>`);
   document.body.appendChild(bar);
 }
 
@@ -58,10 +68,16 @@ function watchNetwork() {
     state.online = navigator.onLine;
     networkBar();
     emit('network', state.online);
+    if (navigator.onLine) bringBackSession();
     if (navigator.onLine && state.tab) openTab(state.tab);
   };
   window.addEventListener('online', update);
   window.addEventListener('offline', update);
+  // Возвращаемся к приложению — сразу проверяем вход: пока телефон лежал в
+  // кармане, ключ мог устареть, и человека не должно выбрасывать на экран входа.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') bringBackSession();
+  });
   networkBar();
 }
 
@@ -89,34 +105,291 @@ async function detectLogo() {
   }
 }
 
+function topOverlay() {
+  const layers = [...document.querySelectorAll('.sheet-backdrop, .chat-view, .game-stage, .story-view, .lightbox')];
+  return layers.length ? layers[layers.length - 1] : null;
+}
+
+let backAt = 0;
+
+function goBackInside() {
+  const now = Date.now();
+  if (now - backAt < 400) return true;
+  backAt = now;
+  const layer = topOverlay();
+  if (layer) {
+    const close = layer.querySelector('[data-back]');
+    if (close) close.click();
+    else layer.remove();
+    document.body.style.overflow = '';
+    return true;
+  }
+  if (state.user && state.tab && state.tab !== 'feed') {
+    openTab('feed');
+    return true;
+  }
+  const host = shell?.querySelector('[data-view]');
+  if (host && host.scrollTop > 0) host.scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  return true;
+}
+
+function watchSwipes() {
+  let start = null;
+  document.addEventListener('touchstart', (event) => {
+    if (event.touches.length !== 1) return;
+    const point = event.touches[0];
+    const edge = point.clientX < 26 || point.clientX > window.innerWidth - 26;
+    start = edge ? { x: point.clientX, y: point.clientY, at: Date.now() } : null;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (event) => {
+    if (!start) return;
+    const point = event.changedTouches[0];
+    const dx = point.clientX - start.x;
+    const dy = point.clientY - start.y;
+    const quick = Date.now() - start.at < 700;
+    start = null;
+    if (!quick || Math.abs(dx) < 80 || Math.abs(dy) > 70) return;
+    goBackInside();
+  }, { passive: true });
+}
+
+window.__spokumBack = () => {
+  goBackInside();
+  return true;
+};
+
+let leaveHint = 0;
+
+function guardHistory() {
+  try {
+    history.replaceState({ spokum: 'root' }, '');
+    history.pushState({ spokum: 'guard' }, '');
+  } catch {
+    return;
+  }
+  window.addEventListener('popstate', () => {
+    const recent = Date.now() - backAt < 400;
+    const deep = recent || !!topOverlay() || (state.user && state.tab && state.tab !== 'feed');
+    goBackInside();
+    if (deep) {
+      leaveHint = 0;
+      try {
+        history.pushState({ spokum: 'guard' }, '');
+      } catch {}
+      return;
+    }
+    if (window.SpokumHost || Date.now() - leaveHint > 2500) {
+      leaveHint = Date.now();
+      import('./ui.js').then(({ toast }) => toast('Ещё раз назад, чтобы выйти')).catch(() => {});
+      try {
+        history.pushState({ spokum: 'guard' }, '');
+      } catch {}
+      return;
+    }
+    leaveHint = 0;
+  });
+}
+
+async function checkDevice(fresh) {
+  if (!api.touchDevice) return false;
+  try {
+    const { deviceInfo, rememberBlock } = await import('./device.js');
+    const info = await deviceInfo();
+    const { state: ban } = await api.touchDevice(info, fresh);
+    rememberBlock(ban);
+    if (ban?.blocked) {
+      showBlocked(ban);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function showBlocked(ban) {
+  const until = ban.forever || !ban.until
+    ? 'навсегда'
+    : 'до ' + new Date(typeof ban.until === 'string' ? Date.parse(ban.until) : ban.until).toLocaleString('ru-RU');
+  document.body.innerHTML = `<div class="block-screen">
+    <span style="color:#c98b8b">${icon('ban', 44, 1.6)}</span>
+    <div class="strong" style="font-size:18px">Устройство заблокировано</div>
+    <p class="small muted" style="margin:0;max-width:340px;line-height:1.55">С этого устройства нельзя зайти и завести аккаунт ${until}.${ban.reason ? ' Причина: ' + ban.reason + '.' : ''}</p>
+    <p class="tiny muted" style="margin:0;max-width:340px;line-height:1.5">Считаете, что это ошибка — напишите администрации с другого устройства.</p>
+  </div>`;
+  api.logout?.().catch(() => {});
+}
+
+let sessionPending = false;
+let sessionTries = 0;
+// Пробуем долго: полчаса на связи — это не повод показывать экран входа.
+const SESSION_TRIES_MAX = 480;
+
+async function bringBackSession() {
+  if (!sessionPending || !navigator.onLine) return;
+  if (sessionTries > SESSION_TRIES_MAX) return;
+  sessionTries += 1;
+  let user = null;
+  try {
+    ({ user } = await api.me());
+  } catch {
+    return;
+  }
+  if (user) {
+    sessionPending = false;
+    networkBar();
+    setUser(user);
+    announcePremium(user);
+    openTab(state.tab || 'feed');
+    return;
+  }
+  if (api.sessionGone?.() !== false) {
+    sessionPending = false;
+    networkBar();
+    setUser(null);
+    renderAuth(root, start);
+  }
+}
+
+const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+
+// Настроена ли внешняя база. Если да, «нет входа» можно говорить только тогда,
+// когда она точно ответила: на медленной связи и через VPN она поднимается долго,
+// и раньше приложение успевало показать экран входа просто из-за задержки.
+function remoteConfigured() {
+  if (window.SPOKUM_FORCE_LOCAL) return false;
+  const params = new URLSearchParams(location.search);
+  if (params.get('local') === '1') return false;
+  return !!(window.SPOKUM_SUPABASE_URL || window.SPOKUM_API || params.get('supabaseUrl') || params.get('api'));
+}
+
+function showNoBase() {
+  root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div>
+    <div class="col" style="gap:10px;max-width:340px;text-align:center;align-items:center">
+      <div class="strong" style="font-size:17px">База не отвечает</div>
+      <p class="small muted" style="margin:0;line-height:1.55">Интернет есть, а сервер молчит. Аккаунт на месте, вход не потерян — просто нажмите «Повторить».</p>
+      <button class="btn btn-primary" data-retry style="width:100%">Повторить</button>
+    </div></div>`;
+  root.querySelector('[data-retry]').onclick = () => location.reload();
+}
+
+async function waitForBackend() {
+  const ready = initBackend();
+  const slow = await Promise.race([
+    ready.then(() => 'ready'),
+    new Promise((done) => setTimeout(() => done('slow'), 12000))
+  ]).catch(() => 'slow');
+  if (slow === 'slow' && remoteConfigured() && navigator.onLine) {
+    const note = root.querySelector('.auth-logo');
+    if (note) note.insertAdjacentHTML('afterend', '<div class="tiny muted" style="text-align:center;margin-top:10px">Связываемся с базой, это может занять минуту</div>');
+    await Promise.race([ready.catch(() => {}), pause(20000)]);
+  }
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (!remoteConfigured() || !navigator.onLine || api.mode !== 'local') break;
+    await pause(1500 * attempt);
+    await Promise.race([initBackend().catch(() => {}), pause(15000)]);
+  }
+}
+
 async function boot() {
   applyAppearance(null);
   await detectLogo();
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
   registerWorker();
   watchNetwork();
-  await Promise.race([
-    initBackend(),
-    new Promise((done) => setTimeout(done, 12000))
-  ]);
+  watchSwipes();
+  guardHistory();
+  import('./views/settings.js').then((module) => {
+    module.applyNight?.();
+    module.applyComfort?.();
+    setInterval(() => module.applyNight?.(), 300000);
+  }).catch(() => {});
+  await waitForBackend();
+  if (remoteConfigured() && navigator.onLine && api.mode === 'local') {
+    showNoBase();
+    return;
+  }
+  let fromCache = false;
   try {
     const { user } = await api.me();
-    setUser(user);
+    if (user) setUser(user);
+    else {
+      const kept = api.cachedUser?.() || null;
+      setUser(kept);
+      fromCache = !!kept;
+    }
   } catch {
-    setUser(null);
+    const kept = api.cachedUser?.() || null;
+    setUser(kept);
+    fromCache = !!kept;
   }
-  if (!state.user) renderAuth(root, start);
-  else {
-    start();
-    announcePremium(state.user);
+  if (await checkDevice(false)) return;
+  if (!state.user) {
+    renderAuth(root, start);
+    return;
   }
+  if (fromCache) {
+    // Профиль взяли из сохранённого, а вход ещё не подтверждён. Если сервер
+    // прямо отказал во входе — показываем экран входа, если виновата связь,
+    // пускаем в приложение и дожидаемся сети: из аккаунта не выбрасываем.
+    if (api.sessionGone?.() === true) {
+      setUser(null);
+      renderAuth(root, start);
+      return;
+    }
+    sessionPending = true;
+    networkBar();
+    setInterval(bringBackSession, 30000);
+  }
+  const { pinOn, askPin } = await import('./pin.js');
+  if (pinOn()) {
+    const ok = await askPin(root);
+    if (!ok) {
+      await api.logout().catch(() => {});
+      setUser(null);
+      renderAuth(root, start);
+      return;
+    }
+  }
+  start();
+  announcePremium(state.user);
+}
+
+async function handOverSession() {
+  if (!window.SpokumHost?.setAuth || !state.user) return;
+  try {
+    const tokens = await api.saveSession?.();
+    if (!tokens?.refresh_token) return;
+    window.SpokumHost.setAuth(
+      window.SPOKUM_SUPABASE_URL || '',
+      window.SPOKUM_SUPABASE_KEY || '',
+      tokens.refresh_token
+    );
+  } catch {}
 }
 
 function start() {
+  window.__spokum = { openTab };
   buildShell();
   openTab(state.tab || 'feed');
   connectSocket();
   askJournal();
+  import('./call.js').then((module) => module.initCalls()).catch(() => {});
+  import('./views/notifications.js').then((module) => {
+    module.refreshBell();
+    setTimeout(() => module.offerNotifications?.(), 4000);
+  }).catch(() => {});
+  import('./accounts.js').then((module) => module.rememberCurrent()).catch(() => {});
+  if (api.tidyProfile) {
+    setTimeout(() => {
+      api.tidyProfile()
+        .then((result) => {
+          if (result?.moved) refreshUser();
+        })
+        .catch(() => {});
+    }, 6000);
+  }
+  handOverSession();
 }
 
 async function askJournal() {
@@ -196,6 +469,7 @@ export async function refreshUser() {
 
 async function openTab(tab) {
   state.tab = tab;
+  window.__spokum = { openTab };
   const host = shell.querySelector('[data-view]');
   if (state.user && navigator.onLine) {
     const { loadStories } = await import('./views/stories.js');
@@ -211,7 +485,18 @@ async function openTab(tab) {
   } catch (error) {
     host.innerHTML = `<div class="empty">${error.message}</div>`;
   }
-  refreshUnread();
+  try {
+    const bell = await import('./views/notifications.js');
+    bell.mountBell(host, tab);
+    if (Date.now() - bellAt > 20000) {
+      bellAt = Date.now();
+      bell.refreshBell();
+    }
+  } catch {}
+  if (Date.now() - unreadAt > 45000) {
+    unreadAt = Date.now();
+    refreshUnread();
+  }
 }
 
 async function refreshUnread() {
@@ -275,9 +560,79 @@ document.addEventListener('click', (event) => {
   toast(badge.dataset.badge);
 }, true);
 
-window.addEventListener('spokum:message', () => refreshUnread());
-setInterval(refreshUnread, 15000);
-setInterval(refreshUser, 30000);
+document.addEventListener('click', async (event) => {
+  const shot = event.target.closest?.('.status-icon, .zoomable, .post-image img, .album-shot');
+  if (!shot || !shot.src) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const { openLightbox } = await import('./ui.js');
+  const group = shot.closest('[data-album]');
+  if (group) {
+    const all = [...group.querySelectorAll('img')].map((node) => node.dataset.full || node.src);
+    openLightbox(all, { start: all.indexOf(shot.dataset.full || shot.src), caption: shot.dataset.caption || '' });
+    return;
+  }
+  openLightbox(shot.dataset.full || shot.src, { caption: shot.dataset.caption || (shot.classList.contains('status-icon') ? 'Статус' : '') });
+}, true);
+
+window.addEventListener('spokum:message', () => {
+  unreadAt = Date.now();
+  refreshUnread();
+});
+
+window.addEventListener('spokum:notify', async (event) => {
+  const bell = await import('./views/notifications.js');
+  const item = event.detail || {};
+  if (!bell.markShown(item.id)) return;
+  bell.bumpBell();
+  if (state.quiet) return;
+  if (document.hidden) bell.systemNotify(item);
+  else if (item.kind !== 'message' && item.kind !== 'newpost') toast(item.title || 'Новое уведомление');
+});
+
+let unreadAt = 0;
+let bellAt = 0;
+
+let ringAt = 0;
+
+async function pullNews() {
+  if (!state.user) return;
+  api.wake?.();
+  if (api.remindersRing && Date.now() - ringAt > 60000) {
+    ringAt = Date.now();
+    try {
+      await api.remindersRing();
+    } catch {}
+  }
+  try {
+    const bell = await import('./views/notifications.js');
+    await bell.pullNotifications();
+  } catch {}
+  if (Date.now() - unreadAt > 45000) {
+    unreadAt = Date.now();
+    refreshUnread();
+  }
+}
+
+let newsTimer = null;
+
+function paceNews() {
+  clearInterval(newsTimer);
+  const gap = document.hidden ? 60000 : 20000;
+  newsTimer = setInterval(pullNews, gap);
+}
+
+paceNews();
+document.addEventListener('visibilitychange', () => {
+  paceNews();
+  if (!document.hidden) pullNews();
+});
+window.addEventListener('online', pullNews);
+window.addEventListener('focus', pullNews);
+setInterval(() => {
+  if (document.hidden) return;
+  refreshUser();
+}, 120000);
 subscribe((event) => {
   if (event === 'user') applyAppearance(state.user);
 });

@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v10';
+const VERSION = 'spokum-v62';
 const CORE = [
   './',
   './index.html',
@@ -13,7 +13,13 @@ const CORE = [
   './js/backend/remote.js',
   './js/backend/supabase.js',
   './js/games/index.js',
+  './js/call.js',
+  './js/saved.js',
+  './js/accounts.js',
   './js/views/auth.js',
+  './js/views/videos.js',
+  './js/views/rules.js',
+  './js/views/notifications.js',
   './js/views/feed.js',
   './js/views/chats.js',
   './js/views/games.js',
@@ -89,6 +95,18 @@ self.addEventListener('fetch', (event) => {
         if (fallback) return fallback;
       }
       return new Response('', { status: 504, statusText: 'offline' });
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) return client.focus();
+      }
+      return self.clients.openWindow('./');
     })
   );
 });

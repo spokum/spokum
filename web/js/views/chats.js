@@ -160,7 +160,8 @@ export async function openChat(chatId) {
           <div class="row" style="gap:6px"><span class="strong small truncate">${esc(chat.title)}</span>${chat.peer ? badges(chat.peer) : ''}</div>
           <div class="tiny muted truncate">${chat.kind === 'dm' ? `@${esc(chat.peer?.username || '')}` : `${chat.members.length} участников`}</div>
         </div>
-        ${chat.kind === 'dm' ? `<button class="btn btn-icon btn-ghost" data-call>${icon('phone', 19)}</button>` : ''}
+        ${chat.kind === 'dm' ? `<button class="btn btn-icon btn-ghost" data-video-call>${icon('video', 19)}</button>
+        <button class="btn btn-icon btn-ghost" data-call>${icon('phone', 19)}</button>` : ''}
         <button class="btn btn-icon btn-ghost" data-menu>${icon('more', 19)}</button>
       </div>
       <div class="chat-body" data-body></div>
@@ -191,10 +192,22 @@ export async function openChat(chatId) {
     else openMembers(chat);
   };
   view.querySelector('[data-menu]').onclick = () => openChatMenu(chat, view);
-  view.querySelector('[data-call]')?.addEventListener('click', () => startCall(chat));
+  view.querySelector('[data-call]')?.addEventListener('click', async () => {
+    const { startCall } = await import('../call.js');
+    startCall(chat);
+  });
+  view.querySelector('[data-video-call]')?.addEventListener('click', async () => {
+    const { startCall } = await import('../call.js');
+    startCall(chat, { video: true });
+  });
 
   const draw = async () => {
-    const { messages } = await api.messages(chatId);
+    const [{ messages }, reactions] = await Promise.all([
+      api.messages(chatId),
+      api.chatReactions
+        ? api.chatReactions(chatId).then((answer) => answer.reactions || {}).catch(() => ({}))
+        : Promise.resolve({})
+    ]);
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 120;
     body.innerHTML = '';
     if (!messages.length) {
@@ -202,7 +215,9 @@ export async function openChat(chatId) {
     }
     let lastAuthor = null;
     for (const message of messages) {
-      body.appendChild(bubble(message, chat, lastAuthor));
+      const node = bubble(message, chat, lastAuthor);
+      wireReact(node, message, reactions[message.id] || [], draw);
+      body.appendChild(node);
       lastAuthor = message.author?.id;
     }
     if (atBottom || true) body.scrollTop = body.scrollHeight;
@@ -270,10 +285,87 @@ export async function openChat(chatId) {
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
+
+
+const REACTS = [
+  ['heart', 'heart'],
+  ['smile', 'smile'],
+  ['sad', 'moon'],
+  ['fire', 'flame'],
+  ['ok', 'check'],
+  ['wave', 'wave']
+];
+
+function wireReact(node, message, rows, done) {
+  if (!api.messageReact || message.kind === 'system' || message.kind === 'call') return;
+  if (rows.length) {
+    const seen = {};
+    rows.forEach((row) => {
+      seen[row.glyph] = (seen[row.glyph] || 0) + 1;
+    });
+    const strip = el(`<div class="react-strip">${Object.entries(seen)
+      .map(([glyph, count]) => {
+        const art = REACTS.find((item) => item[0] === glyph);
+        return `<span class="react-chip">${icon(art ? art[1] : 'heart', 13)}${count > 1 ? count : ''}</span>`;
+      })
+      .join('')}</div>`);
+    node.appendChild(strip);
+  }
+
+  let timer = null;
+  const open = () => {
+    const mine = rows.find((row) => String(row.user) === String(state.user?.id));
+    const menu = el(`<div class="react-row">
+      ${REACTS.map(([glyph, art]) => `<button class="react-pick ${mine?.glyph === glyph ? 'on' : ''}" data-react="${glyph}">${icon(art, 20)}</button>`).join('')}
+    </div>`);
+    const sheet = openSheet('', menu);
+    menu.querySelectorAll('[data-react]').forEach((button) => {
+      button.onclick = async () => {
+        sheet.close();
+        try {
+          await api.messageReact(message.id, mine?.glyph === button.dataset.react ? '' : button.dataset.react);
+          done?.();
+        } catch (error) {
+          toast(error.message, 'err');
+        }
+      };
+    });
+  };
+
+  node.addEventListener('pointerdown', () => {
+    timer = setTimeout(open, 480);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((type) => {
+    node.addEventListener(type, () => clearTimeout(timer));
+  });
+  node.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    open();
+  });
+}
+
+const SAFE_HOSTS = ['spokum.github.io', 'github.com', 't.me', 'telegram.org', 'youtube.com', 'youtu.be', 'vk.com', 'ok.ru', 'wikipedia.org', 'yandex.ru', 'google.com', 'rutube.ru', 'dzen.ru'];
+
+function linkWarning(text) {
+  const found = String(text || '').match(/https?:\/\/[^\s]+|(?:^|\s)[a-z0-9-]+\.(?:ru|com|net|org|io|xyz|top|info|site|online|link)(?:\/[^\s]*)?/gi);
+  if (!found) return '';
+  const risky = found
+    .map((raw) => raw.trim().replace(/^https?:\/\//i, '').split('/')[0].toLowerCase())
+    .filter((host) => host && !SAFE_HOSTS.some((safe) => host === safe || host.endsWith('.' + safe)));
+  if (!risky.length) return '';
+  const odd = risky.find((host) => /xn--|[а-яё]/i.test(host) || host.split('.').length > 3 || host.length > 30);
+  return `<div class="link-warn">${icon('warn', 13)}<span>${odd
+    ? 'Ссылка выглядит подозрительно, домен маскируется под чужой. Не вводите там пароли'
+    : 'Ссылка ведёт на незнакомый сайт. Не вводите там пароль от СпокУма'}</span></div>`;
+}
+
 function bubble(message, chat, lastAuthor) {
   const mine = message.author?.id === state.user?.id;
   if (message.kind === 'call') {
     return el(`<div class="bubble system">${icon('phone', 12)} ${esc(message.body)}</div>`);
+  }
+  if (message.kind === 'gift') {
+    return el(`<div class="bubble gift-note">${icon('gift', 15)}<span>${esc(message.body)}</span></div>`);
   }
   const showAuthor = chat.kind !== 'dm' && !mine && message.author?.id !== lastAuthor;
   let inner = '';
@@ -282,11 +374,37 @@ function bubble(message, chat, lastAuthor) {
   else if (message.kind === 'voice') {
     const bars = Array.from({ length: 22 }, (_, i) => `<i style="height:${20 + Math.round(Math.sin(i * 1.7 + message.id) * 55 + 55) * 0.6}%"></i>`).join('');
     inner = `<div class="voice"><button class="btn btn-icon btn-ghost" data-play style="width:32px;height:32px">${icon('play', 15)}</button><div class="voice-bars">${bars}</div><span class="tiny">${durationText(message.duration)}</span></div>`;
-  } else inner = esc(message.body);
+  } else if (message.kind === 'video') {
+    inner = `<div class="chat-reel" data-reel><video src="${esc(message.media || '')}" playsinline muted loop preload="metadata"></video><span class="chat-reel-play">${icon('play', 22)}</span></div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
+  } else if (message.kind === 'post') {
+    inner = `<div class="chat-reel" data-reel>${message.media ? `<img src="${esc(message.media)}" alt="" loading="lazy">` : `<span class="chat-reel-play">${icon('feed', 22)}</span>`}</div>${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
+  } else inner = esc(message.body) + linkWarning(message.body);
 
   const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
   const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
   const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}</div></div>`);
+
+  const reel = node.querySelector('[data-reel]');
+  if (reel) {
+    const clip = reel.querySelector('video');
+    reel.onclick = () => {
+      if (!clip) {
+        window.__spokum?.openTab?.('videos');
+        return;
+      }
+      if (clip.paused) {
+        clip.muted = false;
+        clip.play().catch(() => {
+          clip.muted = true;
+          clip.play().catch(() => {});
+        });
+        reel.classList.add('playing');
+      } else {
+        clip.pause();
+        reel.classList.remove('playing');
+      }
+    };
+  }
 
   const play = node.querySelector('[data-play]');
   if (play) {
@@ -371,7 +489,7 @@ async function openStickers(send) {
   await draw();
 }
 
-async function recordVoice(send) {
+export async function recordVoice(send, options = {}) {
   if (!navigator.mediaDevices?.getUserMedia) return toast('Микрофон недоступен', 'err');
   let stream;
   try {
@@ -390,9 +508,12 @@ async function recordVoice(send) {
       <div class="strong" data-timer style="font-size:24px">0:00</div>
       <div class="row" style="gap:8px"><button class="btn grow" data-cancel>Отмена</button><button class="btn btn-primary grow" data-stop>Отправить</button></div>
     </div>`);
-  const sheet = openSheet('Запись голосового', body);
+  const sheet = openSheet(options.title || 'Запись голосового', body);
+  const limit = Number(options.limit) || 120;
   const timer = setInterval(() => {
-    body.querySelector('[data-timer]').textContent = durationText((Date.now() - started) / 1000);
+    const spent = (Date.now() - started) / 1000;
+    body.querySelector('[data-timer]').textContent = durationText(spent);
+    if (spent >= limit) finish(true);
   }, 200);
 
   const finish = (keep) => {
@@ -411,6 +532,80 @@ async function recordVoice(send) {
   body.querySelector('[data-stop]').onclick = () => finish(true);
   body.querySelector('[data-cancel]').onclick = () => finish(false);
   recorder.start();
+}
+
+export async function sendPostToChat(post) {
+  const { chats } = await api.chats();
+  let people = [];
+  try {
+    const answer = await api.contacts();
+    people = answer.contacts || [];
+  } catch {}
+  const known = new Set(chats.map((chat) => chat.peer?.id).filter(Boolean));
+  const fresh = people.filter((person) => !known.has(person.id));
+  if (!chats.length && !fresh.length) return toast('Сначала добавьте кого-нибудь в контакты', 'err');
+
+  const body = el(`<div class="col" style="gap:6px">
+    <input class="input" data-find placeholder="Кому отправить">
+    <textarea class="textarea" data-note placeholder="Подпись, если хотите" style="min-height:54px"></textarea>
+    <div class="col" data-list style="gap:6px"></div>
+  </div>`);
+  const sheet = openSheet('Отправить в чат', body);
+  const list = body.querySelector('[data-list]');
+  const note = body.querySelector('[data-note]');
+  let busy = false;
+
+  const rows = [
+    ...chats.map((chat) => ({
+      id: 'chat-' + chat.id,
+      who: chat.peer || chat,
+      title: chat.title || chat.peer?.displayName || 'Чат',
+      hint: chat.peer ? '@' + chat.peer.username : 'беседа',
+      open: async () => chat.id
+    })),
+    ...fresh.map((person) => ({
+      id: 'user-' + person.id,
+      who: person,
+      title: person.displayName,
+      hint: '@' + person.username,
+      open: async () => {
+        const { chat } = await api.createChat({ kind: 'dm', members: [person.id] });
+        return chat.id;
+      }
+    }))
+  ];
+
+  const draw = (query) => {
+    const found = rows.filter((row) => !query || (row.title + ' ' + row.hint).toLowerCase().includes(query));
+    list.innerHTML = '';
+    if (!found.length) {
+      list.appendChild(el('<div class="tiny muted" style="padding:10px 4px">Никого не нашлось</div>'));
+      return;
+    }
+    found.forEach((row) => {
+      const node = el(`<button class="list-item">${avatar(row.who, 34)}<span class="grow" style="text-align:left"><span class="small strong truncate">${esc(row.title)}</span><span class="tiny muted"> ${esc(row.hint)}</span></span>${icon('forward', 15)}</button>`);
+      node.onclick = async () => {
+        if (busy) return;
+        busy = true;
+        node.disabled = true;
+        try {
+          const chatId = await row.open();
+          await api.sendPost(chatId, post.id, note.value.trim());
+          sheet.close();
+          toast('Отправлено');
+        } catch (error) {
+          busy = false;
+          node.disabled = false;
+          toast(error.message, 'err');
+        }
+      };
+      list.appendChild(node);
+    });
+  };
+
+  draw('');
+  body.querySelector('[data-find]').addEventListener('input', (event) => draw(event.target.value.trim().toLowerCase()));
+  return sheet;
 }
 
 function openChatMenu(chat, view) {
@@ -471,38 +666,4 @@ function openMembers(chat) {
   });
 }
 
-function startCall(chat) {
-  api.callSignal?.(chat.id, 'ring').catch(() => {});
-  const started = Date.now();
-  const overlay = el(`
-    <div class="chat-view" style="background:linear-gradient(180deg,var(--bg-2),var(--bg));z-index:80;align-items:center;justify-content:center">
-      <div class="col center" style="align-items:center;gap:18px">
-        ${avatar(chat.peer, 88)}
-        <div><div class="strong" style="font-size:20px;text-align:center">${esc(chat.title)}</div>
-        <div class="small muted center" data-status>Соединение</div></div>
-        <div class="row" style="gap:14px;margin-top:20px">
-          <button class="btn btn-icon" data-mic style="width:56px;height:56px;border-radius:50%">${icon('mic', 22)}</button>
-          <button class="btn btn-icon btn-danger" data-end style="width:56px;height:56px;border-radius:50%">${icon('phone', 22)}</button>
-        </div>
-      </div>
-    </div>`);
-  document.body.appendChild(overlay);
-  const status = overlay.querySelector('[data-status]');
-  let muted = false;
-  const timer = setInterval(() => {
-    status.textContent = durationText((Date.now() - started) / 1000);
-  }, 500);
-  overlay.querySelector('[data-mic]').onclick = (event) => {
-    muted = !muted;
-    event.currentTarget.innerHTML = icon(muted ? 'mute' : 'mic', 22);
-  };
-  overlay.querySelector('[data-end]').onclick = async () => {
-    clearInterval(timer);
-    overlay.remove();
-    try {
-      await api.callSignal?.(chat.id, 'end');
-    } catch {}
-    await api.sendMessage(chat.id, { kind: 'call', body: `Звонок ${durationText((Date.now() - started) / 1000)}` }).catch(() => {});
-    window.dispatchEvent(new CustomEvent('spokum:message', { detail: { chatId: chat.id } }));
-  };
-}
+
