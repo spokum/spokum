@@ -29,6 +29,7 @@ function shapeProfile(row, extra = {}) {
   return {
     id: row.id,
     username: row.username,
+    loginName: row.login_name || row.username,
     displayName: row.display_name || row.username,
     bio: row.bio || '',
     hue: row.hue ?? 220,
@@ -40,15 +41,22 @@ function shapeProfile(row, extra = {}) {
     isModerator: !!row.is_moderator,
     isDeveloper: !!row.is_developer,
     isVerified: !!row.is_verified,
+    modRank: row.mod_rank ?? 0,
+    isBeta: !!row.is_beta || row.username === 'silver',
+    coins: row.coins ?? 0,
+    streakDays: row.streak_days ?? 0,
+    bestStreak: row.best_streak ?? 0,
     bannedUntil: ms(row.banned_until),
     mutedUntil: ms(row.muted_until),
     createdAt: ms(row.created_at),
     lastSeen: ms(row.last_seen),
     pins: normalizePins(row.pins),
+    shelf: Array.isArray(row.shelf) ? row.shelf : [],
     banner: row.banner || null,
     dayWord: row.day_word || null,
     dayWordAt: ms(row.day_word_at),
     shareWord: !!row.share_word,
+    notifyPosts: row.notify_posts !== false,
     statusIcon: row.status_icon || null,
     premiumUntil: ms(row.premium_until),
     premiumReason: row.premium_reason || '',
@@ -59,7 +67,7 @@ function shapeProfile(row, extra = {}) {
   };
 }
 
-function shapePost(row, likedIds) {
+function shapePost(row, likedIds, extra = {}) {
   return {
     id: row.id,
     text: row.body || '',
@@ -68,10 +76,23 @@ function shapePost(row, likedIds) {
     createdAt: ms(row.created_at),
     removed: !!row.removed,
     removedReason: row.removed_reason || '',
+    removedAuto: !!row.removed_auto,
     author: shapeProfile(row.author),
     likes: row.likes?.[0]?.count ?? 0,
     comments: row.comments?.[0]?.count ?? 0,
-    liked: likedIds ? likedIds.has(row.id) : false
+    liked: likedIds ? likedIds.has(row.id) : false,
+    kind: row.kind || 'text',
+    media: Array.isArray(row.media) ? row.media : [],
+    video: row.video || null,
+    poster: row.poster || null,
+    duration: row.duration || 0,
+    views: row.views || 0,
+    sound: row.sound || null,
+    poll: row.poll || null,
+    pinned: !!row.pinned,
+    publishAt: ms(row.publish_at),
+    repostOf: row.repost_of || null,
+    origin: extra.origin || null
   };
 }
 
@@ -83,6 +104,7 @@ function shapeMessage(row, authors) {
     body: row.body || '',
     media: row.media || null,
     duration: row.duration || 0,
+    postId: row.post_id || null,
     createdAt: ms(row.created_at),
     author: shapeProfile(row.author || authors?.get(row.author_id))
   };
@@ -148,6 +170,8 @@ export async function createSupabase(url, key) {
 
   let uid = null;
   let channel = null;
+  let leaving = false;
+  let restoring = null;
 
   const requireUid = () => {
     if (!uid) throw new Error('Нужен вход');
@@ -181,7 +205,89 @@ export async function createSupabase(url, key) {
     return new Set((data || []).map((row) => row.post_id));
   };
 
-  const POST_SELECT = 'id, body, image, mood, created_at, removed, removed_reason, author:profiles!posts_author_id_fkey(*), likes(count), comments(count)';
+  async function withOrigins(rows) {
+    const ids = [...new Set(rows.map((row) => row.repost_of).filter(Boolean))];
+    if (!ids.length) return new Map();
+    const { data } = await sb
+      .from('posts')
+      .select('id, author:profiles!posts_author_id_fkey(username, display_name, avatar, hue)')
+      .in('id', ids);
+    const map = new Map();
+    (data || []).forEach((row) => {
+      if (row.author) {
+        map.set(row.id, {
+          username: row.author.username,
+          displayName: row.author.display_name || row.author.username,
+          avatar: row.author.avatar || null,
+          hue: row.author.hue ?? 220
+        });
+      }
+    });
+    return map;
+  }
+
+  const POST_CORE = 'id, body, image, mood, created_at, removed, removed_reason';
+  const AUTHOR_FIELDS = 'id, username, display_name, avatar, hue, mood, is_admin, is_moderator, is_developer, is_verified, mod_rank, premium_until, status_icon, is_beta';
+  const POST_TAIL = `author:profiles!posts_author_id_fkey(${AUTHOR_FIELDS}), likes(count), comments(count)`;
+  const POST_TIERS = [
+    `${POST_CORE}, removed_auto, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
+    `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
+    `${POST_CORE}, kind, media, video, poster, duration, views, sound, poll, pinned, repost_of, ${POST_TAIL}`,
+    `${POST_CORE}, kind, media, video, poster, duration, views, ${POST_TAIL}`,
+    `${POST_CORE}, ${POST_TAIL}`
+  ];
+  let postTier = 0;
+  let legacyPosts = false;
+  const POST_SELECT = () => POST_TIERS[postTier];
+  const dropTier = () => {
+    if (postTier >= POST_TIERS.length - 1) return false;
+    postTier += 1;
+    legacyPosts = postTier >= POST_TIERS.length - 1;
+    return true;
+  };
+  let later = true;
+  const missingColumn = (error) => !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message || ''));
+
+  const uploadData = async (dataUrl, hint = 'jpg') => {
+    const me = uid;
+    if (!me) throw new Error('Нужен вход');
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const known = /^(video|image)\//.test(blob.type || '') ? blob.type.split(';')[0] : '';
+    const type = known || 'image/jpeg';
+    const ext = (type.split('/')[1] || 'jpg').replace('quicktime', 'mov');
+    const path = `${me}/${hint}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const upload = await sb.storage.from('media').upload(path, blob, { contentType: type, upsert: false });
+    if (upload.error) throw new Error(upload.error.message);
+    const { data } = sb.storage.from('media').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const lighten = async (value, hint) => {
+    if (typeof value !== 'string' || !value.startsWith('data:')) return value;
+    if (value.length < 24000) return value;
+    try {
+      return await uploadData(value, hint);
+    } catch {
+      return value;
+    }
+  };
+
+  const wake = () => {
+    if (!uid) return;
+    const state = channel?.state;
+    if (state === 'joined' || state === 'joining') return;
+    if (channel) {
+      try {
+        sb.removeChannel(channel);
+      } catch {}
+      channel = null;
+    }
+    try {
+      sb.realtime?.connect?.();
+    } catch {}
+    listen();
+  };
 
   const listen = () => {
     if (channel || !uid) return;
@@ -190,20 +296,224 @@ export async function createSupabase(url, key) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         window.dispatchEvent(new CustomEvent('spokum:message', { detail: payload.new }));
       })
-      .subscribe();
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, (payload) => {
+        const row = payload.new;
+        window.dispatchEvent(new CustomEvent('spokum:notify', {
+          detail: { id: row.id, kind: row.kind, title: row.title, body: row.body, meta: row.meta || {}, createdAt: ms(row.created_at), read: false }
+        }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'call_signals', filter: `to_id=eq.${uid}` }, (payload) => {
+        const row = payload.new;
+        window.dispatchEvent(new CustomEvent('spokum:call', {
+          detail: { id: row.id, chatId: row.chat_id, fromId: row.from_id, kind: row.kind, payload: row.payload || {} }
+        }));
+      })
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setTimeout(() => {
+            if (channel?.state === 'joined') return;
+            try {
+              sb.removeChannel(channel);
+            } catch {}
+            channel = null;
+            listen();
+          }, 2500);
+        }
+      });
+  };
+
+  const KEEP_KEY = 'spokum.me.cache';
+
+  const keepProfile = (user) => {
+    if (!user?.id) return;
+    try {
+      localStorage.setItem(KEEP_KEY, JSON.stringify({ at: Date.now(), user }));
+    } catch {}
+  };
+
+  const keptProfile = () => {
+    try {
+      const row = JSON.parse(localStorage.getItem(KEEP_KEY) || 'null');
+      if (row?.user?.id) return row.user;
+    } catch {}
+    return null;
+  };
+
+  const storedSession = () => {
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key || !/^sb-.*-auth-token$/.test(key)) continue;
+        const row = JSON.parse(localStorage.getItem(key) || 'null');
+        const who = row?.user?.id || row?.currentSession?.user?.id;
+        if (who) return who;
+      }
+    } catch {}
+    return null;
+  };
+
+  // Своя копия входа. Живёт отдельно от хранилища библиотеки: если она потеряет
+  // сессию из-за обрыва связи, вход поднимется отсюда, а не превратится в выход.
+  const KEEP_SESSION = 'spokum.session.keep';
+  let sessionLost = false;
+
+  const keepSession = (session) => {
+    if (!session?.refresh_token) return;
+    try {
+      localStorage.setItem(KEEP_SESSION, JSON.stringify({
+        at: Date.now(),
+        id: session.user?.id || uid || '',
+        access_token: session.access_token || '',
+        refresh_token: session.refresh_token
+      }));
+      sessionLost = false;
+    } catch {}
+    // Держим приложение в курсе: у него своя копия ключа для фоновой проверки
+    // уведомлений. Если она отстанет, приложение и веб начнут обновлять вход
+    // по разным ключам — и вход сгорит.
+    if (window.SpokumHost?.setAuth) {
+      try {
+        window.SpokumHost.setAuth(url, key, session.refresh_token);
+      } catch {}
+    }
+  };
+
+  const keptSession = () => {
+    try {
+      const row = JSON.parse(localStorage.getItem(KEEP_SESSION) || 'null');
+      if (row?.refresh_token) return row;
+    } catch {}
+    return null;
+  };
+
+  const dropKeptSession = () => {
+    try {
+      localStorage.removeItem(KEEP_SESSION);
+    } catch {}
+  };
+
+  const pause = (ms) => new Promise((done) => setTimeout(done, ms));
+
+  // Библиотека входа молча стирает сессию, если обновление ключа вернуло отказ
+  // («ключ уже использован», «сессия не найдена»). Снаружи это выглядит как
+  // выход из аккаунта. Поэтому всегда проверяем, живёт ли сессия на самом деле.
+  const liveSession = async () => {
+    try {
+      const { data } = await withTimeout(sb.auth.getSession(), 6000, { data: null });
+      return data?.session || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const restoreSession = async (tries = 3) => {
+    if (restoring) return restoring;
+    if (leaving || !navigator.onLine) return null;
+    const kept = keptSession();
+    if (!kept?.refresh_token) return null;
+    restoring = (async () => {
+      // Может быть, вход уже поднят — другой вкладкой того же устройства или
+      // самой библиотекой. Тогда ничего не обновляем: лишний запрос нового ключа
+      // как раз и приводит к «ключ уже использован».
+      const already = await liveSession();
+      if (already?.user?.id) {
+        uid = already.user.id;
+        keepSession(already);
+        sessionLost = false;
+        listen();
+        return uid;
+      }
+      for (let attempt = 1; attempt <= tries; attempt += 1) {
+        const copy = keptSession();
+        if (!copy?.refresh_token || leaving) return null;
+        try {
+          // Со ключом на месте просто возвращаем сессию в библиотеку. Если ключа
+          // доступа нет (или он уже старый), обновляем вход по ключу обновления —
+          // так тоже можно войти.
+          const { data, error } = copy.access_token
+            ? await sb.auth.setSession({ access_token: copy.access_token, refresh_token: copy.refresh_token })
+            : await sb.auth.refreshSession({ refresh_token: copy.refresh_token });
+          if (error) throw error;
+          const fresh = data?.session || null;
+          const who = fresh?.user?.id || data?.user?.id || null;
+          if (who) {
+            uid = who;
+            if (fresh) keepSession(fresh);
+            sessionLost = false;
+            listen();
+            return who;
+          }
+          return null;
+        } catch (error) {
+          const text = error?.message || '';
+          // «Ключ уже использован» — не повод выходить из аккаунта. Так бывает,
+          // когда в приложении вход обновляют сразу два места (веб и фоновая
+          // служба уведомлений). Сервер в этом случае отдаёт рабочий ключ, так
+          // что просто пробуем ещё раз, а не показываем экран входа.
+          if (/already used/i.test(text)) {
+            if (attempt < tries) await pause(2000 * attempt);
+            continue;
+          }
+          // Токен отозван или испорчен — повторять бессмысленно, нужен обычный вход.
+          if (/invalid|revoked|expired|not found|no such/i.test(text)) {
+            sessionLost = true;
+            return null;
+          }
+          // Это была связь, а не вход. Ждём и пробуем ещё.
+          if (attempt < tries) await pause(1500 * attempt);
+        }
+      }
+      return null;
+    })().finally(() => {
+      restoring = null;
+    });
+    return restoring;
   };
 
   const sessionResult = await withTimeout(sb.auth.getSession(), 8000, { data: { session: null } });
-  uid = sessionResult?.data?.session?.user?.id || null;
+  const firstSession = sessionResult?.data?.session || null;
+  if (firstSession) keepSession(firstSession);
+  uid = firstSession?.user?.id || storedSession() || null;
+  if (!uid) uid = await restoreSession(navigator.onLine ? 2 : 0);
   if (uid) listen();
 
-  sb.auth.onAuthStateChange((_event, session) => {
-    uid = session?.user?.id || null;
-    if (uid) listen();
+  sb.auth.onAuthStateChange((event, session) => {
+    if (session) {
+      keepSession(session);
+      uid = session.user?.id || uid;
+      listen();
+      return;
+    }
+    if (event === 'INITIAL_SESSION' && !session) {
+      // Библиотека не нашла вход. Он может лежать в нашей копии — поднимаем его,
+      // а профиль из кеша не трогаем, чтобы человека не выбрасывало на экран входа.
+      // Через setTimeout: внутри этого обработчика запросы к службе входа
+      // нельзя начинать сразу, библиотека держит замок и всё повиснет.
+      if (!leaving && !uid) setTimeout(() => restoreSession(2).catch(() => {}), 0);
+      return;
+    }
+    if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      if (leaving) {
+        uid = null;
+        return;
+      }
+      // Библиотека может считать сессию потерянной из-за обрыва связи или
+      // повтора запроса. Пробуем поднять её сами, а выходим только если человек
+      // сам нажал «Выйти» или сервер отказал во входе.
+      uid = null;
+      setTimeout(() => restoreSession(3).catch(() => {}), 0);
+      return;
+    }
   });
 
   return {
     mode: 'supabase',
+
+    wake,
+
+    realtimeUp() {
+      return channel?.state === 'joined';
+    },
 
     async register({ username, displayName, password }) {
       const name = String(username || '').toLowerCase().replace(/^@/, '');
@@ -211,6 +521,8 @@ export async function createSupabase(url, key) {
       if (String(password || '').length < 8) throw new Error('Пароль минимум 8 символов');
       const taken = await sb.from('profiles').select('id').eq('username', name).maybeSingle();
       if (taken.data) throw new Error('Юзернейм занят');
+      const alias = await sb.from('usernames').select('user_id').eq('username', name).maybeSingle();
+      if (alias.data) throw new Error('Юзернейм занят');
       const { data, error } = await sb.auth.signUp({
         email: emailFor(name),
         password,
@@ -225,12 +537,21 @@ export async function createSupabase(url, key) {
 
     async login({ username, password }) {
       const name = String(username || '').toLowerCase().replace(/^@/, '');
-      const { data, error } = await sb.auth.signInWithPassword({ email: emailFor(name), password });
+      let handle = name;
+      try {
+        const resolved = await sb.rpc('resolve_login', { target: name });
+        if (resolved.data) handle = resolved.data;
+      } catch {}
+      const { data, error } = await sb.auth.signInWithPassword({ email: emailFor(handle), password });
       guard(error);
+      leaving = false;
       uid = data.user.id;
+      if (data.session) keepSession(data.session);
       const user = await profileById(uid);
       if (user.bannedUntil > Date.now()) {
-        await sb.auth.signOut();
+        leaving = true;
+        await sb.auth.signOut({ scope: 'local' });
+        dropKeptSession();
         throw new Error('Аккаунт заблокирован');
       }
       listen();
@@ -238,8 +559,20 @@ export async function createSupabase(url, key) {
     },
 
     async logout() {
-      await sb.auth.signOut();
+      leaving = true;
+      // Локальный выход: закрываем сессию только на этом устройстве. Раньше
+      // выход стирал сессии на всех устройствах сразу, и у людей «вылетал»
+      // аккаунт на телефоне после выхода с компьютера.
+      try {
+        await sb.auth.signOut({ scope: 'local' });
+      } catch {
+        await sb.auth.signOut().catch(() => {});
+      }
       uid = null;
+      dropKeptSession();
+      try {
+        localStorage.removeItem(KEEP_KEY);
+      } catch {}
       if (channel) {
         sb.removeChannel(channel);
         channel = null;
@@ -247,10 +580,60 @@ export async function createSupabase(url, key) {
       return { ok: true };
     },
 
+    cachedUser() {
+      const kept = keptProfile();
+      return kept && (!uid || kept.id === uid) ? kept : null;
+    },
+
+    // true, когда сервер прямо отказал во входе (токен отозван), а не когда
+    // просто пропала связь. Экран входа показываем только в этом случае.
+    sessionGone() {
+      return sessionLost && !uid;
+    },
+
     async me() {
+      if (!uid && !leaving) await restoreSession(2);
       if (!uid) return { user: null };
-      await sb.rpc('touch_presence');
-      return { user: await profileById(uid) };
+      sb.rpc('touch_presence').catch(() => {});
+      try {
+        const user = await profileById(uid);
+        if (user) keepProfile(user);
+        return { user };
+      } catch (error) {
+        const kept = keptProfile();
+        if (kept && kept.id === uid) return { user: kept };
+        throw error;
+      }
+    },
+
+    async tidyProfile() {
+      if (!uid) return { moved: 0 };
+      const { data } = await sb.from('profiles').select('avatar, banner, pins, status_icon').eq('id', uid).maybeSingle();
+      if (!data) return { moved: 0 };
+      const heavy = (value) => typeof value === 'string' && value.startsWith('data:') && value.length >= 24000;
+      const fields = {};
+      let moved = 0;
+      if (heavy(data.avatar)) {
+        fields.avatar = await lighten(data.avatar, 'avatar');
+        if (fields.avatar !== data.avatar) moved += 1;
+      }
+      if (heavy(data.banner)) {
+        fields.banner = await lighten(data.banner, 'banner');
+        if (fields.banner !== data.banner) moved += 1;
+      }
+      if (heavy(data.status_icon)) {
+        fields.status_icon = await lighten(data.status_icon, 'status');
+        if (fields.status_icon !== data.status_icon) moved += 1;
+      }
+      const pins = normalizePins(data.pins);
+      if (pins.some((pin) => heavy(pin.image))) {
+        for (const pin of pins) pin.image = await lighten(pin.image, 'pin');
+        fields.pins = pins;
+        moved += 1;
+      }
+      if (!moved) return { moved: 0 };
+      await sb.from('profiles').update(fields).eq('id', uid);
+      return { moved };
     },
 
     async updateMe(patch) {
@@ -262,15 +645,20 @@ export async function createSupabase(url, key) {
       if (patch.mood != null) fields.mood = patch.mood;
       if (patch.theme != null) fields.theme = patch.theme;
       if (patch.accent != null) fields.accent = patch.accent;
-      if (patch.avatar !== undefined) fields.avatar = patch.avatar;
-      if (patch.pins !== undefined) fields.pins = normalizePins(patch.pins);
-      if (patch.banner !== undefined) fields.banner = patch.banner;
+      if (patch.avatar !== undefined) fields.avatar = await lighten(patch.avatar, 'avatar');
+      if (patch.pins !== undefined) {
+        const pins = normalizePins(patch.pins);
+        for (const pin of pins) pin.image = await lighten(pin.image, 'pin');
+        fields.pins = pins;
+      }
+      if (patch.banner !== undefined) fields.banner = await lighten(patch.banner, 'banner');
       if (patch.dayWord !== undefined) {
         fields.day_word = patch.dayWord;
         fields.day_word_at = new Date().toISOString();
       }
       if (patch.shareWord !== undefined) fields.share_word = !!patch.shareWord;
-      if (patch.statusIcon !== undefined) fields.status_icon = patch.statusIcon;
+      if (patch.notifyPosts !== undefined) fields.notify_posts = !!patch.notifyPosts;
+      if (patch.statusIcon !== undefined) fields.status_icon = await lighten(patch.statusIcon, 'status');
       const { error } = await sb.from('profiles').update(fields).eq('id', id);
       guard(error);
       return { user: await profileById(id) };
@@ -279,7 +667,7 @@ export async function createSupabase(url, key) {
     async changePassword({ current, next }) {
       const id = requireUid();
       const profile = await profileById(id);
-      const check = await sb.auth.signInWithPassword({ email: emailFor(profile.username), password: current });
+      const check = await sb.auth.signInWithPassword({ email: emailFor(profile.login_name || profile.username), password: current });
       if (check.error) throw new Error('Текущий пароль неверный');
       const { error } = await sb.auth.updateUser({ password: next });
       guard(error);
@@ -304,8 +692,12 @@ export async function createSupabase(url, key) {
     },
 
     async dropSession() {
-      await sb.auth.signOut();
-      uid = null;
+      // Закрываем входы на других устройствах, но остаёмся в аккаунте здесь.
+      try {
+        await sb.auth.signOut({ scope: 'others' });
+      } catch {
+        return { ok: false };
+      }
       return { ok: true };
     },
 
@@ -315,21 +707,164 @@ export async function createSupabase(url, key) {
       if (q) request = request.or(`username.ilike.%${q}%,display_name.ilike.%${q}%,bio.ilike.%${q}%`);
       const { data, error } = await request;
       guard(error);
-      return { users: (data || []).map((row) => shapeProfile(row)) };
+      const found = new Map((data || []).map((row) => [row.id, row]));
+      if (q) {
+        try {
+          const aliases = await sb.from('usernames').select('user_id').ilike('username', `%${q}%`).limit(40);
+          const missing = (aliases.data || []).map((row) => row.user_id).filter((id) => !found.has(id));
+          if (missing.length) {
+            const extra = await sb.from('profiles').select('*').in('id', missing);
+            for (const row of extra.data || []) found.set(row.id, row);
+          }
+        } catch {}
+      }
+      return { users: [...found.values()].map((row) => shapeProfile(row)) };
+    },
+
+    async saveSession() {
+      const { data } = await sb.auth.getSession();
+      if (!data?.session) return null;
+      keepSession(data.session);
+      return {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      };
+    },
+
+    async useSession(tokens) {
+      if (!tokens?.refresh_token) throw new Error('Сессия не сохранена, войдите заново');
+      const { data, error } = await sb.auth.setSession({
+        access_token: tokens.access_token || '',
+        refresh_token: tokens.refresh_token
+      });
+      guard(error);
+      leaving = false;
+      uid = data?.user?.id || data?.session?.user?.id || null;
+      if (!uid) throw new Error('Сессия устарела, войдите заново');
+      if (data?.session) keepSession(data.session);
+      sessionLost = false;
+      listen();
+      const user = await profileById(uid);
+      if (user?.bannedUntil > Date.now()) {
+        leaving = true;
+        await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+        dropKeptSession();
+        uid = null;
+        throw new Error('Аккаунт заблокирован');
+      }
+      return { user };
+    },
+
+    async notifications(limit = 40) {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('notifications')
+        .select('*')
+        .eq('user_id', me)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) return { items: [], unread: 0 };
+      const items = (data || []).map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        title: row.title || '',
+        body: row.body || '',
+        meta: row.meta || {},
+        createdAt: ms(row.created_at),
+        read: !!row.read_at
+      }));
+      return { items, unread: items.filter((row) => !row.read).length };
+    },
+
+    async unreadNotifications() {
+      if (!uid) return { count: 0 };
+      const { count, error } = await sb
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', uid)
+        .is('read_at', null);
+      if (error) return { count: 0 };
+      return { count: count || 0 };
+    },
+
+    async readNotifications(ids) {
+      await sb.rpc('mark_notifications', { ids: ids && ids.length ? ids : null });
+      return { ok: true };
+    },
+
+    async clearNotifications() {
+      await sb.rpc('clear_notifications');
+      return { ok: true };
+    },
+
+    async linkCode() {
+      requireUid();
+      const { data, error } = await sb.rpc('make_link_code');
+      guard(error);
+      return { code: data };
+    },
+
+    async billing() {
+      requireUid();
+      const { data, error } = await sb.rpc('my_billing');
+      if (error) return { telegram: null, payments: [] };
+      return data || { telegram: null, payments: [] };
+    },
+
+    async myUsernames() {
+      const me = requireUid();
+      const { data, error } = await sb
+        .from('usernames')
+        .select('username, created_at')
+        .eq('user_id', me)
+        .order('created_at', { ascending: true });
+      if (error) return { names: [], limit: 3 };
+      const limit = await sb.rpc('username_limit');
+      return { names: (data || []).map((row) => row.username), limit: limit.data || 3 };
+    },
+
+    async addUsername(name) {
+      const { data, error } = await sb.rpc('add_username', { wanted: name });
+      guard(error);
+      return { username: data };
+    },
+
+    async dropUsername(name) {
+      const { error } = await sb.rpc('drop_username', { target: name });
+      guard(error);
+      return { ok: true };
+    },
+
+    async setMainUsername(name) {
+      const { error } = await sb.rpc('set_main_username', { target: name });
+      guard(error);
+      return { user: await profileById(uid) };
     },
 
     async getUser(name) {
       const clean = String(name).toLowerCase().replace(/^@/, '');
-      const { data, error } = await sb.from('profiles').select('*').eq('username', clean).maybeSingle();
+      let { data, error } = await sb.from('profiles').select('*').eq('username', clean).maybeSingle();
       guard(error);
+      if (!data) {
+        const alias = await sb.from('usernames').select('user_id').eq('username', clean).maybeSingle();
+        if (alias.data) {
+          const found = await sb.from('profiles').select('*').eq('id', alias.data.user_id).maybeSingle();
+          data = found.data;
+        }
+      }
       if (!data) throw new Error('Пользователь не найден');
-      const posts = await sb
-        .from('posts')
-        .select(POST_SELECT)
-        .eq('author_id', data.id)
-        .eq('removed', false)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const grab = () =>
+        sb
+          .from('posts')
+          .select(POST_SELECT())
+          .eq('author_id', data.id)
+          .eq('removed', false)
+          .order('created_at', { ascending: false })
+          .limit(50);
+      let posts = await grab();
+      if (missingColumn(posts.error) && dropTier()) {
+        posts = await grab();
+      }
       guard(posts.error);
       const liked = await likedSet((posts.data || []).map((row) => row.id));
       return {
@@ -338,29 +873,137 @@ export async function createSupabase(url, key) {
       };
     },
 
-    async listPosts({ mood } = {}) {
-      let request = sb
-        .from('posts')
-        .select(POST_SELECT)
-        .eq('removed', false)
-        .order('created_at', { ascending: false })
-        .limit(60);
-      if (mood) request = request.eq('mood', mood);
-      const { data, error } = await request;
+    async listPosts({ mood, kind, before, limit, includeRemoved, ids } = {}) {
+      const size = Math.min(40, Math.max(4, Number(limit) || 12));
+      const picked = Array.isArray(ids) ? ids.filter((value) => value !== null && value !== undefined) : null;
+      if (picked && !picked.length) return { posts: [], more: false, cursor: null };
+      const build = () => {
+        let request = sb.from('posts').select(POST_SELECT());
+        if (!includeRemoved) request = request.eq('removed', false);
+        if (picked) return request.in('id', picked).limit(picked.length);
+        request = request.order('created_at', { ascending: false }).limit(size);
+        if (later) request = request.lte('publish_at', new Date().toISOString());
+        if (mood) request = request.eq('mood', mood);
+        if (!legacyPosts && kind === 'reels') request = request.in('kind', ['video', 'album']);
+        if (!legacyPosts && kind === 'video') request = request.eq('kind', 'video');
+        if (!legacyPosts && kind === 'album') request = request.eq('kind', 'album');
+        if (!legacyPosts && kind === 'feed') request = request.eq('kind', 'text');
+        if (before) request = request.lt('created_at', new Date(Number(before)).toISOString());
+        return request;
+      };
+      let { data, error } = await build();
+      if (missingColumn(error) && later) {
+        later = false;
+        ({ data, error } = await build());
+      }
+      while (missingColumn(error) && dropTier()) {
+        if (legacyPosts && (kind === 'video' || kind === 'album' || kind === 'reels')) return { posts: [], more: false, cursor: null };
+        ({ data, error } = await build());
+      }
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
-      return { posts: (data || []).map((row) => shapePost(row, liked)) };
+      const origins = postTier === 0 ? await withOrigins(data || []) : new Map();
+      const posts = (data || []).map((row) => shapePost(row, liked, { origin: origins.get(row.repost_of) || null }));
+      if (picked) {
+        const order = new Map(picked.map((value, index) => [String(value), index]));
+        posts.sort((a, b) => (order.get(String(a.id)) ?? 0) - (order.get(String(b.id)) ?? 0));
+        return { posts, more: false, cursor: null };
+      }
+      return { posts, more: posts.length === size, cursor: posts.length ? posts[posts.length - 1].createdAt : null };
     },
 
-    async createPost({ text, image, mood }) {
+    async listAnnouncements() {
+      const { data, error } = await sb
+        .from('announcements')
+        .select('*')
+        .gt('until', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(4);
+      if (error) return { announcements: [] };
+      return {
+        announcements: (data || []).map((row) => ({
+          id: row.id,
+          title: row.title || '',
+          body: row.body || '',
+          tone: row.tone || 'info',
+          createdAt: ms(row.created_at),
+          until: ms(row.until)
+        }))
+      };
+    },
+
+    async createAnnouncement({ title, body, tone, days }) {
+      const me = requireUid();
+      const until = new Date(Date.now() + Math.max(1, Number(days) || 7) * 86400000).toISOString();
+      const { error } = await sb.from('announcements').insert({
+        title: String(title || '').slice(0, 80),
+        body: String(body || '').slice(0, 600),
+        tone: tone || 'info',
+        author_id: me,
+        until
+      });
+      guard(error);
+      return { ok: true };
+    },
+
+    async deleteAnnouncement(id) {
+      const { error } = await sb.from('announcements').delete().eq('id', id);
+      guard(error);
+      return { ok: true };
+    },
+
+    async bumpViews(id) {
+      await sb.rpc('bump_post_views', { target: id });
+      return { ok: true };
+    },
+
+    async uploadMedia(dataUrl, hint = 'jpg') {
+      requireUid();
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const known = /^(video|image)\//.test(blob.type || '') ? blob.type.split(';')[0] : '';
+      const type = known || (hint === 'mp4' ? 'video/mp4' : 'image/jpeg');
+      const ext = (type.split('/')[1] || hint).replace('quicktime', 'mov');
+      const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const upload = await sb.storage.from('media').upload(path, blob, { contentType: type, upsert: false });
+      if (upload.error) {
+        if (/bucket/i.test(upload.error.message)) throw new Error('В Supabase нет хранилища media. Прогоните schema.sql заново');
+        guard(upload.error);
+      }
+      const { data } = sb.storage.from('media').getPublicUrl(path);
+      return data.publicUrl;
+    },
+
+    async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll, publishAt }) {
       const id = requireUid();
       const body = String(text || '').trim().slice(0, 5000);
-      if (!body && !image) throw new Error('Пустой пост');
-      const { data, error } = await sb
-        .from('posts')
-        .insert({ author_id: id, body, image: image || null, mood: mood || 'calm' })
-        .select(POST_SELECT)
-        .single();
+      const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
+      if (!body && !image && !album.length && !video && !poll && !sound) throw new Error('Пустой пост');
+      const payload = {
+        author_id: id,
+        body,
+        image: image || album[0] || poster || null,
+        mood: mood || 'calm',
+        kind: kind || (video ? 'video' : album.length > 1 ? 'album' : 'text'),
+        media: album,
+        video: video || null,
+        poster: poster || null,
+        duration: Math.max(0, Math.round(Number(duration) || 0)),
+        sound: sound || null,
+        poll: poll || null
+      };
+      if (publishAt && publishAt > Date.now()) payload.publish_at = new Date(publishAt).toISOString();
+      const shed = [['publish_at'], ['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
+      let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
+      for (const keys of shed) {
+        if (!missingColumn(error)) break;
+        dropTier();
+        keys.forEach((key) => delete payload[key]);
+        if (!payload.kind && (video || album.length > 1)) {
+          throw new Error('Видео и альбомы появятся после того, как вы прогоните supabase/schema.sql заново');
+        }
+        ({ data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single());
+      }
       guard(error);
       return { post: shapePost(data, new Set()) };
     },
@@ -381,24 +1024,27 @@ export async function createSupabase(url, key) {
         const { error } = await sb.from('likes').insert({ post_id: id, user_id: me });
         guard(error);
       }
-      const { data, error } = await sb.from('posts').select(POST_SELECT).eq('id', id).single();
+      const { data, error } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       guard(error);
       return { post: shapePost(data, await likedSet([id])) };
     },
 
     async listComments(id) {
-      const { data, error } = await sb
-        .from('comments')
-        .select('id, body, created_at, author:profiles!comments_author_id_fkey(*)')
-        .eq('post_id', id)
-        .order('id', { ascending: true })
-        .limit(200);
+      const grab = (columns) =>
+        sb.from('comments').select(columns).eq('post_id', id).order('id', { ascending: true }).limit(200);
+      let { data, error } = await grab(`id, body, created_at, removed, removed_reason, removed_auto, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`);
+      if (missingColumn(error)) {
+        ({ data, error } = await grab(`id, body, created_at, author:profiles!comments_author_id_fkey(${AUTHOR_FIELDS})`));
+      }
       guard(error);
       return {
         comments: (data || []).map((row) => ({
           id: row.id,
           text: row.body,
           createdAt: ms(row.created_at),
+          removed: !!row.removed,
+          removedReason: row.removed_reason || '',
+          removedAuto: !!row.removed_auto,
           author: shapeProfile(row.author)
         }))
       };
@@ -408,9 +1054,19 @@ export async function createSupabase(url, key) {
       const me = requireUid();
       const body = String(text || '').trim().slice(0, 500);
       if (!body) throw new Error('Пустой комментарий');
-      const { error } = await sb.from('comments').insert({ post_id: id, author_id: me, body });
-      guard(error);
-      const { data } = await sb.from('posts').select(POST_SELECT).eq('id', id).single();
+      const recent = await sb
+        .from('comments')
+        .select('id')
+        .eq('post_id', id)
+        .eq('author_id', me)
+        .eq('body', body)
+        .gt('created_at', new Date(Date.now() - 10000).toISOString())
+        .limit(1);
+      if (!recent.data?.length) {
+        const { error } = await sb.from('comments').insert({ post_id: id, author_id: me, body });
+        guard(error);
+      }
+      const { data } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       return { post: shapePost(data, await likedSet([id])) };
     },
 
@@ -523,7 +1179,7 @@ export async function createSupabase(url, key) {
     async messages(chatId) {
       const { data, error } = await sb
         .from('messages')
-        .select('*, author:profiles!messages_author_id_fkey(*)')
+        .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .eq('chat_id', chatId)
         .eq('removed', false)
         .order('id', { ascending: true })
@@ -544,7 +1200,7 @@ export async function createSupabase(url, key) {
           media: payload.media || null,
           duration: payload.duration || 0
         })
-        .select('*, author:profiles!messages_author_id_fkey(*)')
+        .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .single();
       guard(error);
       return { message: shapeMessage(data) };
@@ -556,7 +1212,72 @@ export async function createSupabase(url, key) {
       return { ok: true };
     },
 
-    async callSignal() {
+    async callSignal(chatId, toId, kind, payload) {
+      const me = requireUid();
+      const { error } = await sb.from('call_signals').insert({
+        chat_id: chatId,
+        from_id: me,
+        to_id: toId,
+        kind,
+        payload: payload || {}
+      });
+      guard(error);
+      return { ok: true };
+    },
+
+    async callInbox(since) {
+      if (!uid) return { signals: [] };
+      const { data, error } = await sb
+        .from('call_signals')
+        .select('*')
+        .eq('to_id', uid)
+        .gt('id', Number(since) || 0)
+        .order('id', { ascending: true })
+        .limit(50);
+      if (error) return { signals: [] };
+      return {
+        signals: (data || []).map((row) => ({
+          id: row.id,
+          chatId: row.chat_id,
+          fromId: row.from_id,
+          kind: row.kind,
+          payload: row.payload || {},
+          createdAt: ms(row.created_at)
+        }))
+      };
+    },
+
+    async callClear(chatId) {
+      if (!uid) return { ok: true };
+      await sb.from('call_signals').delete().eq('chat_id', chatId).or(`to_id.eq.${uid},from_id.eq.${uid}`);
+      return { ok: true };
+    },
+
+    async wipePosts(userId) {
+      const { data, error } = await sb.rpc('admin_wipe_posts', { target: userId });
+      guard(error);
+      return { removed: data || 0 };
+    },
+
+    // Удаление аккаунта целиком: записи, переписка, файлы и сам вход.
+    async adminDeleteUser(userId) {
+      const { data, error } = await sb.rpc('admin_delete_user', { target: userId });
+      if (error && /could not find the function|does not exist/i.test(error.message || '')) {
+        throw new Error('В базе ещё нет этой функции. Прогоните на сервере 06-shema.sh и попробуйте снова');
+      }
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async resetLook(userId) {
+      const { error } = await sb.rpc('admin_reset_look', { target: userId });
+      guard(error);
+      return { ok: true };
+    },
+
+    async renameUser(userId, name) {
+      const { error } = await sb.rpc('admin_rename', { target: userId, name });
+      guard(error);
       return { ok: true };
     },
 
@@ -603,18 +1324,18 @@ export async function createSupabase(url, key) {
     },
 
     async modQueue() {
-      const { data, error } = await sb
-        .from('posts')
-        .select(POST_SELECT)
-        .order('created_at', { ascending: false })
-        .limit(60);
+      const grab = () => sb.from('posts').select(POST_SELECT()).order('created_at', { ascending: false }).limit(60);
+      let { data, error } = await grab();
+      if (missingColumn(error) && dropTier()) {
+        ({ data, error } = await grab());
+      }
       guard(error);
       const liked = await likedSet((data || []).map((row) => row.id));
       return { posts: (data || []).map((row) => shapePost(row, liked)) };
     },
 
-    async removePost(id, reason) {
-      const { error } = await sb.rpc('mod_remove_post', { target: id, reason });
+    async removePost(id, reason, proof) {
+      const { error } = await sb.rpc('mod_remove_post', { target: id, reason, proof: proof || '' });
       guard(error);
       return { ok: true };
     },
@@ -623,6 +1344,580 @@ export async function createSupabase(url, key) {
       const { error } = await sb.rpc('mod_punish', { target: userId, kind, minutes: minutes || 0, reason });
       guard(error);
       return { ok: true };
+    },
+
+    async touchDevice(info, fresh) {
+      const { data, error } = await sb.rpc('touch_device', {
+        fp: info.id,
+        info: { label: info.label, platform: info.platform, country: info.country, app: info.app },
+        fresh: !!fresh
+      });
+      guard(error);
+      return { state: data || { blocked: false } };
+    },
+
+    async deviceState(id) {
+      const { data, error } = await sb.rpc('device_ban_state', { fp: id });
+      guard(error);
+      return { state: data || { blocked: false } };
+    },
+
+    async userInfo(id) {
+      const { data, error } = await sb.rpc('mod_user_info', { target: id });
+      guard(error);
+      return { info: data };
+    },
+
+    async banDevice(id, minutes, reason) {
+      const { data, error } = await sb.rpc('mod_ban_device', { fp: id, minutes: minutes || 0, reason });
+      guard(error);
+      return data;
+    },
+
+    async unbanDevice(id) {
+      const { error } = await sb.rpc('mod_unban_device', { fp: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async modTeam() {
+      const { data, error } = await sb.rpc('admin_mod_team');
+      guard(error);
+      return { team: data || [] };
+    },
+
+    async setRank(id, rank) {
+      const { data, error } = await sb.rpc('admin_set_rank', { target: id, rank });
+      guard(error);
+      return data;
+    },
+
+    async grantCoins(amount, reason) {
+      const { data, error } = await sb.rpc('grant_coins', { amount, reason: reason || '' });
+      guard(error);
+      return data || { added: 0 };
+    },
+
+    async coinLog() {
+      const { data, error } = await sb
+        .from('coin_log')
+        .select('*')
+        .eq('user_id', requireUid())
+        .order('id', { ascending: false })
+        .limit(40);
+      guard(error);
+      return { rows: (data || []).map((row) => ({ id: row.id, amount: row.amount, reason: row.reason, createdAt: ms(row.created_at) })) };
+    },
+
+    async giftTypes() {
+      const { data, error } = await sb.from('gift_types').select('*').order('sort');
+      guard(error);
+      return { types: data || [] };
+    },
+
+    async gifts(userId) {
+      const { data, error } = await sb
+        .from('gifts')
+        .select('*, type:gift_types(*), from:profiles!gifts_from_id_fkey(username,display_name,avatar,hue)')
+        .eq('owner_id', userId || requireUid())
+        .eq('sold', false)
+        .order('id', { ascending: false });
+      guard(error);
+      return {
+        gifts: (data || []).map((row) => ({
+          id: row.id,
+          typeId: row.type_id,
+          title: row.type?.title || row.type_id,
+          price: row.type?.price || 0,
+          rarity: row.type?.rarity || 'common',
+          art: row.type?.art || 'spark',
+          hue: row.type?.hue ?? 220,
+          note: row.note || '',
+          pinned: !!row.pinned,
+          createdAt: ms(row.created_at),
+          from: row.from ? { username: row.from.username, displayName: row.from.display_name, avatar: row.from.avatar, hue: row.from.hue } : null
+        }))
+      };
+    },
+
+    async buyGift(typeId, userId, note) {
+      const { data, error } = await sb.rpc('buy_gift', { gift: typeId, target: userId, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async sellGift(id) {
+      const { data, error } = await sb.rpc('sell_gift', { target: id });
+      guard(error);
+      return data;
+    },
+
+    async pinGift(id, on) {
+      const { error } = await sb.rpc('pin_gift', { target: id, on_shelf: !!on });
+      guard(error);
+      return { ok: true };
+    },
+
+    async campfireJoin() {
+      const { data, error } = await sb.rpc('campfire_join');
+      guard(error);
+      return data;
+    },
+
+    async campfireSay(room, body) {
+      const { error } = await sb.rpc('campfire_say', { room, body });
+      guard(error);
+      return { ok: true };
+    },
+
+    async campfireRead(room, after) {
+      const { data, error } = await sb.rpc('campfire_read', { room, after: after || 0 });
+      guard(error);
+      return data;
+    },
+
+    async campfireLeave(room) {
+      const { error } = await sb.rpc('campfire_leave', { room });
+      guard(error);
+      return { ok: true };
+    },
+
+    async letterSend(body) {
+      const { data, error } = await sb.rpc('letter_send', { body });
+      guard(error);
+      return data;
+    },
+
+    async letterTake() {
+      const { data, error } = await sb.rpc('letter_take');
+      guard(error);
+      return data;
+    },
+
+    async letterReply(id, answer) {
+      const { error } = await sb.rpc('letter_reply', { target: id, answer });
+      guard(error);
+      return { ok: true };
+    },
+
+    async myLetters() {
+      const { data, error } = await sb.rpc('my_letters');
+      guard(error);
+      return { letters: (data || []).map((row) => ({ ...row, createdAt: ms(row.createdAt), repliedAt: ms(row.repliedAt) })) };
+    },
+
+    async capsuleAdd(body, days) {
+      const { data, error } = await sb.rpc('capsule_add', { body, days });
+      guard(error);
+      return data;
+    },
+
+    async capsules() {
+      const { data, error } = await sb
+        .from('capsules')
+        .select('*')
+        .eq('user_id', requireUid())
+        .order('open_at');
+      guard(error);
+      return {
+        capsules: (data || []).map((row) => ({
+          id: row.id,
+          body: row.body,
+          openAt: ms(row.open_at),
+          createdAt: ms(row.created_at),
+          openedAt: ms(row.opened_at)
+        }))
+      };
+    },
+
+    async capsuleCheck() {
+      const { data, error } = await sb.rpc('capsule_check');
+      guard(error);
+      return data || { ready: 0 };
+    },
+
+    async capsuleDrop(id) {
+      const { error } = await sb.from('capsules').delete().eq('id', id).eq('user_id', requireUid());
+      guard(error);
+      return { ok: true };
+    },
+
+    async mentorBoard() {
+      const { data, error } = await sb.rpc('mentor_board');
+      guard(error);
+      return data || { students: [], free: [], reviews: [], mentor: null };
+    },
+
+    async mentorFeed() {
+      const { data, error } = await sb.rpc('mentor_feed');
+      guard(error);
+      return { rows: data || [] };
+    },
+
+    async mentorTake(id) {
+      const { error } = await sb.rpc('mentor_take', { student: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async mentorDrop(id) {
+      const { error } = await sb.rpc('mentor_drop', { student: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async mentorReview(punishmentId, verdict, note) {
+      const { error } = await sb.rpc('mentor_review', { target: punishmentId, verdict, note: note || '' });
+      guard(error);
+      return { ok: true };
+    },
+
+    async repost(id, note) {
+      const { data, error } = await sb.rpc('repost', { target: id, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async sendPost(chatId, postId, note) {
+      const { data, error } = await sb.rpc('send_post', { chat: chatId, target: postId, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async setBeta(id, on) {
+      const { error } = await sb.rpc('admin_set_beta', { target: id, on_beta: !!on });
+      guard(error);
+      return { ok: true };
+    },
+
+    async giveCoins(id, amount) {
+      const { data, error } = await sb.rpc('admin_give_coins', { target: id, amount });
+      guard(error);
+      return data;
+    },
+
+    async react(id, kind) {
+      const { data, error } = await sb.rpc('react', { target: id, want: kind });
+      guard(error);
+      return data;
+    },
+
+    async reactions(id) {
+      const { data, error } = await sb.rpc('post_reactions', { target: id });
+      guard(error);
+      return data || {};
+    },
+
+    async touchStreak() {
+      const { data, error } = await sb.rpc('touch_streak');
+      guard(error);
+      return data || { days: 0 };
+    },
+
+    async breatheIn(minutes) {
+      const { data, error } = await sb.rpc('breathe_in', { minutes: minutes || 0 });
+      guard(error);
+      return data || { together: 1 };
+    },
+
+    async breatheOut() {
+      await sb.rpc('breathe_out');
+      return { ok: true };
+    },
+
+    async moodMap() {
+      const { data, error } = await sb.rpc('mood_map');
+      guard(error);
+      return { rows: data || [] };
+    },
+
+    async badges() {
+      const { data, error } = await sb.rpc('my_badges');
+      guard(error);
+      return { badges: data || [] };
+    },
+
+    async pollVote(id, choice) {
+      const { data, error } = await sb.rpc('poll_vote', { target: id, choice });
+      guard(error);
+      return data;
+    },
+
+    async pollResult(id) {
+      const { data, error } = await sb.rpc('poll_result', { target: id });
+      guard(error);
+      return data || { total: 0, counts: {}, mine: null };
+    },
+
+    async pinPost(id, on) {
+      const { error } = await sb.rpc('pin_post', { target: id, on_top: !!on });
+      guard(error);
+      return { ok: true };
+    },
+
+    async follow(id, on) {
+      const { data, error } = await sb.rpc('follow', { target: id, on_follow: !!on });
+      guard(error);
+      return data;
+    },
+
+    async followState(id) {
+      const { data, error } = await sb.rpc('follow_state', { target: id });
+      guard(error);
+      return data || { following: false, followers: 0 };
+    },
+
+    async thankMod(id, note) {
+      const { data, error } = await sb.rpc('thank_mod', { target: id, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async modThanks(id) {
+      const { data, error } = await sb.rpc('mod_thanks', { target: id });
+      guard(error);
+      return data || { total: 0, week: 0, mine: false };
+    },
+
+    async eventState() {
+      const { data, error } = await sb.rpc('event_state');
+      guard(error);
+      return data || { active: false };
+    },
+
+    async eventClaim() {
+      const { data, error } = await sb.rpc('event_claim');
+      guard(error);
+      return data;
+    },
+
+    async deleteComment(id, reason) {
+      const { data, error } = await sb.rpc('delete_comment', { target: id, reason: reason || null });
+      guard(error);
+      return data;
+    },
+
+    async inviteMine() {
+      const { data, error } = await sb.rpc('invite_mine');
+      guard(error);
+      return data || { code: '', used: 0, taken: false };
+    },
+
+    async inviteUse(code) {
+      const { data, error } = await sb.rpc('invite_use', { code });
+      guard(error);
+      return data;
+    },
+
+    async noteAbout(id) {
+      const { data, error } = await sb.rpc('note_about', { target: id });
+      guard(error);
+      return { note: data?.note || '', at: data?.at || null };
+    },
+
+    async noteSave(id, body) {
+      const { data, error } = await sb.rpc('note_save', { target: id, body: body || '' });
+      guard(error);
+      return data;
+    },
+
+    async reminderMake(body, minutes) {
+      const { data, error } = await sb.rpc('reminder_make', { body, minutes });
+      guard(error);
+      return data;
+    },
+
+    async reminderDrop(id) {
+      const { error } = await sb.rpc('reminder_drop', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async remindersMine() {
+      const { data, error } = await sb.rpc('reminders_mine');
+      guard(error);
+      return { reminders: data || [] };
+    },
+
+    async remindersRing() {
+      const { data, error } = await sb.rpc('reminders_ring');
+      if (error) return { rang: 0 };
+      return data || { rang: 0 };
+    },
+
+    async guardQueue(mode = 'all', size = 40) {
+      const { data, error } = await sb.rpc('guard_queue', { size, mode });
+      guard(error);
+      return { hits: data || [] };
+    },
+
+    async guardUndo(id) {
+      const { error } = await sb.rpc('guard_undo', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async guardKeep(id) {
+      const { error } = await sb.rpc('guard_keep', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async guardStats() {
+      const { data, error } = await sb.rpc('guard_stats');
+      guard(error);
+      return data || { day: 0, day_hidden: 0, week_hidden: 0, week_undone: 0, miss: 0, top: [] };
+    },
+
+    async guardTry(text) {
+      const { data, error } = await sb.rpc('guard_try', { src: text || '' });
+      guard(error);
+      return data || { score: 0, hits: [], notes: [], hide: false };
+    },
+
+    async guardWords() {
+      const { data, error } = await sb.rpc('guard_words_all');
+      guard(error);
+      return { words: data || [] };
+    },
+
+    async guardWordAdd(word, kind, weight) {
+      const { data, error } = await sb.rpc('guard_word_add', { src: word, kind, weight });
+      guard(error);
+      return data;
+    },
+
+    async guardWordDrop(id) {
+      const { error } = await sb.rpc('guard_word_drop', { target: id });
+      guard(error);
+      return { ok: true };
+    },
+
+    async guardConfig() {
+      const { data, error } = await sb.rpc('guard_config_read');
+      guard(error);
+      return data || {};
+    },
+
+    async guardConfigSave(patch) {
+      const { data, error } = await sb.rpc('guard_config_write', { patch });
+      guard(error);
+      return data || {};
+    },
+
+    async moodTwins() {
+      const { data, error } = await sb.rpc('mood_twins');
+      guard(error);
+      return { mood: data?.mood || null, people: data?.people || [] };
+    },
+
+    async messageReact(id, glyph) {
+      const { data, error } = await sb.rpc('message_react', { target: id, glyph: glyph || '' });
+      guard(error);
+      return data;
+    },
+
+    async chatReactions(chatId) {
+      const { data, error } = await sb.rpc('chat_reactions', { room: chatId });
+      guard(error);
+      return { reactions: data || {} };
+    },
+
+    async seasonState() {
+      const { data, error } = await sb.rpc('season_state');
+      guard(error);
+      return data || { season: 'autumn', collected: 0, total: 0 };
+    },
+
+    async setShelf(rows) {
+      const { error } = await sb.rpc('set_shelf', { rows });
+      guard(error);
+      return { ok: true };
+    },
+
+    async myPunishments() {
+      const { data, error } = await sb
+        .from('punishments')
+        .select('id, kind, minutes, reason, created_at, reverted')
+        .eq('user_id', requireUid())
+        .order('created_at', { ascending: false })
+        .limit(20);
+      guard(error);
+      return {
+        punishments: (data || []).map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          minutes: row.minutes,
+          reason: row.reason || '',
+          createdAt: ms(row.created_at),
+          reverted: !!row.reverted
+        }))
+      };
+    },
+
+    async appealSend(punishmentId, body) {
+      const { data, error } = await sb.rpc('appeal_send', { target: punishmentId, body });
+      guard(error);
+      return data;
+    },
+
+    async myAppeals() {
+      const { data, error } = await sb.rpc('my_appeals');
+      guard(error);
+      return { appeals: data || [] };
+    },
+
+    async appealQueue() {
+      const { data, error } = await sb.rpc('appeal_queue');
+      guard(error);
+      return { appeals: data || [] };
+    },
+
+    async appealJudge(id, verdict, note) {
+      const { data, error } = await sb.rpc('appeal_judge', { target: id, verdict, note: note || '' });
+      guard(error);
+      return data;
+    },
+
+    async monthRecap() {
+      const { data, error } = await sb.rpc('month_recap');
+      guard(error);
+      return data || {};
+    },
+
+    async recoveryState() {
+      const { data, error } = await sb.rpc('recovery_state');
+      guard(error);
+      return data || { total: 0 };
+    },
+
+    async recoveryMake() {
+      const { data, error } = await sb.rpc('recovery_make');
+      guard(error);
+      return { codes: (data && data.codes) || [] };
+    },
+
+    async recoverAccount(login, code, password) {
+      const { data, error } = await sb.rpc('recovery_use', { login, code, fresh_password: password });
+      guard(error);
+      const handle = (data && data.login) || login;
+      const answer = await sb.auth.signInWithPassword({ email: emailFor(handle), password });
+      guard(answer.error);
+      uid = answer.data.user.id;
+      listen();
+      return { user: await profileById(uid) };
+    },
+
+    async summerRecap() {
+      const { data, error } = await sb.rpc('summer_recap');
+      guard(error);
+      return data || {};
+    },
+
+    async reelIds(size, seen) {
+      const { data, error } = await sb.rpc('feed_reels', { size: size || 12, seen: seen || [] });
+      guard(error);
+      return { ids: data || [] };
     },
 
     async strikes(userId) {
@@ -640,6 +1935,30 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('admin_stats');
       guard(error);
       return { stats: data };
+    },
+
+    async adminHealth() {
+      const { data, error } = await sb.rpc('admin_health');
+      guard(error);
+      return { health: data || {} };
+    },
+
+    async praisePick() {
+      const { data, error } = await sb.rpc('admin_praise_pick');
+      guard(error);
+      return { who: data && data.id ? data : null };
+    },
+
+    async praise(id, note, coins) {
+      const { data, error } = await sb.rpc('admin_praise', { target: id, note: note || '', purse: coins || 100 });
+      guard(error);
+      return data;
+    },
+
+    async quietCall(body) {
+      const { error } = await sb.rpc('admin_quiet_call', { body: body || '' });
+      guard(error);
+      return { ok: true };
     },
 
     async adminUsers(query) {
@@ -798,7 +2117,7 @@ export async function createSupabase(url, key) {
     async stories() {
       const { data, error } = await sb
         .from('stories')
-        .select('*, author:profiles!stories_author_id_fkey(*)')
+        .select(`*, author:profiles!stories_author_id_fkey(${AUTHOR_FIELDS})`)
         .gt('expires_at', new Date().toISOString())
         .order('id', { ascending: true });
       guard(error);
