@@ -73,7 +73,8 @@ export async function openQuests() {
 
       if (challenge && challenge.id) {
         const chPct = challenge.target > 0 ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100)) : 0;
-        const canComplete = challenge.progress >= challenge.target && !challenge.completed;
+        const allDailyDone = daily && daily.length > 0 && daily.every((q) => q.completed);
+        const canComplete = allDailyDone && !challenge.completed;
         html += `
           <div class="card" style="background:linear-gradient(135deg,rgba(184,230,201,.08),var(--bg-2));border:1px solid rgba(184,230,201,.2);padding:14px">
             <div class="row between" style="align-items:center;margin-bottom:8px">
@@ -88,7 +89,7 @@ export async function openQuests() {
               <span class="tiny muted">${challenge.progress}/${challenge.target}</span>
             </div>
             <button class="btn ${challenge.completed ? '' : (canComplete ? 'btn-primary' : '')}" data-challenge ${(!canComplete || challenge.completed) ? 'disabled' : ''} style="width:100%">
-              ${challenge.completed ? 'Выполнено' : (canComplete ? 'Забрать награду' : 'Выполните задания')}
+              ${challenge.completed ? 'Выполнено' : (canComplete ? 'Забрать награду' : 'Выполните все ежедневные задания')}
             </button>
           </div>
         `;
