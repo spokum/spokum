@@ -474,7 +474,10 @@ export async function createSupabase(url, key) {
   const firstSession = sessionResult?.data?.session || null;
   if (firstSession) keepSession(firstSession);
   uid = firstSession?.user?.id || storedSession() || null;
-  if (!uid) uid = await restoreSession(navigator.onLine ? 2 : 0);
+  // ─── БАГФИКС: больше попыток восстановить сессию при загрузке ───
+  // Раньше было 2 попытки — иногда не хватало, и при reload приложение
+  //showало экран входа, хотя сессия была валидна.
+  if (!uid) uid = await restoreSession(navigator.onLine ? 4 : 0);
   if (uid) listen();
 
   sb.auth.onAuthStateChange((event, session) => {
@@ -540,8 +543,11 @@ export async function createSupabase(url, key) {
       guard(error);
       if (!data.session) throw new Error('Подтверждение почты включено в Supabase, выключите его в Authentication → Providers → Email');
       uid = data.user.id;
+      if (data.session) keepSession(data.session);
+      const user = await profileById(uid);
+      keepProfile(user); // ─── БАГФИКС: кэшируем профиль для reload
       listen();
-      return { user: await profileById(uid) };
+      return { user };
     },
 
     async login({ username, password }) {
@@ -563,6 +569,7 @@ export async function createSupabase(url, key) {
         dropKeptSession();
         throw new Error('Аккаунт заблокирован');
       }
+      keepProfile(user); // ─── БАГФИКС: кэшируем профиль, чтобы при reload показать его сразу
       listen();
       return { user };
     },
