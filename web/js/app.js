@@ -83,6 +83,37 @@ function watchNetwork() {
 
 const IN_APP = location.hostname === 'spokum.local' || location.hostname === 'appassets.androidplatform.net';
 
+// ─── БАГФИКС: принудительная очистка старых Service Worker ───
+// У некоторых пользователей (например @silver, логинившегося до фиксов)
+// в браузере застрял старый SW версии v62/v63/v64. Новый SW (v65) не
+// активируется, пока не закрыты все вкладки со старым. Поэтому при загрузке
+// проверяем версию активного SW, и если она старая — unregister его.
+// Это заставит браузер установить новый SW с network-first navigation.
+const REQUIRED_SW_VERSION = 'spokum-v65';
+
+async function purgeStaleWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const reg of registrations) {
+      // Запросим свежий sw.js, чтобы прочитать его VERSION
+      try {
+        const resp = await fetch('sw.js', { cache: 'no-store' });
+        const text = await resp.text();
+        const match = text.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+        const liveVersion = match ? match[1] : null;
+        if (liveVersion && liveVersion !== REQUIRED_SW_VERSION) {
+          // На сервере уже новая версия, но установлен старый SW — сносим
+          await reg.unregister();
+          console.log('[sw] unregistered stale worker, will re-register fresh');
+        }
+      } catch {
+        // Не получилось проверить — оставляем как есть
+      }
+    }
+  } catch {}
+}
+
 function registerWorker() {
   if (!('serviceWorker' in navigator)) return;
   if (IN_APP) {
@@ -91,7 +122,13 @@ function registerWorker() {
       .catch(() => {});
     return;
   }
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Сначала чистим старый, потом регистрируем новый
+  purgeStaleWorker().finally(() => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      // Принудительно проверяем обновление при каждой загрузке
+      reg.update().catch(() => {});
+    }).catch(() => {});
+  });
 }
 
 async function detectLogo() {
