@@ -3,8 +3,6 @@ import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, openSheet, emptyState } from '../ui.js';
 
-const BETA_USER = 'silver';
-
 async function mount(host) {
   host.innerHTML = `<div class="card"><p class="muted center">Загрузка...</p></div>`;
   try {
@@ -58,7 +56,6 @@ async function mount(host) {
 }
 
 export async function openTournaments() {
-  if (state.user?.username !== BETA_USER) { toast('Скоро для всех', 'err'); return; }
   const host = el('<div class="col"></div>');
   const sheet = openSheet('Турниры', host, {});
   await mount(host);
@@ -66,9 +63,5 @@ export async function openTournaments() {
 }
 
 export async function render(root) {
-  if (state.user?.username !== BETA_USER) {
-    root.innerHTML = `<div class="card"><p class="muted center">Скоро для всех</p></div>`;
-    return;
-  }
   await mount(root);
 }

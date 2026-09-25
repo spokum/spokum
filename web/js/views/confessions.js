@@ -3,12 +3,6 @@ import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, emptyState, openSheet, confirmSheet } from '../ui.js';
 
-const BETA_USER = 'silver';
-
-export function isConfessionsOpen() {
-  return state.user?.username === BETA_USER;
-}
-
 async function mount(host) {
   host.innerHTML = `
     <div class="card" style="margin:8px 0">
@@ -80,7 +74,6 @@ async function mount(host) {
 }
 
 export async function openConfessions() {
-  if (!isConfessionsOpen()) { toast('Скоро для всех', 'err'); return; }
   const host = el('<div class="col"></div>');
   const sheet = openSheet('Анонимные признания', host, {});
   await mount(host);
@@ -88,9 +81,5 @@ export async function openConfessions() {
 }
 
 export async function render(root) {
-  if (!isConfessionsOpen()) {
-    root.innerHTML = `<div class="card"><p class="muted center">Скоро для всех</p></div>`;
-    return;
-  }
   await mount(root);
 }

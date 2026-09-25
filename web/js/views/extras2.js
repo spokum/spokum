@@ -3,10 +3,7 @@ import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, openSheet, emptyState, confirmSheet, promptSheet } from '../ui.js';
 
-const BETA_USER = 'silver';
-
 export async function openProfileViewers() {
-  if (state.user?.username !== BETA_USER) { toast('Скоро для всех', 'err'); return; }
   const host = el('<div class="col" style="gap:8px"></div>');
   const sheet = openSheet('Кто смотрел профиль', host);
   host.innerHTML = `<div class="card"><p class="muted center">Загрузка...</p></div>`;
@@ -32,7 +29,6 @@ export async function openProfileViewers() {
 }
 
 export async function openWishlist(userId, isOwn) {
-  if (state.user?.username !== BETA_USER && !isOwn) { toast('Скоро для всех', 'err'); return; }
   const host = el('<div class="col" style="gap:8px"></div>');
   const sheet = openSheet(isOwn ? 'Мой вишлист' : 'Вишлист', host);
 

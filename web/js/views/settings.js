@@ -104,11 +104,11 @@ export async function render(root) {
       <div class="accent-row" data-accents></div>
       <div class="divider"></div>
       <button class="list-item" data-mine>${icon('palette', 18)}<div class="grow"><div class="small strong">Своя тема</div><div class="tiny muted">Соберите оформление под себя</div></div>${icon('forward', 15)}</button>
-      ${state.user?.username === 'silver' ? `<div class="divider"></div>
+      <div class="divider"></div>
       <div class="row between" style="padding:8px 0">
         <div><div class="small strong">Новый интерфейс (v2.0)</div><div class="tiny muted">Крупнее карточки, мягче тени</div></div>
         <label class="switch"><input type="checkbox" data-ui-v2 ${localStorage.getItem('spokum.ui') === 'v2' ? 'checked' : ''}><span></span></label>
-      </div>` : ''}
+      </div>
     </div>
 
     ${premiumCard()}
@@ -183,8 +183,8 @@ export async function render(root) {
       <button class="list-item" data-pin>${icon('lock', 18)}<div class="grow"><div class="small strong">Код на вход</div><div class="tiny muted" data-pin-state>Спрашивать код при запуске</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
-      ${state.user?.username === 'silver' ? `<button class="list-item" data-blocks>${icon('ban', 18)}<div class="grow"><div class="small strong">Чёрный список</div><div class="tiny muted" data-blocks-state>Заблокированные пользователи</div></div>${icon('forward', 15)}</button>` : ''}
-      ${state.user?.username === 'silver' ? `<button class="list-item" data-promo>${icon('gift', 18)}<div class="grow"><div class="small strong">Промокод</div><div class="tiny muted">Активировать код и получить награду</div></div>${icon('forward', 15)}</button>` : ''}
+      <button class="list-item" data-blocks>${icon('ban', 18)}<div class="grow"><div class="small strong">Чёрный список</div><div class="tiny muted" data-blocks-state>Заблокированные пользователи</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-promo>${icon('gift', 18)}<div class="grow"><div class="small strong">Промокод</div><div class="tiny muted">Активировать код и получить награду</div></div>${icon('forward', 15)}</button>
     </div>
 
     <div class="card appear">
@@ -203,7 +203,7 @@ export async function render(root) {
     <div class="card appear center">
       <div class="strong">СпокУм</div>
       <div class="tiny muted" style="margin-top:4px">Соцсеть про спокойствие и настроение</div>
-      <div class="tiny muted" style="margin-top:8px">версия 1.0</div>
+      <div class="tiny muted" style="margin-top:8px">версия 2.0</div>
     </div>`;
 
   const premium = isPremium(state.user);

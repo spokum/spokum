@@ -1081,12 +1081,6 @@ async function drawAudit(body) {
 }
 
 async function drawPromos(body) {
-  
-  if (state.user?.username !== 'silver') {
-    body.innerHTML = emptyState('lock', 'Скоро', 'Раздел промокодов откроется позже');
-    return;
-  }
-
   body.innerHTML = `
     <div class="col" style="gap:10px;padding:12px">
       <div class="card" style="padding:12px">

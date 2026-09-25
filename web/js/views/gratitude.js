@@ -3,12 +3,6 @@ import { el, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, emptyState, openSheet, confirmSheet } from '../ui.js';
 
-const BETA_USER = 'silver';
-
-export function isGratitudeOpen() {
-  return state.user?.username === BETA_USER;
-}
-
 async function mount(host) {
   host.innerHTML = `
     <div class="card" style="margin:8px 0">
@@ -99,10 +93,6 @@ async function mount(host) {
 }
 
 export async function openGratitude() {
-  if (!isGratitudeOpen()) {
-    toast('Раздел скоро откроется для всех', 'err');
-    return;
-  }
   const host = el('<div class="col"></div>');
   const sheet = openSheet('Стена благодарности', host, {});
   await mount(host);
@@ -110,10 +100,6 @@ export async function openGratitude() {
 }
 
 export async function render(root) {
-  if (!isGratitudeOpen()) {
-    root.innerHTML = `<div class="card"><p class="muted center">Раздел скоро откроется для всех</p></div>`;
-    return;
-  }
   await mount(root);
 }
 

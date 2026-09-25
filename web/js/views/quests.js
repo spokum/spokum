@@ -3,12 +3,6 @@ import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, emptyState } from '../ui.js';
 
-const BETA_USER = 'silver';
-
-export function isQuestsOpen() {
-  return state.user?.username === BETA_USER;
-}
-
 function questCard(q) {
   const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
   return `
@@ -31,7 +25,6 @@ function questCard(q) {
 }
 
 export async function openQuests() {
-  if (!isQuestsOpen()) { toast('Скоро для всех', 'err'); return; }
   const host = el('<div class="col" style="gap:10px"></div>');
   const sheet = openSheet('Задания', host, {});
 
