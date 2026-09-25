@@ -2347,8 +2347,8 @@ export async function createSupabase(url, key) {
         p_title: payload.title,
         p_ends_at: payload.endsAt,
         p_prize_1: payload.prize1 || 500,
-        p_prize_2: payload.prize2 || 300,
-        p_prize_3: payload.prize3 || 150
+        p_prize_2: payload.prize2 || 250,
+        p_prize_3: payload.prize3 || 100
       });
       guard(error);
       return data || { ok: true };
