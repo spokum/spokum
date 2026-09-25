@@ -348,23 +348,18 @@ async function boot() {
   }
   let fromCache = false;
   try {
-    console.log('[boot] calling api.me()...');
     const { user } = await api.me();
-    console.log('[boot] api.me() returned:', { user: user?.username || null, uid: user?.id || null });
     if (user) setUser(user);
     else {
       const kept = api.cachedUser?.() || null;
-      console.log('[boot] cachedUser:', { kept: kept?.username || null, id: kept?.id || null });
       setUser(kept);
       fromCache = !!kept;
     }
   } catch (error) {
-    console.log('[boot] api.me() threw:', error?.message || error);
     const kept = api.cachedUser?.() || null;
     setUser(kept);
     fromCache = !!kept;
   }
-  console.log('[boot] state:', { fromCache, hasUser: !!state.user, sessionGone: api.sessionGone?.() });
   if (await checkDevice(false)) return;
   if (!state.user) {
     renderAuth(root, start);
