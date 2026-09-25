@@ -285,8 +285,6 @@ export async function openChat(chatId) {
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
-
-
 const REACTS = [
   ['heart', 'heart'],
   ['smile', 'smile'],
@@ -382,7 +380,7 @@ function bubble(message, chat, lastAuthor) {
 
   const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
   const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
-  // v2.0: для своих текстовых сообщений показываем кнопку удаления
+  
   const canDelete = mine && message.kind !== 'call' && message.kind !== 'gift' && message.kind !== 'system' && !message.removed;
   const delBtn = canDelete ? `<button class="bubble-del" data-del-msg title="Удалить">${icon('trash', 12)}</button>` : '';
   const removedBadge = message.removed ? `<div class="tiny muted" style="font-style:italic">сообщение удалено</div>` : '';
@@ -426,7 +424,7 @@ function bubble(message, chat, lastAuthor) {
       play.innerHTML = icon('play', 15);
     };
   }
-  // v2.0: удаление своего сообщения
+  
   const delMsg = node.querySelector('[data-del-msg]');
   if (delMsg) {
     delMsg.onclick = async (event) => {
@@ -436,7 +434,7 @@ function bubble(message, chat, lastAuthor) {
       try {
         await api.deleteMyMessage(message.id);
         toast('Удалено');
-        // Обновим чат
+        
         const draw2 = node.closest('[data-host')?.__draw;
         if (typeof draw2 === 'function') draw2();
         else window.location.reload();
@@ -688,5 +686,4 @@ function openMembers(chat) {
     };
   });
 }
-
 

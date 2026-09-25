@@ -89,9 +89,9 @@ export async function openGiftShop(target, done) {
   const grid = body.querySelector('[data-grid]');
   const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][new Date().getMonth()];
   types
-    // Подарки за событие (например, розочка лета) выдаются кнопкой в ленте.
-    // В магазине им делать нечего: цена ноль, и раньше их можно было «купить» себе
-    // бесплатно и без ограничений.
+    
+    
+    
     .filter((kind) => kind.price > 0 && (!kind.season || kind.season === season))
     .forEach((kind) => {
     const card = el(`<button class="gift-card ${purse < kind.price ? 'poor' : ''}">

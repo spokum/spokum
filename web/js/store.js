@@ -24,8 +24,8 @@ export async function initBackend() {
 
   if (supabaseUrl && supabaseKey) {
     if (backend.mode === 'supabase') return backend.mode;
-    // Повторный запуск не должен поднимать вторую копию службы входа:
-    // две копии одновременно обновляют один и тот же ключ, и вход вылетает.
+    
+    
     if (starting) return starting;
     starting = (async () => {
       try {

@@ -6,7 +6,6 @@ import { openProfile } from './profile.js';
 import { openStories, publishStory } from './stories.js';
 import { isSaved, toggleSaved, savedList, dropSaved, folders, addFolder, dropFolder, setFolder } from '../saved.js';
 
-
 const DAY_THEMES = [
   ['Воскресный итог', 'Что было хорошего за неделю?'],
   ['Понедельник маленьких целей', 'Одно дело, которое сегодня по силам'],
@@ -797,7 +796,6 @@ function tagged(text) {
   return esc(text).replace(/(^|\s)#([\wа-яё]{2,24})/gi, (all, space, tag) => `${space}<span class="hashtag" data-tag="${tag.toLowerCase()}">#${tag}</span>`);
 }
 
-
 function voiceBlock(post) {
   const bars = [];
   let seed = Number(post.id) || 7;
@@ -1151,7 +1149,7 @@ export async function openComments(post, refresh) {
           const ok = await confirmSheet({ title: 'Удалить комментарий', text: 'Он пропадёт навсегда.', confirm: 'Удалить', danger: true });
           if (!ok) return;
           try {
-            // v2.0: свой комментарий удаляем через delete_my_comment, чужой (хост поста) — через deleteComment
+            
             if (mine) {
               await api.deleteMyComment(c.id);
             } else {

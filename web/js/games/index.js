@@ -5004,7 +5004,6 @@ function mine(canvas, report) {
   });
 }
 
-
 function lights(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     let width = w;
@@ -5294,9 +5293,6 @@ function chain(canvas, report) {
   });
 }
 
-// ─── НОВЫЕ ИГРЫ ───
-
-// Светлячки: тапать по появляющимся огонькам, пока не погасли
 function fireflies(canvas, report) {
   return runner(canvas, () => {
     let state = { flies: [], score: 0, spawn: 0, dist: 0, miss: 0, over: false };
@@ -5339,14 +5335,14 @@ function fireflies(canvas, report) {
       draw(ctx, size) {
         const { w, h } = size;
         backdrop(ctx, w, h, ['#0a1410', '#1a2a22']);
-        // фон-звёзды
+        
         ctx.fillStyle = 'rgba(255,255,255,.18)';
         for (let i = 0; i < 30; i++) {
           const sx = ((i * 173 + state.dist * 8) % w);
           const sy = ((i * 91) % h);
           ctx.fillRect(sx, sy, 1.5, 1.5);
         }
-        // светлячки
+        
         state.flies.forEach((f) => {
           const alpha = Math.min(1, f.life);
           const r = 8 + Math.sin(state.dist * 8 + f.x * 10) * 2;
@@ -5366,7 +5362,6 @@ function fireflies(canvas, report) {
   });
 }
 
-// Град: уклоняться от падающих камней, двигая платформу
 function hail(canvas, report) {
   return runner(canvas, () => {
     let state = { x: 0.5, stones: [], score: 0, spawn: 0, dist: 0, over: false };
@@ -5408,7 +5403,7 @@ function hail(canvas, report) {
       draw(ctx, size) {
         const { w, h } = size;
         backdrop(ctx, w, h, ['#151d23', '#283a45']);
-        // камни
+        
         state.stones.forEach((s) => {
           ctx.fillStyle = '#8a9aa5';
           ctx.beginPath();
@@ -5419,7 +5414,7 @@ function hail(canvas, report) {
           ctx.arc(s.x * w - s.r * w * 0.3, s.y * h - s.r * w * 0.3, s.r * w * 0.4, 0, Math.PI * 2);
           ctx.fill();
         });
-        // платформа
+        
         ctx.fillStyle = '#dde8ef';
         ctx.beginPath();
         ctx.roundRect(state.x * w - 24, h * 0.9 - 8, 48, 14, 7);
@@ -5431,7 +5426,6 @@ function hail(canvas, report) {
   });
 }
 
-// Реакция: тапать по загорающимся кругам, чем дольше — тем быстрее
 function reaction(canvas, report) {
   return runner(canvas, () => {
     let state = { target: null, score: 0, miss: 0, dist: 0, over: false, spawn: 0 };
@@ -5502,9 +5496,6 @@ function reaction(canvas, report) {
   });
 }
 
-// ─── v2.0: ЕЩЕ 3 НОВЫЕ ИГРЫ ───
-
-// Дождь: ловить капли, уклоняться от молний
 function rain(canvas, report) {
   return runner(canvas, () => {
     let state = { x: 0.5, drops: [], bolts: [], score: 0, spawn: 0, boltSpawn: 0, dist: 0, over: false, lives: 3 };
@@ -5558,14 +5549,14 @@ function rain(canvas, report) {
       draw(ctx, size) {
         const { w, h } = size;
         backdrop(ctx, w, h, ['#081b22', '#0f3a45']);
-        // капли
+        
         ctx.fillStyle = 'rgba(150,200,255,.7)';
         state.drops.forEach((d) => {
           ctx.beginPath();
           ctx.ellipse(d.x * w, d.y * h, 2, 6, 0, 0, Math.PI * 2);
           ctx.fill();
         });
-        // молнии (красные)
+        
         state.bolts.forEach((b) => {
           ctx.fillStyle = '#ff6b6b';
           ctx.beginPath();
@@ -5575,7 +5566,7 @@ function rain(canvas, report) {
           ctx.closePath();
           ctx.fill();
         });
-        // сосуд
+        
         ctx.fillStyle = '#dde8ef';
         ctx.beginPath();
         ctx.roundRect(state.x * w - 18, h * 0.85 - 6, 36, 14, 7);
@@ -5587,7 +5578,6 @@ function rain(canvas, report) {
   });
 }
 
-// Паук: плести паутину, ловить мух
 function spider(canvas, report) {
   return runner(canvas, () => {
     let state = { x: 0.5, y: 0.5, flies: [], score: 0, spawn: 0, dist: 0, over: false, miss: 0 };
@@ -5636,14 +5626,14 @@ function spider(canvas, report) {
       draw(ctx, size) {
         const { w, h } = size;
         backdrop(ctx, w, h, ['#0d0d12', '#1d1d28']);
-        // мухи
+        
         state.flies.forEach((f) => {
           ctx.fillStyle = '#a8d4a0';
           ctx.beginPath();
           ctx.arc(f.x * w, f.y * h, 4, 0, Math.PI * 2);
           ctx.fill();
         });
-        // паук
+        
         ctx.fillStyle = '#e8d4e8';
         ctx.beginPath();
         ctx.arc(state.x * w, state.y * h, 8, 0, Math.PI * 2);
@@ -5663,7 +5653,6 @@ function spider(canvas, report) {
   });
 }
 
-// Змейка 2: классическая змейка с управлением свайпом
 function snake2(canvas, report) {
   return runner(canvas, () => {
     const GRID = 14;
@@ -5723,12 +5712,12 @@ function snake2(canvas, report) {
         const cell = Math.min(w, h) / GRID;
         const ox = (w - cell * GRID) / 2;
         const oy = (h - cell * GRID) / 2;
-        // еда
+        
         ctx.fillStyle = '#e8a4a4';
         ctx.beginPath();
         ctx.arc(ox + state.food.x * cell + cell / 2, oy + state.food.y * cell + cell / 2, cell / 3, 0, Math.PI * 2);
         ctx.fill();
-        // змейка
+        
         state.snake.forEach((s, i) => {
           ctx.fillStyle = i === 0 ? '#a8d4a0' : '#87b7a3';
           ctx.beginPath();

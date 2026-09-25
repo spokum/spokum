@@ -73,8 +73,8 @@ function watchNetwork() {
   };
   window.addEventListener('online', update);
   window.addEventListener('offline', update);
-  // Возвращаемся к приложению — сразу проверяем вход: пока телефон лежал в
-  // кармане, ключ мог устареть, и человека не должно выбрасывать на экран входа.
+  
+  
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') bringBackSession();
   });
@@ -83,12 +83,6 @@ function watchNetwork() {
 
 const IN_APP = location.hostname === 'spokum.local' || location.hostname === 'appassets.androidplatform.net';
 
-// ─── БАГФИКС: принудительная очистка старых Service Worker ───
-// У некоторых пользователей (например @silver, логинившегося до фиксов)
-// в браузере застрял старый SW версии v62/v63/v64. Новый SW (v65) не
-// активируется, пока не закрыты все вкладки со старым. Поэтому при загрузке
-// проверяем версию активного SW, и если она старая — unregister его.
-// Это заставит браузер установить новый SW с network-first navigation.
 const REQUIRED_SW_VERSION = 'spokum-v65';
 
 async function purgeStaleWorker() {
@@ -96,19 +90,19 @@ async function purgeStaleWorker() {
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const reg of registrations) {
-      // Запросим свежий sw.js, чтобы прочитать его VERSION
+      
       try {
         const resp = await fetch('sw.js', { cache: 'no-store' });
         const text = await resp.text();
         const match = text.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
         const liveVersion = match ? match[1] : null;
         if (liveVersion && liveVersion !== REQUIRED_SW_VERSION) {
-          // На сервере уже новая версия, но установлен старый SW — сносим
+          
           await reg.unregister();
           console.log('[sw] unregistered stale worker, will re-register fresh');
         }
       } catch {
-        // Не получилось проверить — оставляем как есть
+        
       }
     }
   } catch {}
@@ -122,10 +116,10 @@ function registerWorker() {
       .catch(() => {});
     return;
   }
-  // Сначала чистим старый, потом регистрируем новый
+  
   purgeStaleWorker().finally(() => {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
-      // Принудительно проверяем обновление при каждой загрузке
+      
       reg.update().catch(() => {});
     }).catch(() => {});
   });
@@ -259,7 +253,7 @@ function showBlocked(ban) {
 
 let sessionPending = false;
 let sessionTries = 0;
-// Пробуем долго: полчаса на связи — это не повод показывать экран входа.
+
 const SESSION_TRIES_MAX = 480;
 
 async function bringBackSession() {
@@ -290,9 +284,6 @@ async function bringBackSession() {
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 
-// Настроена ли внешняя база. Если да, «нет входа» можно говорить только тогда,
-// когда она точно ответила: на медленной связи и через VPN она поднимается долго,
-// и раньше приложение успевало показать экран входа просто из-за задержки.
 function remoteConfigured() {
   if (window.SPOKUM_FORCE_LOCAL) return false;
   const params = new URLSearchParams(location.search);
@@ -366,9 +357,9 @@ async function boot() {
     return;
   }
   if (fromCache) {
-    // Профиль взяли из сохранённого, а вход ещё не подтверждён. Если сервер
-    // прямо отказал во входе — показываем экран входа, если виновата связь,
-    // пускаем в приложение и дожидаемся сети: из аккаунта не выбрасываем.
+    
+    
+    
     if (api.sessionGone?.() === true) {
       setUser(null);
       renderAuth(root, start);

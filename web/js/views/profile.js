@@ -4,8 +4,6 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
 
-
-
 function moodCanvas(user, data) {
   const canvas = document.createElement('canvas');
   const scale = 2;
@@ -170,8 +168,6 @@ async function openAppeals() {
     };
   });
 }
-
-
 
 async function openInvite() {
   if (!api.inviteMine) return toast('Приглашения появятся, когда база будет обновлена', 'err');
@@ -760,7 +756,6 @@ function openPinEditor(user, done) {
 
   draw();
 }
-
 
 function shapeAvatar(seed, hue) {
   const size = 256;

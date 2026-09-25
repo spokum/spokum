@@ -200,7 +200,6 @@ async function drawReels(body) {
   await load('reels');
 }
 
-
 const GUARD_MODES = [
   ['open', 'Ждут проверки'],
   ['hidden', 'Скрытые'],
@@ -532,7 +531,6 @@ async function drawReports(body) {
     list.appendChild(card);
   });
 }
-
 
 async function drawAppeals(body) {
   if (!api.appealQueue) {

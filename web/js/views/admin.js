@@ -76,8 +76,6 @@ export async function openAdmin() {
   draw();
 }
 
-
-
 const GUARD_KINDS = [
   ['insult', 'Оскорбление'],
   ['threat', 'Угроза'],
@@ -852,8 +850,8 @@ function openUserActions(user, refresh) {
   body.querySelector('[data-mute]').onclick = () => restrict('mute', user.mutedUntil > Date.now() ? 'unmute' : null);
   body.querySelector('[data-ban]').onclick = () => restrict('ban', user.bannedUntil > Date.now() ? 'unban' : null);
 
-  // Полное удаление: профиль, записи, переписка, подарки и сам вход.
-  // Два подтверждения и ввод @имени — чтобы не удалить человека случайно.
+  
+  
   body.querySelector('[data-erase]').onclick = async () => {
     sheet.close();
     if (!api.adminDeleteUser) {
@@ -1082,9 +1080,8 @@ async function drawAudit(body) {
     .join('')}</div></div>`;
 }
 
-// ─── v2.0: Промокоды (админ) ───
 async function drawPromos(body) {
-  // Gate: только silver на этапе бета-теста
+  
   if (state.user?.username !== 'silver') {
     body.innerHTML = emptyState('lock', 'Скоро', 'Раздел промокодов откроется позже');
     return;

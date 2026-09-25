@@ -207,7 +207,7 @@ function ensureNewTables() {
   for (const key of ['coinLog', 'gifts', 'campRooms', 'campSeats', 'campMessages', 'letters', 'capsules', 'mentorships', 'mentorReviews']) {
     if (!Array.isArray(state[key])) state[key] = [];
   }
-  // Розочка лета удалена из продукта: убираем её у всех, у кого она успела появиться.
+  
   if (state.rosePurged !== '2026-09') {
     state.gifts = state.gifts.filter((row) => row.typeId !== 'rose');
     state.eventClaims = [];
@@ -948,7 +948,7 @@ export const local = {
     return { removed: before - state.posts.length };
   },
 
-  // Полное удаление аккаунта: записи, переписка, витрина, вход и входы.
+  
   async adminDeleteUser(userId) {
     const admin = needAdmin();
     const target = state.users.find((u) => u.id === userId);
@@ -961,14 +961,14 @@ export const local = {
       messages: (state.messages || []).filter((m) => m.userId === userId).length
     };
 
-    // Чаты, где человек был, уходят целиком: вместе с участниками и перепиской.
+    
     const chats = new Set((state.members || []).filter((m) => m.userId === userId).map((m) => m.chatId));
     state.chats = (state.chats || []).filter((c) => !chats.has(c.id));
     state.members = (state.members || []).filter((m) => !chats.has(m.chatId));
     state.messages = (state.messages || []).filter((m) => !chats.has(m.chatId));
 
-    // Всё остальное, где встречается его номер или его записи: лайки, ответы,
-    // подписки, подарки, жалобы, наказания, монеты, заметки, истории, игры.
+    
+    
     const goneIds = new Set([userId]);
     state.posts.forEach((p) => {
       if (p.authorId === userId) goneIds.add(p.id);
@@ -2143,8 +2143,8 @@ export const local = {
     };
   },
 
-  // Ивент «Последний день лета» и розочка удалены из продукта. Функции отвечают
-  // так же, как сервер, — старые версии приложения не должны сыпать ошибками.
+  
+  
   async eventState() {
     return { active: false, id: 'summer26' };
   },

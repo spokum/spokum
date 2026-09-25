@@ -352,8 +352,8 @@ export async function createSupabase(url, key) {
     return null;
   };
 
-  // Своя копия входа. Живёт отдельно от хранилища библиотеки: если она потеряет
-  // сессию из-за обрыва связи, вход поднимется отсюда, а не превратится в выход.
+  
+  
   const KEEP_SESSION = 'spokum.session.keep';
   let sessionLost = false;
 
@@ -368,9 +368,9 @@ export async function createSupabase(url, key) {
       }));
       sessionLost = false;
     } catch {}
-    // Держим приложение в курсе: у него своя копия ключа для фоновой проверки
-    // уведомлений. Если она отстанет, приложение и веб начнут обновлять вход
-    // по разным ключам — и вход сгорит.
+    
+    
+    
     if (window.SpokumHost?.setAuth) {
       try {
         window.SpokumHost.setAuth(url, key, session.refresh_token);
@@ -394,9 +394,9 @@ export async function createSupabase(url, key) {
 
   const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 
-  // Библиотека входа молча стирает сессию, если обновление ключа вернуло отказ
-  // («ключ уже использован», «сессия не найдена»). Снаружи это выглядит как
-  // выход из аккаунта. Поэтому всегда проверяем, живёт ли сессия на самом деле.
+  
+  
+  
   const liveSession = async () => {
     try {
       const { data } = await withTimeout(sb.auth.getSession(), 6000, { data: null });
@@ -416,9 +416,9 @@ export async function createSupabase(url, key) {
       return null;
     }
     restoring = (async () => {
-      // Может быть, вход уже поднят — другой вкладкой того же устройства или
-      // самой библиотекой. Тогда ничего не обновляем: лишний запрос нового ключа
-      // как раз и приводит к «ключ уже использован».
+      
+      
+      
       const already = await liveSession();
       if (already?.user?.id) {
         uid = already.user.id;
@@ -473,9 +473,9 @@ export async function createSupabase(url, key) {
   const firstSession = sessionResult?.data?.session || null;
   if (firstSession) keepSession(firstSession);
   uid = firstSession?.user?.id || storedSession() || null;
-  // ─── БАГФИКС: больше попыток восстановить сессию при загрузке ───
-  // Раньше было 2 попытки — иногда не хватало, и при reload приложение
-  //showало экран входа, хотя сессия была валидна.
+  
+  
+  
   if (!uid) uid = await restoreSession(navigator.onLine ? 4 : 0);
   if (uid) listen();
 
@@ -487,10 +487,10 @@ export async function createSupabase(url, key) {
       return;
     }
     if (event === 'INITIAL_SESSION' && !session) {
-      // Библиотека не нашла вход. Он может лежать в нашей копии — поднимаем его,
-      // а профиль из кеша не трогаем, чтобы человека не выбрасывало на экран входа.
-      // Через setTimeout: внутри этого обработчика запросы к службе входа
-      // нельзя начинать сразу, библиотека держит замок и всё повиснет.
+      
+      
+      
+      
       if (!leaving && !uid) setTimeout(() => restoreSession(2).catch(() => {}), 0);
       return;
     }
@@ -499,15 +499,15 @@ export async function createSupabase(url, key) {
         uid = null;
         return;
       }
-      // ─── БАГФИКС: вылет аккаунта при перезагрузке/обрыве связи ───
-      // Раньше здесь сразу было `uid = null`, и приложение мгновенно теряло
-      // пользователя, даже если restoreSession ещё не успел отработать.
-      // Теперь НЕ сбрасываем uid мгновенно: даём restoreSession шанс.
-      // Сбросим только если восстановление реально не удалось.
+      
+      
+      
+      
+      
       setTimeout(async () => {
         const restored = await restoreSession(3).catch(() => null);
-        // restoreSession возвращает uid при успехе, null при провале.
-        // Если удалось — uid уже обновлён внутри. Если нет — сбрасываем.
+        
+        
         if (!restored && !leaving) {
           uid = null;
           sessionLost = true;
@@ -544,7 +544,7 @@ export async function createSupabase(url, key) {
       uid = data.user.id;
       if (data.session) keepSession(data.session);
       const user = await profileById(uid);
-      keepProfile(user); // ─── БАГФИКС: кэшируем профиль для reload
+      keepProfile(user); 
       listen();
       return { user };
     },
@@ -568,16 +568,16 @@ export async function createSupabase(url, key) {
         dropKeptSession();
         throw new Error('Аккаунт заблокирован');
       }
-      keepProfile(user); // ─── БАГФИКС: кэшируем профиль, чтобы при reload показать его сразу
+      keepProfile(user); 
       listen();
       return { user };
     },
 
     async logout() {
       leaving = true;
-      // Локальный выход: закрываем сессию только на этом устройстве. Раньше
-      // выход стирал сессии на всех устройствах сразу, и у людей «вылетал»
-      // аккаунт на телефоне после выхода с компьютера.
+      
+      
+      
       try {
         await sb.auth.signOut({ scope: 'local' });
       } catch {
@@ -600,8 +600,8 @@ export async function createSupabase(url, key) {
       return kept && (!uid || kept.id === uid) ? kept : null;
     },
 
-    // true, когда сервер прямо отказал во входе (токен отозван), а не когда
-    // просто пропала связь. Экран входа показываем только в этом случае.
+    
+    
     sessionGone() {
       return sessionLost && !uid;
     },
@@ -613,7 +613,7 @@ export async function createSupabase(url, key) {
       if (!uid) {
         return { user: null };
       }
-      // touch_presence — фоновый ping, не должен ломать me() если упадёт
+      
       try { await sb.rpc('touch_presence'); } catch {}
       try {
         const user = await profileById(uid);
@@ -712,7 +712,7 @@ export async function createSupabase(url, key) {
     },
 
     async dropSession() {
-      // Закрываем входы на других устройствах, но остаёмся в аккаунте здесь.
+      
       try {
         await sb.auth.signOut({ scope: 'others' });
       } catch {
@@ -1286,7 +1286,7 @@ export async function createSupabase(url, key) {
       return { removed: data || 0 };
     },
 
-    // Удаление аккаунта целиком: записи, переписка, файлы и сам вход.
+    
     async adminDeleteUser(userId) {
       const { data, error } = await sb.rpc('admin_delete_user', { target: userId });
       if (error && /could not find the function|does not exist/i.test(error.message || '')) {
@@ -2215,7 +2215,7 @@ export async function createSupabase(url, key) {
       return { leaderboard: [...best.values()].sort((a, b) => b.score - a.score).slice(0, 20) };
     },
 
-    // ─── НОВОЕ: Стена благодарности ───
+    
     async gratitudeAdd(body, anonymous = false) {
       const { data, error } = await sb.rpc('gratitude_add', { p_body: body, p_anonymous: anonymous });
       guard(error);
@@ -2228,7 +2228,7 @@ export async function createSupabase(url, key) {
       return { entries: data || [] };
     },
 
-    // ─── НОВОЕ: Чёрный список ───
+    
     async blockUser(targetId) {
       const { data, error } = await sb.rpc('block_user', { p_target: targetId });
       guard(error);
@@ -2253,14 +2253,14 @@ export async function createSupabase(url, key) {
       return { blocked: !!data };
     },
 
-    // ─── НОВОЕ: Кастомные темы (премиум) ───
+    
     async saveCustomTheme(theme) {
       const { data, error } = await sb.rpc('save_custom_theme', { p_theme: theme });
       guard(error);
       return data || { ok: true };
     },
 
-    // ─── v2.0: Промокоды ───
+    
     async redeemPromo(code) {
       const { data, error } = await sb.rpc('redeem_promo', { p_code: code });
       guard(error);
@@ -2298,7 +2298,7 @@ export async function createSupabase(url, key) {
       return data || { ok: true };
     },
 
-    // ─── v2.0: Удаление своих сообщений ───
+    
     async deleteMyComment(id) {
       const { data, error } = await sb.rpc('delete_my_comment', { p_id: id });
       guard(error);

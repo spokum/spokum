@@ -3,7 +3,6 @@ import { el, esc, initials } from '../util.js';
 import { icon, logoMark } from '../icons.js';
 import { toast, pickImage, openSheet } from '../ui.js';
 
-
 async function openRecovery(login, done) {
   if (!api.recoverAccount) return toast('Восстановление появится, когда база будет обновлена', 'err');
   const body = el(`<div class="col">

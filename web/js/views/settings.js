@@ -75,7 +75,6 @@ export function applyNight() {
   document.body.classList.toggle('night-soft', want && (hour >= 23 || hour < 7));
 }
 
-
 function prefs() {
   try {
     return JSON.parse(localStorage.getItem(PREF_KEY)) || {};
@@ -459,10 +458,7 @@ export async function render(root) {
   });
 }
 
-
-
 const MY_ACCENTS = ['#87b7a3', '#9c93c2', '#c79486', '#8badca', '#c6b083', '#d98fae', '#7fd7e8', '#d8b45c', '#9bb37f', '#e08f6a'];
-
 
 async function openMuteWords(done) {
   const { muteWords, saveMuteWords } = await import('./feed.js');
@@ -594,7 +590,6 @@ function openMyTheme(done) {
   };
   paint();
 }
-
 
 async function openPin(done) {
   const { pinOn, pinSet, pinOff, pinCheck } = await import('../pin.js');
@@ -826,7 +821,6 @@ function shortAgent(agent) {
   return agent.slice(0, 28);
 }
 
-
 async function openBlocks(done) {
   const body = el('<div class="col" style="gap:8px"></div>');
   const sheet = openSheet('Чёрный список', body);
@@ -898,7 +892,7 @@ async function openPromo(done) {
       if (r.days > 0) parts.push(`+${r.days} дн. премиума`);
       result.innerHTML = `<div class="card" style="background:var(--bg-2);padding:12px"><div class="strong small" style="color:var(--accent)">${icon('spark', 16)} Готово!</div><div class="small muted" style="margin-top:4px">${parts.join(' · ') || 'Награда получена'}</div></div>`;
       code.value = '';
-      // Обновим профиль, чтобы отразились новые монеты/премиум
+      
       try {
         const { user } = await api.me();
         if (user) {
