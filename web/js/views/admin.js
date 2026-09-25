@@ -14,7 +14,8 @@ const TABS = [
   ['announce', 'Эфир'],
   ['guard', 'Автофильтр'],
   ['actions', 'Наказания'],
-  ['audit', 'Журнал']
+  ['audit', 'Журнал'],
+  ['promos', 'Промокоды']
 ];
 
 export async function openAdmin() {
@@ -65,6 +66,7 @@ export async function openAdmin() {
       if (active === 'guard') await drawGuard(body);
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
+      if (active === 'promos') await drawPromos(body);
     } catch (error) {
       body.innerHTML = emptyState('warn', 'Ошибка', error.message);
     }
@@ -1078,4 +1080,134 @@ async function drawAudit(body) {
       </div>`
     )
     .join('')}</div></div>`;
+}
+
+// ─── v2.0: Промокоды (админ) ───
+async function drawPromos(body) {
+  // Gate: только silver на этапе бета-теста
+  if (state.user?.username !== 'silver') {
+    body.innerHTML = emptyState('lock', 'Скоро', 'Раздел промокодов откроется позже');
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="col" style="gap:10px;padding:12px">
+      <div class="card" style="padding:12px">
+        <div class="strong small" style="margin-bottom:8px">${icon('plus', 16)} Создать промокод</div>
+        <div class="col" style="gap:8px">
+          <input class="input" data-code placeholder="КОД (3-32 символа)" maxlength="32" style="text-transform:uppercase">
+          <select class="input" data-type>
+            <option value="coins">Монеты</option>
+            <option value="premium">Премиум-дни</option>
+            <option value="coins_premium">Монеты + Премиум</option>
+          </select>
+          <div class="row" style="gap:8px">
+            <input class="input grow" data-amount type="number" min="0" placeholder="Кол-во монет" value="0">
+            <input class="input grow" data-days type="number" min="0" placeholder="Дней премиума" value="0">
+          </div>
+          <div class="row" style="gap:8px">
+            <input class="input grow" data-max type="number" min="0" placeholder="Лимит (0=∞)" value="0">
+            <input class="input grow" data-expires type="date">
+          </div>
+          <button class="btn btn-primary" data-create>${icon('plus', 16)} Создать</button>
+        </div>
+      </div>
+      <div class="strong small" style="padding:0 4px">Активные промокоды</div>
+      <div data-list></div>
+    </div>
+  `;
+
+  const list = body.querySelector('[data-list]');
+  const codeInp = body.querySelector('[data-code]');
+  const typeSel = body.querySelector('[data-type]');
+  const amountInp = body.querySelector('[data-amount]');
+  const daysInp = body.querySelector('[data-days]');
+  const maxInp = body.querySelector('[data-max]');
+  const expiresInp = body.querySelector('[data-expires]');
+  const createBtn = body.querySelector('[data-create]');
+
+  const draw = async () => {
+    list.innerHTML = `<div class="card"><p class="muted center">Загрузка...</p></div>`;
+    try {
+      const { promos } = await api.adminListPromos();
+      if (!promos.length) {
+        list.innerHTML = emptyState('gift', 'Пока пусто', 'Создайте первый промокод');
+        return;
+      }
+      list.innerHTML = promos.map((p) => {
+        const reward = [
+          p.rewardType !== 'premium' && p.rewardAmount > 0 ? `${p.rewardAmount} монет` : null,
+          p.rewardType !== 'coins' && p.rewardDays > 0 ? `${p.rewardDays} дн.` : null
+        ].filter(Boolean).join(' + ') || '—';
+        const expiry = p.expiresAt ? `до ${new Date(p.expiresAt).toLocaleDateString('ru-RU')}` : '∞';
+        const uses = p.maxUses > 0 ? `${p.usedCount}/${p.maxUses}` : `${p.usedCount}/∞`;
+        const state_ = p.disabled ? 'выключен' : 'активен';
+        return `<div class="card list-item" style="padding:10px;align-items:flex-start">
+          <div class="grow">
+            <div class="row" style="gap:8px;align-items:center">
+              <span class="strong small">${esc(p.code)}</span>
+              <span class="pill ${p.disabled ? '' : 'ok'}" style="font-size:10px;padding:2px 8px">${state_}</span>
+            </div>
+            <div class="tiny muted" style="margin-top:4px">${reward} · использований: ${uses} · ${expiry}</div>
+          </div>
+          <div class="col" style="gap:4px">
+            <button class="btn btn-sm" data-toggle="${p.id}" data-disabled="${p.disabled}">${p.disabled ? 'Включить' : 'Выключить'}</button>
+            <button class="btn btn-sm" data-del="${p.id}" style="color:#c98b8b">Удалить</button>
+          </div>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('[data-toggle]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api.adminTogglePromo(Number(btn.dataset.toggle), btn.dataset.disabled !== 'true');
+            toast('Обновлено');
+            draw();
+          } catch (e) { toast(e.message, 'err'); }
+        };
+      });
+      list.querySelectorAll('[data-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          const ok = await confirmSheet({ title: 'Удалить промокод?', text: 'Все активации останутся в истории.', confirm: 'Удалить', danger: true });
+          if (!ok) return;
+          try {
+            await api.adminDeletePromo(Number(btn.dataset.del));
+            toast('Удалён');
+            draw();
+          } catch (e) { toast(e.message, 'err'); }
+        };
+      });
+    } catch (e) {
+      list.innerHTML = emptyState('warn', 'Ошибка', e.message);
+    }
+  };
+
+  createBtn.onclick = async () => {
+    const code = codeInp.value.trim().toUpperCase();
+    if (!code) { toast('Введите код', 'err'); return; }
+    createBtn.disabled = true;
+    try {
+      const expires = expiresInp.value ? new Date(expiresInp.value + 'T23:59:59').toISOString() : null;
+      await api.adminCreatePromo({
+        code,
+        rewardType: typeSel.value,
+        rewardAmount: Number(amountInp.value) || 0,
+        rewardDays: Number(daysInp.value) || 0,
+        maxUses: Number(maxInp.value) || 0,
+        expiresAt: expires
+      });
+      toast('Промокод создан');
+      codeInp.value = '';
+      amountInp.value = '0';
+      daysInp.value = '0';
+      maxInp.value = '0';
+      expiresInp.value = '';
+      draw();
+    } catch (e) {
+      toast(e.message, 'err');
+    } finally {
+      createBtn.disabled = false;
+    }
+  };
+
+  await draw();
 }

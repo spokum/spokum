@@ -1151,7 +1151,12 @@ export async function openComments(post, refresh) {
           const ok = await confirmSheet({ title: 'Удалить комментарий', text: 'Он пропадёт навсегда.', confirm: 'Удалить', danger: true });
           if (!ok) return;
           try {
-            await api.deleteComment(c.id);
+            // v2.0: свой комментарий удаляем через delete_my_comment, чужой (хост поста) — через deleteComment
+            if (mine) {
+              await api.deleteMyComment(c.id);
+            } else {
+              await api.deleteComment(c.id);
+            }
             post.comments = Math.max(0, (post.comments || 1) - 1);
             await draw();
             refresh?.(post);

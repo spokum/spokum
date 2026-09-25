@@ -1,0 +1,241 @@
+/* ─── СпокУм v2.0 — новый интерфейс ───
+   Включается через [data-ui="v2"] на <html>
+   Переключатель в Настройках. Старый интерфейс остаётся по умолчанию.
+   Принцип: мягче тени, крупнее карточки, просторнее, акцент на дыхание.
+*/
+
+[data-ui='v2'] {
+  --bg: #0e1116;
+  --bg-1: #14181f;
+  --bg-2: #1c2129;
+  --bg-3: #252b35;
+  --ink: #e8ecf2;
+  --muted: #8a93a3;
+  --line: rgba(255,255,255,.06);
+  --accent: #87b7a3;
+  --accent-ink: #08110e;
+  --shadow: 0 4px 24px rgba(0,0,0,.18);
+  --radius: 18px;
+  --radius-sm: 12px;
+}
+
+/* Карточки крупнее и мягче */
+[data-ui='v2'] .card {
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+
+/* Кнопки — мягче, просторнее */
+[data-ui='v2'] .btn {
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  font-weight: 500;
+  transition: transform .1s ease, background .15s;
+}
+[data-ui='v2'] .btn:active { transform: scale(.97); }
+[data-ui='v2'] .btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Чипы настроений — крупнее */
+[data-ui='v2'] .chip {
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* Заголовки — воздуху */
+[data-ui='v2'] .topbar {
+  padding: 18px 14px 8px;
+}
+[data-ui='v2'] h1 {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+[data-ui='v2'] .sub {
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Лента — просторнее между постами */
+[data-ui='v2'] article.card {
+  margin-bottom: 14px;
+}
+
+/* Навигация — стеклянная, мягкая */
+[data-ui='v2'] nav,
+[data-ui='v2'] [data-nav] {
+  backdrop-filter: blur(20px);
+  background: rgba(14,17,22,.78);
+  border-top: 1px solid var(--line);
+}
+
+[data-ui='v2'] nav button,
+[data-ui='v2'] [data-nav] button {
+  padding: 10px 0;
+  transition: color .15s, transform .1s;
+}
+[data-ui='v2'] nav button:active,
+[data-ui='v2'] [data-nav] button:active { transform: scale(.92); }
+
+/* Активный таб — точка снизу вместо заливки */
+[data-ui='v2'] nav button.active,
+[data-ui='v2'] [data-nav] button.active {
+  color: var(--accent);
+  position: relative;
+}
+[data-ui='v2'] nav button.active::after,
+[data-ui='v2'] [data-nav] button.active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Инпуты — мягче, крупнее */
+[data-ui='v2'] .input {
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  font-size: 15px;
+}
+[data-ui='v2'] .input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(135,183,163,.15);
+}
+
+/* Sheet (модалки) — крупнее радиус, воздух */
+[data-ui='v2'] .sheet {
+  border-radius: 24px 24px 0 0;
+  padding-top: 8px;
+}
+[data-ui='v2'] .sheet h3 {
+  font-size: 18px;
+  padding: 0 8px 8px;
+}
+
+/* Пост-карточка — больше воздуха */
+[data-ui='v2'] .post-text {
+  font-size: 16px;
+  line-height: 1.55;
+  margin: 10px 0;
+}
+
+/* Аватары — мягче тень */
+[data-ui='v2'] .avatar {
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+
+/* Бейджи — мягче */
+[data-ui='v2'] .pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* Плашка offline — мягче */
+[data-ui='v2'] .offline-bar {
+  backdrop-filter: blur(10px);
+  background: rgba(60,40,20,.85);
+  color: #fff;
+  border-radius: 0 0 12px 12px;
+}
+
+/* Game cards — больше воздуха */
+[data-ui='v2'] .game-card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Премиум-бейдж */
+[data-ui='v2'] .game-pro {
+  background: linear-gradient(135deg, #f2d57a, #d8a948);
+  color: #2a1d05;
+}
+
+/* Топбар с кнопками — воздух */
+[data-ui='v2'] .topbar .row {
+  gap: 10px;
+}
+
+/* Списки (list-item) — просторнее */
+[data-ui='v2'] .list-item {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+}
+
+/* Появление — мягче */
+[data-ui='v2'] .appear {
+  animation: v2-appear .3s ease;
+}
+@keyframes v2-appear {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Плавный переход цветов */
+[data-ui='v2'] * {
+  transition: background-color .2s, border-color .2s, color .2s;
+}
+
+/* Текст-плейсхолдер */
+[data-ui='v2'] .empty {
+  color: var(--muted);
+  padding: 32px 16px;
+  text-align: center;
+}
+
+/* Заголовки секций */
+[data-ui='v2'] .strong.small {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Чекбоксы/радио — мягче */
+[data-ui='v2'] input[type='checkbox'],
+[data-ui='v2'] input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+/* Полоса прокрутки — тонкая */
+[data-ui='v2'] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-ui='v2'] ::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.1);
+  border-radius: 3px;
+}
+[data-ui='v2'] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Шапка поста — воздух */
+[data-ui='v2'] .post-head {
+  margin-bottom: 6px;
+}
+
+/* Бабблы чатов — мягче */
+[data-ui='v2'] .bubble {
+  border-radius: 18px 18px 18px 4px;
+  padding: 10px 14px;
+}
+[data-ui='v2'] .bubble.mine {
+  border-radius: 18px 18px 4px 18px;
+}
+
+/* Тёмная ночь — ещё мягче */
+[data-ui='v2'].night-soft {
+  filter: brightness(.85) sepia(.05);
+}

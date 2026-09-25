@@ -37,7 +37,10 @@ const THEMES = [
   ['sakura', 'Сакура', 'linear-gradient(140deg,#fffbfc,#f6dde3)', '#3d2730', true],
   ['frost', 'Мороз', 'linear-gradient(140deg,#0d1620,#1c3346)', '#dceaf2', false],
   ['pomegranate', 'Гранат', 'linear-gradient(140deg,#1c0a10,#4a1525)', '#f0d4d8', false],
-  ['lavender', 'Лаванда', 'linear-gradient(140deg,#1a1426,#3a2c5c)', '#e0d6f0', false]
+  ['lavender', 'Лаванда', 'linear-gradient(140deg,#1a1426,#3a2c5c)', '#e0d6f0', false],
+  ['mist', 'Туман', 'linear-gradient(140deg,#1a1d22,#3a3f47)', '#e8eaed', false],
+  ['coral', 'Коралл', 'linear-gradient(140deg,#1f1410,#4a2820)', '#f0c4b8', false],
+  ['steel', 'Сталь', 'linear-gradient(140deg,#12161a,#2a323a)', '#c8d4dc', false]
 ];
 
 const ACCENTS = [
@@ -102,6 +105,11 @@ export async function render(root) {
       <div class="accent-row" data-accents></div>
       <div class="divider"></div>
       <button class="list-item" data-mine>${icon('palette', 18)}<div class="grow"><div class="small strong">Своя тема</div><div class="tiny muted">Соберите оформление под себя</div></div>${icon('forward', 15)}</button>
+      ${state.user?.username === 'silver' ? `<div class="divider"></div>
+      <div class="row between" style="padding:8px 0">
+        <div><div class="small strong">Новый интерфейс (v2.0)</div><div class="tiny muted">Крупнее карточки, мягче тени</div></div>
+        <label class="switch"><input type="checkbox" data-ui-v2 ${localStorage.getItem('spokum.ui') === 'v2' ? 'checked' : ''}><span></span></label>
+      </div>` : ''}
     </div>
 
     ${premiumCard()}
@@ -177,6 +185,7 @@ export async function render(root) {
       <button class="list-item" data-codes>${icon('key', 18)}<div class="grow"><div class="small strong">Коды восстановления</div><div class="tiny muted" data-codes-state>Три кода на случай забытого пароля</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-sessions>${icon('device', 18)}<div class="grow"><div class="small strong">Активные сессии</div><div class="tiny muted">Где выполнен вход</div></div>${icon('forward', 15)}</button>
       ${state.user?.username === 'silver' ? `<button class="list-item" data-blocks>${icon('ban', 18)}<div class="grow"><div class="small strong">Чёрный список</div><div class="tiny muted" data-blocks-state>Заблокированные пользователи</div></div>${icon('forward', 15)}</button>` : ''}
+      ${state.user?.username === 'silver' ? `<button class="list-item" data-promo>${icon('gift', 18)}<div class="grow"><div class="small strong">Промокод</div><div class="tiny muted">Активировать код и получить награду</div></div>${icon('forward', 15)}</button>` : ''}
     </div>
 
     <div class="card appear">
@@ -435,6 +444,13 @@ export async function render(root) {
   root.querySelector('[data-password]').onclick = openPassword;
   root.querySelector('[data-sessions]').onclick = openSessions;
   root.querySelector('[data-blocks]')?.addEventListener('click', () => openBlocks(() => render(root)));
+  root.querySelector('[data-promo]')?.addEventListener('click', () => openPromo(() => render(root)));
+  root.querySelector('[data-ui-v2]')?.addEventListener('change', (e) => {
+    const v = e.target.checked ? 'v2' : 'v1';
+    localStorage.setItem('spokum.ui', v);
+    document.documentElement.dataset.ui = v;
+    toast(v === 'v2' ? 'Включён новый интерфейс' : 'Старый интерфейс');
+  });
   root.querySelector('[data-reset]')?.addEventListener('click', async () => {
     if (!(await confirmSheet({ title: 'Стереть данные', text: 'Все локальные аккаунты, посты и чаты будут удалены', confirm: 'Стереть', danger: true }))) return;
     const { local } = await import('../backend/local.js');
@@ -850,4 +866,55 @@ async function openBlocks(done) {
     }
   };
   await draw();
+}
+
+async function openPromo(done) {
+  const body = el(`
+    <div class="col" style="gap:10px">
+      <p class="tiny muted" style="line-height:1.5">Введите промокод, чтобы получить монеты или премиум-подписку.</p>
+      <div class="row" style="gap:8px">
+        <input class="input grow" data-code placeholder="Например, WELCOME2026" maxlength="32" style="text-transform:uppercase">
+        <button class="btn btn-primary" data-redeem>${icon('gift', 16)} Активировать</button>
+      </div>
+      <div data-result></div>
+    </div>
+  `);
+  const sheet = openSheet('Промокод', body);
+  const code = body.querySelector('[data-code]');
+  const redeem = body.querySelector('[data-redeem]');
+  const result = body.querySelector('[data-result]');
+
+  const submit = async () => {
+    const c = code.value.trim().toUpperCase();
+    if (!c) { toast('Введите код', 'err'); return; }
+    redeem.disabled = true;
+    redeem.textContent = '...';
+    result.innerHTML = '';
+    try {
+      const r = await api.redeemPromo(c);
+      const parts = [];
+      if (r.coins > 0) parts.push(`+${r.coins} монет`);
+      if (r.days > 0) parts.push(`+${r.days} дн. премиума`);
+      result.innerHTML = `<div class="card" style="background:var(--bg-2);padding:12px"><div class="strong small" style="color:var(--accent)">${icon('spark', 16)} Готово!</div><div class="small muted" style="margin-top:4px">${parts.join(' · ') || 'Награда получена'}</div></div>`;
+      code.value = '';
+      // Обновим профиль, чтобы отразились новые монеты/премиум
+      try {
+        const { user } = await api.me();
+        if (user) {
+          const { setUser } = await import('../store.js');
+          setUser(user);
+        }
+      } catch {}
+      done?.();
+    } catch (error) {
+      result.innerHTML = `<div class="card" style="padding:10px;color:#c98b8b"><div class="small">${esc(error.message)}</div></div>`;
+    } finally {
+      redeem.disabled = false;
+      redeem.innerHTML = `${icon('gift', 16)} Активировать`;
+    }
+  };
+
+  redeem.onclick = submit;
+  code.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  code.focus();
 }

@@ -1,7 +1,7 @@
 import { api, state, isOffline, isPremium } from '../store.js';
 import { el, esc, timeAgo, clockTime, durationText, debounce } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet } from '../ui.js';
+import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet, confirmSheet } from '../ui.js';
 import { openProfile } from './profile.js';
 
 const EMOJI = ['🙂','😌','😴','🥲','😭','😤','😍','🤍','✨','🌙','☕','🌿','🫶','👀','🔥','💤','🎧','📌','🙏','💬','🌊','🧊','🍂','⭐'];
@@ -382,7 +382,11 @@ function bubble(message, chat, lastAuthor) {
 
   const seen = mine && message.createdAt <= (chat.peerReadAt || 0);
   const ticks = mine ? `<span class="ticks ${seen ? 'seen' : ''}">${icon(seen ? 'check_double' : 'check', 13, 2.6)}</span>` : '';
-  const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}</div></div>`);
+  // v2.0: для своих текстовых сообщений показываем кнопку удаления
+  const canDelete = mine && message.kind !== 'call' && message.kind !== 'gift' && message.kind !== 'system' && !message.removed;
+  const delBtn = canDelete ? `<button class="bubble-del" data-del-msg title="Удалить">${icon('trash', 12)}</button>` : '';
+  const removedBadge = message.removed ? `<div class="tiny muted" style="font-style:italic">сообщение удалено</div>` : '';
+  const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${removedBadge || inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}${delBtn}</div></div>`);
 
   const reel = node.querySelector('[data-reel]');
   if (reel) {
@@ -420,6 +424,25 @@ function bubble(message, chat, lastAuthor) {
     };
     audio.onended = () => {
       play.innerHTML = icon('play', 15);
+    };
+  }
+  // v2.0: удаление своего сообщения
+  const delMsg = node.querySelector('[data-del-msg]');
+  if (delMsg) {
+    delMsg.onclick = async (event) => {
+      event.stopPropagation();
+      const ok = await confirmSheet({ title: 'Удалить сообщение?', text: 'Оно пропадёт у всех собеседников.', confirm: 'Удалить', danger: true });
+      if (!ok) return;
+      try {
+        await api.deleteMyMessage(message.id);
+        toast('Удалено');
+        // Обновим чат
+        const draw2 = node.closest('[data-host')?.__draw;
+        if (typeof draw2 === 'function') draw2();
+        else window.location.reload();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
     };
   }
   return node;

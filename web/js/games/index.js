@@ -5502,6 +5502,246 @@ function reaction(canvas, report) {
   });
 }
 
+// ─── v2.0: ЕЩЕ 3 НОВЫЕ ИГРЫ ───
+
+// Дождь: ловить капли, уклоняться от молний
+function rain(canvas, report) {
+  return runner(canvas, () => {
+    let state = { x: 0.5, drops: [], bolts: [], score: 0, spawn: 0, boltSpawn: 0, dist: 0, over: false, lives: 3 };
+    const reset = () => { state = { x: 0.5, drops: [], bolts: [], score: 0, spawn: 0.5, boltSpawn: 2, dist: 0, over: false, lives: 3 }; };
+    reset();
+    let target = 0.5;
+    return {
+      score: () => state.score,
+      bind(bind, canvas) {
+        bind('pointermove', (e) => {
+          const r = canvas.getBoundingClientRect();
+          target = Math.max(0.05, Math.min(0.95, ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width));
+        });
+        bind('pointerdown', (e) => {
+          if (state.over) { reset(); return; }
+          const r = canvas.getBoundingClientRect();
+          target = Math.max(0.05, Math.min(0.95, (e.clientX - r.left) / r.width));
+        });
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.x += (target - state.x) * Math.min(1, dt * 14);
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.2, 0.6 - state.dist * 0.003);
+          state.drops.push({ x: Math.random(), y: -0.05, v: 0.5 + Math.random() * 0.3 });
+        }
+        state.boltSpawn -= dt;
+        if (state.boltSpawn <= 0) {
+          state.boltSpawn = Math.max(0.8, 2.5 - state.dist * 0.005);
+          state.bolts.push({ x: Math.random(), y: -0.1, v: 0.8, warned: false });
+        }
+        state.drops.forEach((d) => { d.y += d.v * dt; });
+        state.drops = state.drops.filter((d) => {
+          if (d.y > 1.05) return false;
+          if (Math.abs(d.x - state.x) < 0.04 && Math.abs(d.y - 0.85) < 0.06) { state.score += 1; return false; }
+          return true;
+        });
+        state.bolts.forEach((b) => { b.y += b.v * dt; });
+        state.bolts = state.bolts.filter((b) => {
+          if (b.y > 1.1) return false;
+          if (Math.abs(b.x - state.x) < 0.04 && Math.abs(b.y - 0.85) < 0.08) {
+            state.lives -= 1;
+            if (state.lives <= 0) { state.over = true; report(state.score); }
+            return false;
+          }
+          return true;
+        });
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#081b22', '#0f3a45']);
+        // капли
+        ctx.fillStyle = 'rgba(150,200,255,.7)';
+        state.drops.forEach((d) => {
+          ctx.beginPath();
+          ctx.ellipse(d.x * w, d.y * h, 2, 6, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        // молнии (красные)
+        state.bolts.forEach((b) => {
+          ctx.fillStyle = '#ff6b6b';
+          ctx.beginPath();
+          ctx.moveTo(b.x * w - 4, b.y * h);
+          ctx.lineTo(b.x * w + 4, b.y * h);
+          ctx.lineTo(b.x * w, b.y * h + 12);
+          ctx.closePath();
+          ctx.fill();
+        });
+        // сосуд
+        ctx.fillStyle = '#dde8ef';
+        ctx.beginPath();
+        ctx.roundRect(state.x * w - 18, h * 0.85 - 6, 36, 14, 7);
+        ctx.fill();
+        hud(ctx, w, [`Очки ${state.score}`, `Жизни ${'❤'.repeat(state.lives)}`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
+// Паук: плести паутину, ловить мух
+function spider(canvas, report) {
+  return runner(canvas, () => {
+    let state = { x: 0.5, y: 0.5, flies: [], score: 0, spawn: 0, dist: 0, over: false, miss: 0 };
+    const reset = () => { state = { x: 0.5, y: 0.5, flies: [], score: 0, spawn: 0.6, dist: 0, over: false, miss: 0 }; };
+    reset();
+    let target = { x: 0.5, y: 0.5 };
+    return {
+      score: () => state.score,
+      bind(bind, canvas) {
+        bind('pointermove', (e) => {
+          const r = canvas.getBoundingClientRect();
+          target = {
+            x: Math.max(0.05, Math.min(0.95, ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width)),
+            y: Math.max(0.1, Math.min(0.9, ((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height))
+          };
+        });
+        bind('pointerdown', (e) => {
+          if (state.over) { reset(); return; }
+        });
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.x += (target.x - state.x) * Math.min(1, dt * 10);
+        state.y += (target.y - state.y) * Math.min(1, dt * 10);
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.4, 1.2 - state.dist * 0.004);
+          state.flies.push({
+            x: Math.random() < 0.5 ? -0.05 : 1.05,
+            y: 0.1 + Math.random() * 0.8,
+            vx: (Math.random() < 0.5 ? 1 : -1) * (0.1 + Math.random() * 0.15),
+            vy: (Math.random() - 0.5) * 0.1,
+            life: 8
+          });
+        }
+        state.flies.forEach((f) => { f.x += f.vx * dt; f.y += f.vy * dt; f.life -= dt; });
+        state.flies = state.flies.filter((f) => {
+          if (f.life <= 0) { state.miss += 1; return false; }
+          const dx = f.x - state.x, dy = f.y - state.y;
+          if (Math.sqrt(dx * dx + dy * dy) < 0.05) { state.score += 10; return false; }
+          return f.x > -0.1 && f.x < 1.1;
+        });
+        if (state.miss >= 5) { state.over = true; report(state.score); }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0d0d12', '#1d1d28']);
+        // мухи
+        state.flies.forEach((f) => {
+          ctx.fillStyle = '#a8d4a0';
+          ctx.beginPath();
+          ctx.arc(f.x * w, f.y * h, 4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        // паук
+        ctx.fillStyle = '#e8d4e8';
+        ctx.beginPath();
+        ctx.arc(state.x * w, state.y * h, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(state.x * w - 12, state.y * h);
+        ctx.lineTo(state.x * w + 12, state.y * h);
+        ctx.moveTo(state.x * w, state.y * h - 12);
+        ctx.lineTo(state.x * w, state.y * h + 12);
+        ctx.stroke();
+        hud(ctx, w, [`Очки ${state.score}`, `Пропущено ${state.miss}/5`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
+// Змейка 2: классическая змейка с управлением свайпом
+function snake2(canvas, report) {
+  return runner(canvas, () => {
+    const GRID = 14;
+    let state = { snake: [{ x: 7, y: 7 }], dir: { x: 1, y: 0 }, food: { x: 3, y: 3 }, score: 0, over: false, tick: 0 };
+    const reset = () => {
+      state = { snake: [{ x: 7, y: 7 }, { x: 6, y: 7 }, { x: 5, y: 7 }], dir: { x: 1, y: 0 }, food: { x: 3, y: 3 }, score: 0, over: false, tick: 0 };
+    };
+    reset();
+    let lastTouch = null;
+    return {
+      score: () => state.score,
+      bind(bind, canvas) {
+        bind('pointerdown', (e) => {
+          if (state.over) { reset(); return; }
+          const r = canvas.getBoundingClientRect();
+          lastTouch = { x: (e.touches?.[0]?.clientX ?? e.clientX) - r.left, y: (e.touches?.[0]?.clientY ?? e.clientY) - r.top };
+        });
+        bind('pointermove', (e) => {
+          if (!lastTouch) return;
+          const r = canvas.getBoundingClientRect();
+          const x = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
+          const y = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
+          const dx = x - lastTouch.x, dy = y - lastTouch.y;
+          if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+          if (Math.abs(dx) > Math.abs(dy)) {
+            state.dir = { x: dx > 0 ? 1 : -1, y: 0 };
+          } else {
+            state.dir = { x: 0, y: dy > 0 ? 1 : -1 };
+          }
+          lastTouch = { x, y };
+        });
+      },
+      update(dt) {
+        if (state.over) return;
+        state.tick += dt;
+        if (state.tick < 0.18) return;
+        state.tick = 0;
+        const head = state.snake[0];
+        const newHead = { x: head.x + state.dir.x, y: head.y + state.dir.y };
+        if (newHead.x < 0 || newHead.x >= GRID || newHead.y < 0 || newHead.y >= GRID) {
+          state.over = true; report(state.score); return;
+        }
+        if (state.snake.some((s) => s.x === newHead.x && s.y === newHead.y)) {
+          state.over = true; report(state.score); return;
+        }
+        state.snake.unshift(newHead);
+        if (newHead.x === state.food.x && newHead.y === state.food.y) {
+          state.score += 10;
+          state.food = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+        } else {
+          state.snake.pop();
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0d1420', '#1b2a3c']);
+        const cell = Math.min(w, h) / GRID;
+        const ox = (w - cell * GRID) / 2;
+        const oy = (h - cell * GRID) / 2;
+        // еда
+        ctx.fillStyle = '#e8a4a4';
+        ctx.beginPath();
+        ctx.arc(ox + state.food.x * cell + cell / 2, oy + state.food.y * cell + cell / 2, cell / 3, 0, Math.PI * 2);
+        ctx.fill();
+        // змейка
+        state.snake.forEach((s, i) => {
+          ctx.fillStyle = i === 0 ? '#a8d4a0' : '#87b7a3';
+          ctx.beginPath();
+          ctx.roundRect(ox + s.x * cell + 1, oy + s.y * cell + 1, cell - 2, cell - 2, 3);
+          ctx.fill();
+        });
+        hud(ctx, w, [`Очки ${state.score}`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -5742,5 +5982,26 @@ export const GAMES = [
     desc: 'Тапай по кругам, пока не промахнулся',
     tint: ['#161025', '#2c1d4a'],
     mount: reaction
+  },
+  {
+    id: 'rain',
+    title: 'Дождь',
+    desc: 'Лови капли, уклоняйся от молний',
+    tint: ['#081b22', '#0f3a45'],
+    mount: rain
+  },
+  {
+    id: 'spider',
+    title: 'Паук',
+    desc: 'Лови мух в паутине',
+    tint: ['#0d0d12', '#1d1d28'],
+    mount: spider
+  },
+  {
+    id: 'snake2',
+    title: 'Змейка',
+    desc: 'Классика: свайп управляет направлением',
+    tint: ['#0d1420', '#1b2a3c'],
+    mount: snake2
   }
 ];

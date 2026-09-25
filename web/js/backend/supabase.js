@@ -2258,6 +2258,57 @@ export async function createSupabase(url, key) {
       const { data, error } = await sb.rpc('save_custom_theme', { p_theme: theme });
       guard(error);
       return data || { ok: true };
+    },
+
+    // ─── v2.0: Промокоды ───
+    async redeemPromo(code) {
+      const { data, error } = await sb.rpc('redeem_promo', { p_code: code });
+      guard(error);
+      return data || { ok: false };
+    },
+
+    async adminCreatePromo(payload) {
+      const { data, error } = await sb.rpc('admin_create_promo', {
+        p_code: payload.code,
+        p_reward_type: payload.rewardType,
+        p_reward_amount: payload.rewardAmount || 0,
+        p_reward_days: payload.rewardDays || 0,
+        p_max_uses: payload.maxUses || 0,
+        p_expires_at: payload.expiresAt || null
+      });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async adminListPromos() {
+      const { data, error } = await sb.rpc('admin_list_promos');
+      guard(error);
+      return { promos: data || [] };
+    },
+
+    async adminTogglePromo(id, disabled) {
+      const { data, error } = await sb.rpc('admin_toggle_promo', { p_id: id, p_disabled: disabled });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async adminDeletePromo(id) {
+      const { data, error } = await sb.rpc('admin_delete_promo', { p_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    // ─── v2.0: Удаление своих сообщений ───
+    async deleteMyComment(id) {
+      const { data, error } = await sb.rpc('delete_my_comment', { p_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async deleteMyMessage(id) {
+      const { data, error } = await sb.rpc('delete_my_message', { p_id: id });
+      guard(error);
+      return data || { ok: true };
     }
   };
 }

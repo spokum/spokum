@@ -1,9 +1,10 @@
-const VERSION = 'spokum-v65';
+const VERSION = 'spokum-v66';
 const CORE = [
   './',
   './index.html',
   './manifest.webmanifest',
   './css/app.css',
+  './css/ui-v2.css',
   './js/app.js',
   './js/store.js',
   './js/ui.js',
