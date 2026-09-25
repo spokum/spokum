@@ -1025,6 +1025,7 @@ export async function createSupabase(url, key) {
         ({ data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single());
       }
       guard(error);
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'post', p_amount: 1 }); } catch {}
       return { post: shapePost(data, new Set()) };
     },
 
@@ -1092,6 +1093,7 @@ export async function createSupabase(url, key) {
         }
         const { error } = await sb.from('comments').insert(payload);
         guard(error);
+        try { await sb.rpc('bump_daily_quest', { p_quest_key: 'comment', p_amount: 1 }); } catch {}
       }
       const { data } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       return { post: shapePost(data, await likedSet([id])) };
@@ -1230,6 +1232,7 @@ export async function createSupabase(url, key) {
         .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .single();
       guard(error);
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'chat', p_amount: 1 }); } catch {}
       return { message: shapeMessage(data) };
     },
 
@@ -2094,6 +2097,7 @@ export async function createSupabase(url, key) {
           { onConflict: 'user_id,day' }
         );
       guard(error);
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'journal', p_amount: 1 }); } catch {}
       return { ok: true };
     },
 
@@ -2195,6 +2199,7 @@ export async function createSupabase(url, key) {
       const me = requireUid();
       const { error } = await sb.from('game_scores').insert({ user_id: me, game, score });
       guard(error);
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'game', p_amount: 1 }); } catch {}
       return { ok: true };
     },
 
@@ -2307,6 +2312,110 @@ export async function createSupabase(url, key) {
 
     async deleteMyMessage(id) {
       const { data, error } = await sb.rpc('delete_my_message', { p_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async myDailyQuests() {
+      const { data, error } = await sb.rpc('my_daily_quests');
+      guard(error);
+      return { quests: data || [] };
+    },
+
+    async claimDailyQuest(id) {
+      const { data, error } = await sb.rpc('claim_daily_quest', { p_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async activeTournaments() {
+      const { data, error } = await sb.rpc('active_tournaments');
+      guard(error);
+      return { tournaments: data || [] };
+    },
+
+    async tournamentLeaderboard(id) {
+      const { data, error } = await sb.rpc('tournament_leaderboard', { p_tour_id: id });
+      guard(error);
+      return { leaderboard: data || [] };
+    },
+
+    async adminCreateTournament(payload) {
+      const { data, error } = await sb.rpc('admin_create_tournament', {
+        p_game_id: payload.gameId,
+        p_title: payload.title,
+        p_ends_at: payload.endsAt,
+        p_prize_1: payload.prize1 || 500,
+        p_prize_2: payload.prize2 || 300,
+        p_prize_3: payload.prize3 || 150
+      });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async recordProfileView(userId) {
+      try { await sb.rpc('record_profile_view', { p_profile_id: userId }); } catch {}
+      return { ok: true };
+    },
+
+    async myProfileViewers() {
+      const { data, error } = await sb.rpc('my_profile_viewers');
+      guard(error);
+      return { viewers: data || [] };
+    },
+
+    async addConfession(body, mood = 'calm') {
+      const { data, error } = await sb.rpc('add_confession', { p_body: body, p_mood: mood });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async confessionsList(limit = 30, offset = 0) {
+      const { data, error } = await sb.rpc('confessions_list', { p_limit: limit, p_offset: offset });
+      guard(error);
+      return { confessions: data || [] };
+    },
+
+    async deleteConfession(id) {
+      const { data, error } = await sb.rpc('delete_confession', { p_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async addWishlistItem(title, link = null) {
+      const { data, error } = await sb.rpc('add_wishlist_item', { p_title: title, p_link: link });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async removeWishlistItem(id) {
+      const { data, error } = await sb.rpc('remove_wishlist_item', { p_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async getWishlist(userId) {
+      const { data, error } = await sb.rpc('get_wishlist', { p_user_id: userId });
+      guard(error);
+      return { items: data || [] };
+    },
+
+    async todayChallenge() {
+      const { data, error } = await sb.rpc('today_challenge');
+      guard(error);
+      return data || {};
+    },
+
+    async completeTodayChallenge() {
+      const { data, error } = await sb.rpc('complete_today_challenge');
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async adminSetChallenge(title, description, reward = 50) {
+      const { data, error } = await sb.rpc('admin_set_challenge', {
+        p_title: title, p_description: description, p_reward: reward
+      });
       guard(error);
       return data || { ok: true };
     }

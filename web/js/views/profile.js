@@ -488,6 +488,11 @@ export async function render(root) {
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       ${fresh.username === 'silver' ? `<button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">Бета: за что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-quests>${icon('star', 20)}<div class="grow"><div class="strong small">Задания дня</div><div class="tiny muted">Бета: 3 задания + челлендж дня за монеты</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-tournaments>${icon('trophy', 20)}<div class="grow"><div class="strong small">Турниры</div><div class="tiny muted">Бета: еженедельные соревнования с призами</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-confessions>${icon('eye', 20)}<div class="grow"><div class="strong small">Анонимные признания</div><div class="tiny muted">Бета: лента анонимных откровений</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-wishlist>${icon('gift', 20)}<div class="grow"><div class="strong small">Мой вишлист</div><div class="tiny muted">Бета: что вы хотите получить</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-viewers>${icon('users', 20)}<div class="grow"><div class="strong small">Кто смотрел профиль</div><div class="tiny muted">Бета: последние посетители</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-shop>${icon('star', 20)}<div class="grow"><div class="strong small">Купить себе подарок</div><div class="tiny muted">Сразу ляжет на вашу витрину</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
@@ -588,6 +593,26 @@ export async function render(root) {
   body.querySelector('[data-gratitude]')?.addEventListener('click', async () => {
     const { openGratitude } = await import('./gratitude.js');
     openGratitude();
+  });
+  body.querySelector('[data-quests]')?.addEventListener('click', async () => {
+    const { openQuests } = await import('./quests.js');
+    openQuests();
+  });
+  body.querySelector('[data-tournaments]')?.addEventListener('click', async () => {
+    const { openTournaments } = await import('./tournaments.js');
+    openTournaments();
+  });
+  body.querySelector('[data-confessions]')?.addEventListener('click', async () => {
+    const { openConfessions } = await import('./confessions.js');
+    openConfessions();
+  });
+  body.querySelector('[data-wishlist]')?.addEventListener('click', async () => {
+    const { openWishlist } = await import('./extras2.js');
+    openWishlist(fresh.id, true);
+  });
+  body.querySelector('[data-viewers]')?.addEventListener('click', async () => {
+    const { openProfileViewers } = await import('./extras2.js');
+    openProfileViewers();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');
@@ -1197,6 +1222,9 @@ export async function openProfile(username) {
 
   try {
     const { user, posts } = await api.getUser(username);
+    if (api.recordProfileView && user?.id && state.user?.id !== user.id) {
+      api.recordProfileView(user.id).catch(() => {});
+    }
     const mood = MOODS[user.mood] || MOODS.calm;
     const days = Math.max(1, Math.round((Date.now() - user.createdAt) / 86400000));
     body.innerHTML = `
