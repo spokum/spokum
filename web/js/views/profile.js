@@ -430,9 +430,27 @@ export async function render(root) {
       <div class="spacer"></div>
       <button class="btn btn-icon" data-edit title="Редактировать">${icon('edit', 18)}</button>
     </div>
+    ${user?.username === 'silver' ? `<div data-quote-host></div>` : ''}
     <div data-body></div>`;
 
   const body = root.querySelector('[data-body]');
+  if (user?.username === 'silver' && api.todayQuote) {
+    api.todayQuote().then((q) => {
+      if (!q?.text) return;
+      const host = root.querySelector('[data-quote-host]');
+      if (host) host.innerHTML = `
+        <div class="card appear" style="margin:0 12px 12px;padding:14px;background:linear-gradient(135deg,var(--bg-2),var(--bg-3));border:1px solid var(--line)">
+          <div class="row" style="gap:8px;align-items:flex-start">
+            ${icon('spark', 16)}
+            <div>
+              <div class="strong small" style="margin-bottom:4px">Цитата дня</div>
+              <div class="small" style="line-height:1.5;font-style:italic">${esc(q.text)}</div>
+              ${q.author ? `<div class="tiny muted" style="margin-top:4px">— ${esc(q.author)}</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }).catch(() => {});
+  }
   if (!user) {
     body.innerHTML = emptyState('profile', 'Вы не вошли', 'Войдите, чтобы вести свой дневник настроения');
     return;

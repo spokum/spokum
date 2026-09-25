@@ -615,6 +615,7 @@ export async function createSupabase(url, key) {
       }
       
       try { await sb.rpc('touch_presence'); } catch {}
+      try { await sb.rpc('touch_streak'); } catch {}
       try {
         const user = await profileById(uid);
         if (user) keepProfile(user);
@@ -1025,7 +1026,7 @@ export async function createSupabase(url, key) {
         ({ data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single());
       }
       guard(error);
-      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'post', p_amount: 1 }); } catch {}
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'post', p_amount: 1 }); await sb.rpc('add_xp', { p_amount: 15 }); } catch {}
       return { post: shapePost(data, new Set()) };
     },
 
@@ -1093,7 +1094,7 @@ export async function createSupabase(url, key) {
         }
         const { error } = await sb.from('comments').insert(payload);
         guard(error);
-        try { await sb.rpc('bump_daily_quest', { p_quest_key: 'comment', p_amount: 1 }); } catch {}
+        try { await sb.rpc('bump_daily_quest', { p_quest_key: 'comment', p_amount: 1 }); await sb.rpc('add_xp', { p_amount: 5 }); } catch {}
       }
       const { data } = await sb.from('posts').select(POST_SELECT()).eq('id', id).single();
       return { post: shapePost(data, await likedSet([id])) };
@@ -1232,7 +1233,7 @@ export async function createSupabase(url, key) {
         .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .single();
       guard(error);
-      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'chat', p_amount: 1 }); } catch {}
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'chat', p_amount: 1 }); await sb.rpc('add_xp', { p_amount: 3 }); } catch {}
       return { message: shapeMessage(data) };
     },
 
@@ -2097,7 +2098,7 @@ export async function createSupabase(url, key) {
           { onConflict: 'user_id,day' }
         );
       guard(error);
-      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'journal', p_amount: 1 }); } catch {}
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'journal', p_amount: 1 }); await sb.rpc('add_xp', { p_amount: 20 }); } catch {}
       return { ok: true };
     },
 
@@ -2199,7 +2200,7 @@ export async function createSupabase(url, key) {
       const me = requireUid();
       const { error } = await sb.from('game_scores').insert({ user_id: me, game, score });
       guard(error);
-      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'game', p_amount: 1 }); } catch {}
+      try { await sb.rpc('bump_daily_quest', { p_quest_key: 'game', p_amount: 1 }); await sb.rpc('add_xp', { p_amount: Math.floor(score / 50) + 2 }); } catch {}
       return { ok: true };
     },
 
@@ -2418,6 +2419,30 @@ export async function createSupabase(url, key) {
       });
       guard(error);
       return data || { ok: true };
+    },
+
+    async myWeeklyQuests() {
+      const { data, error } = await sb.rpc('my_weekly_quests');
+      guard(error);
+      return { quests: data || [] };
+    },
+
+    async touchStreak() {
+      const { data, error } = await sb.rpc('touch_streak');
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async todayQuote() {
+      const { data, error } = await sb.rpc('today_quote');
+      guard(error);
+      return data || {};
+    },
+
+    async myLevel() {
+      const { data, error } = await sb.rpc('my_level');
+      guard(error);
+      return data || {};
     }
   };
 }

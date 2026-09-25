@@ -58,7 +58,7 @@ export async function openWishlist(userId, isOwn) {
             <div class="grow">
               <div class="strong small">${esc(it.title)}</div>
               ${it.link ? `<a href="${esc(it.link)}" target="_blank" rel="noopener" class="tiny" style="color:var(--accent);display:block;margin-top:2px;word-break:break-all">Открыть ссылку</a>` : ''}
-              ${it.grantedBy ? `<div class="tiny muted" style="margin-top:4px">✓ подарено</div>` : `<div class="tiny muted" style="margin-top:4px">${timeAgo(new Date(it.createdAt))}</div>`}
+              ${it.grantedBy ? `<div class="tiny muted" style="margin-top:4px">подарено</div>` : `<div class="tiny muted" style="margin-top:4px">${timeAgo(new Date(it.createdAt))}</div>`}
             </div>
             ${it.canDelete ? `<button class="btn btn-sm" data-del="${it.id}" style="color:#c98b8b;padding:4px 8px">${icon('trash', 14)}</button>` : ''}
           </div>

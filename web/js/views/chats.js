@@ -4,7 +4,7 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet, confirmSheet } from '../ui.js';
 import { openProfile } from './profile.js';
 
-const EMOJI = ['🙂','😌','😴','🥲','😭','😤','😍','🤍','✨','🌙','☕','🌿','🫶','👀','🔥','💤','🎧','📌','🙏','💬','🌊','🧊','🍂','⭐'];
+const EMOJI = [];
 
 let listRoot = null;
 

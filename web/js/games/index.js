@@ -5571,7 +5571,7 @@ function rain(canvas, report) {
         ctx.beginPath();
         ctx.roundRect(state.x * w - 18, h * 0.85 - 6, 36, 14, 7);
         ctx.fill();
-        hud(ctx, w, [`Очки ${state.score}`, `Жизни ${'❤'.repeat(state.lives)}`]);
+        hud(ctx, w, [`Очки ${state.score}`, `Жизни ${state.lives}`]);
         if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы повторить');
       }
     };
