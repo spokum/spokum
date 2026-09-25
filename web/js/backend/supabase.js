@@ -627,7 +627,8 @@ export async function createSupabase(url, key) {
         console.log('[me] no uid, returning null user. sessionLost=', sessionLost);
         return { user: null };
       }
-      sb.rpc('touch_presence').catch(() => {});
+      // touch_presence — фоновый ping, не должен ломать me() если упадёт
+      try { await sb.rpc('touch_presence'); } catch {}
       try {
         const user = await profileById(uid);
         if (user) keepProfile(user);
