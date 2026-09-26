@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v70';
+const VERSION = 'spokum-v71';
 const CORE = [
   './',
   './index.html',

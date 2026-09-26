@@ -163,7 +163,7 @@ async function loadFactory() {
 export async function createSupabase(url, key) {
   const createClient = await loadFactory();
   const sb = createClient(url, key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, flowType: 'refresh' },
     global: { fetch: timedFetch },
     realtime: { params: { eventsPerSecond: 4 } }
   });
@@ -172,6 +172,8 @@ export async function createSupabase(url, key) {
   let channel = null;
   let leaving = false;
   let restoring = null;
+  let lastSuccessTime = 0;
+  let signOutTimer = null;
 
   const requireUid = () => {
     if (!uid) throw new Error('Нужен вход');
@@ -416,14 +418,12 @@ export async function createSupabase(url, key) {
       return null;
     }
     restoring = (async () => {
-      
-      
-      
       const already = await liveSession();
       if (already?.user?.id) {
         uid = already.user.id;
         keepSession(already);
         sessionLost = false;
+        lastSuccessTime = Date.now();
         listen();
         return uid;
       }
@@ -445,6 +445,7 @@ export async function createSupabase(url, key) {
             uid = who;
             if (fresh) keepSession(fresh);
             sessionLost = false;
+            lastSuccessTime = Date.now();
             listen();
             return who;
           }
@@ -478,19 +479,22 @@ export async function createSupabase(url, key) {
   
   if (!uid) uid = await restoreSession(navigator.onLine ? 4 : 0);
   if (uid) listen();
+  setInterval(() => {
+    if (uid && !leaving && navigator.onLine && Date.now() - lastSuccessTime > 25 * 60 * 1000) {
+      restoreSession(1).catch(() => {});
+    }
+  }, 5 * 60 * 1000);
 
   sb.auth.onAuthStateChange((event, session) => {
     if (session) {
       keepSession(session);
       uid = session.user?.id || uid;
+      lastSuccessTime = Date.now();
+      sessionLost = false;
       listen();
       return;
     }
     if (event === 'INITIAL_SESSION' && !session) {
-      
-      
-      
-      
       if (!leaving && !uid) setTimeout(() => restoreSession(2).catch(() => {}), 0);
       return;
     }
@@ -499,20 +503,18 @@ export async function createSupabase(url, key) {
         uid = null;
         return;
       }
-      
-      
-      
-      
-      
-      setTimeout(async () => {
+      if (signOutTimer) clearTimeout(signOutTimer);
+      signOutTimer = setTimeout(async () => {
+        signOutTimer = null;
+        if (Date.now() - lastSuccessTime < 15000) {
+          return;
+        }
         const restored = await restoreSession(3).catch(() => null);
-        
-        
         if (!restored && !leaving) {
           uid = null;
           sessionLost = true;
         }
-      }, 0);
+      }, 3000);
       return;
     }
   });
@@ -613,7 +615,9 @@ export async function createSupabase(url, key) {
       if (!uid) {
         return { user: null };
       }
-      
+      if (Date.now() - lastSuccessTime > 25 * 60 * 1000) {
+        await restoreSession(2).catch(() => {});
+      }
       try { await sb.rpc('touch_presence'); } catch {}
       try { await sb.rpc('touch_streak'); } catch {}
       try {
