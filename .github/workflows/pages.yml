@@ -1,0 +1,35 @@
+name: Publish site
+
+on:
+  push:
+    branches:
+      - main
+      - Main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push web folder to gh-pages
+        run: |
+          for candidate in logo.png logo.jpg logo.jpeg logo.webp logo.svg; do
+            if [ -f "$candidate" ] && [ ! -f "web/$candidate" ]; then cp "$candidate" "web/$candidate"; fi
+          done
+          git rev-parse --short HEAD > web/version.txt
+          (cd web && zip -qr ../web-bundle.zip . -x '.nojekyll' 'web-bundle.zip')
+          mv web-bundle.zip web/web-bundle.zip
+          cd web
+          touch .nojekyll
+          rm -rf .git
+          git init -q
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Обновление сайта"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:gh-pages
