@@ -204,6 +204,7 @@ export async function render(root) {
       <div class="strong">СпокУм</div>
       <div class="tiny muted" style="margin-top:4px">Соцсеть про спокойствие и настроение</div>
       <div class="tiny muted" style="margin-top:8px">версия 2.0</div>
+      <div class="tiny muted" style="margin-top:12px">Поддержка: <a href="https://t.me/Janer638" target="_blank" rel="noopener" style="color:var(--accent)">Telegram @Janer638</a></div>
     </div>`;
 
   const premium = isPremium(state.user);
