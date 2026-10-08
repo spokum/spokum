@@ -2271,3 +2271,93 @@ body.still *::after {
 .switch input:checked + span::before {
   transform: translateX(20px);
 }
+
+[data-theme='frost'] {
+  --bg: #0d1620;
+  --bg-2: #1c3346;
+  --surface: rgba(140,180,220,.035);
+  --surface-2: rgba(140,180,220,.06);
+  --line: rgba(140,180,220,.08);
+  --line-strong: rgba(140,180,220,.15);
+  --text: #dceaf2;
+  --muted: #6a8090;
+  --shadow: 0 16px 40px rgba(0,20,40,.42);
+  --glow-1: rgba(140,200,240,.07);
+  --glow-2: rgba(160,210,250,.07);
+  --glow: .55;
+}
+
+[data-theme='pomegranate'] {
+  --bg: #1c0a10;
+  --bg-2: #4a1525;
+  --surface: rgba(200,140,150,.035);
+  --surface-2: rgba(200,140,150,.06);
+  --line: rgba(200,140,150,.08);
+  --line-strong: rgba(200,140,150,.15);
+  --text: #f0d4d8;
+  --muted: #8a6068;
+  --shadow: 0 16px 40px rgba(40,5,15,.42);
+  --glow-1: rgba(220,120,130,.07);
+  --glow-2: rgba(200,100,110,.07);
+  --glow: .55;
+}
+
+[data-theme='lavender'] {
+  --bg: #1a1426;
+  --bg-2: #3a2c5c;
+  --surface: rgba(180,160,220,.035);
+  --surface-2: rgba(180,160,220,.06);
+  --line: rgba(180,160,220,.08);
+  --line-strong: rgba(180,160,220,.15);
+  --text: #e0d6f0;
+  --muted: #7a6e90;
+  --shadow: 0 16px 40px rgba(20,10,40,.42);
+  --glow-1: rgba(180,150,230,.07);
+  --glow-2: rgba(200,170,240,.07);
+  --glow: .55;
+}
+
+[data-theme='mist'] {
+  --bg: #1a1d22;
+  --bg-2: #3a3f47;
+  --surface: rgba(200,210,220,.035);
+  --surface-2: rgba(200,210,220,.06);
+  --line: rgba(200,210,220,.07);
+  --line-strong: rgba(200,210,220,.13);
+  --text: #e8eaed;
+  --muted: #7a8088;
+  --shadow: 0 16px 40px rgba(15,18,22,.42);
+  --glow-1: rgba(180,190,200,.06);
+  --glow-2: rgba(200,210,220,.06);
+  --glow: .5;
+}
+
+[data-theme='coral'] {
+  --bg: #1f1410;
+  --bg-2: #4a2820;
+  --surface: rgba(220,160,130,.035);
+  --surface-2: rgba(220,160,130,.06);
+  --line: rgba(220,160,130,.08);
+  --line-strong: rgba(220,160,130,.15);
+  --text: #f0c4b8;
+  --muted: #8a6858;
+  --shadow: 0 16px 40px rgba(30,15,10,.42);
+  --glow-1: rgba(230,140,100,.07);
+  --glow-2: rgba(210,120,90,.07);
+  --glow: .55;
+}
+
+[data-theme='steel'] {
+  --bg: #12161a;
+  --bg-2: #2a323a;
+  --surface: rgba(150,170,190,.035);
+  --surface-2: rgba(150,170,190,.06);
+  --line: rgba(150,170,190,.07);
+  --line-strong: rgba(150,170,190,.13);
+  --text: #c8d4dc;
+  --muted: #6a7480;
+  --shadow: 0 16px 40px rgba(10,15,20,.42);
+  --glow-1: rgba(130,160,190,.06);
+  --glow-2: rgba(150,180,210,.06);
+  --glow: .5;
+}
