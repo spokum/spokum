@@ -22,6 +22,8 @@ jobs:
 
       - name: Build EXE
         working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --x64
 
       - name: Upload to release
