@@ -1,21 +1,22 @@
 {
   "name": "spokum-desktop",
   "version": "2.1.0",
-  "description": "СпокУм",
+  "description": "Spokum",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "npx electron-builder --win --x64"
+    "build": "npx electron-builder --win portable"
   },
   "build": {
     "appId": "com.spokum.app",
     "productName": "Spokum",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "icon.ico"],
+    "files": ["main.js", "preload.js", "icon.png"],
     "win": {
       "target": ["portable"],
-      "icon": "icon.ico"
-    }
+      "icon": "icon.png"
+    },
+    "asar": false
   },
   "devDependencies": {
     "electron": "^32.0.0",
