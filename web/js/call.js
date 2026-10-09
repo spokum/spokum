@@ -29,14 +29,21 @@ function supported() {
 
 async function grabMedia(withVideo) {
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: withVideo ? { facingMode: 'user', width: { ideal: 720 } } : false
-    });
+    if (navigator.mediaDevices?.getUserMedia) {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: withVideo ? { facingMode: 'user', width: { ideal: 720 } } : false
+      });
+    }
+    throw new Error('Браузер не поддерживает звонки');
   } catch (error) {
-    if (error.name === 'NotAllowedError') throw new Error('Нет доступа к микрофону. Разрешите его в настройках');
-    if (error.name === 'NotFoundError') throw new Error('Камера или микрофон не найдены');
-    throw new Error('Не удалось включить микрофон');
+    if (error.name === 'NotAllowedError') throw new Error('Нет доступа к микрофону. Разрешите доступ в настройках браузера или приложения');
+    if (error.name === 'NotFoundError') throw new Error('Микрофон не найден. Проверьте подключение');
+    if (error.name === 'NotReadableError') throw new Error('Микрофон занят другим приложением');
+    if (error.name === 'OverconstrainedError') {
+      return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+    throw new Error('Не удалось включить микрофон: ' + (error.message || error.name));
   }
 }
 

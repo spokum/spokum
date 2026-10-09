@@ -78,6 +78,12 @@ public class MainActivity extends AppCompatActivity {
     webView = new WebView(this);
     setContentView(webView);
 
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+        != PackageManager.PERMISSION_GRANTED) {
+      ActivityCompat.requestPermissions(this,
+          new String[] { Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA }, 43);
+    }
+
     WebSettings settings = webView.getSettings();
     settings.setJavaScriptEnabled(true);
     settings.setDomStorageEnabled(true);

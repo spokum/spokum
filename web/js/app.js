@@ -83,7 +83,7 @@ function watchNetwork() {
 
 const IN_APP = location.hostname === 'spokum.local' || location.hostname === 'appassets.androidplatform.net';
 
-const REQUIRED_SW_VERSION = 'spokum-v89';
+const REQUIRED_SW_VERSION = 'spokum-v90';
 
 async function purgeStaleWorker() {
   if (!('serviceWorker' in navigator)) return;
