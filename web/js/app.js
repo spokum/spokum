@@ -83,27 +83,16 @@ function watchNetwork() {
 
 const IN_APP = location.hostname === 'spokum.local' || location.hostname === 'appassets.androidplatform.net';
 
-const REQUIRED_SW_VERSION = 'spokum-v65';
+const REQUIRED_SW_VERSION = 'spokum-v86';
 
 async function purgeStaleWorker() {
   if (!('serviceWorker' in navigator)) return;
+  if (sessionStorage.getItem('spokum.sw.purged')) return;
+  sessionStorage.setItem('spokum.sw.purged', '1');
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const reg of registrations) {
-      
-      try {
-        const resp = await fetch('sw.js', { cache: 'no-store' });
-        const text = await resp.text();
-        const match = text.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
-        const liveVersion = match ? match[1] : null;
-        if (liveVersion && liveVersion !== REQUIRED_SW_VERSION) {
-          
-          await reg.unregister();
-          console.log('[sw] unregistered stale worker, will re-register fresh');
-        }
-      } catch {
-        
-      }
+      await reg.unregister();
     }
   } catch {}
 }
@@ -123,25 +112,9 @@ function registerWorker() {
     }
   });
 
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((reg) => {
-      if (reg.active) {
-        const ver = reg.active.scriptURL;
-        fetch('sw.js', { cache: 'no-store' }).then((r) => r.text()).then((text) => {
-          const m = text.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
-          if (m && !text.includes(`VERSION = '${reg.active.state}'`)) {
-            reg.update().then(() => reg.unregister().then(() => location.reload())).catch(() => {});
-          }
-        }).catch(() => {});
-      }
-    });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
   }).catch(() => {});
-
-  purgeStaleWorker().finally(() => {
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
-      reg.update().catch(() => {});
-    }).catch(() => {});
-  });
 }
 
 async function detectLogo() {
