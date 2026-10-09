@@ -2,9 +2,6 @@
   "name": "spokum-desktop",
   "version": "2.1.0",
   "main": "main.js",
-  "scripts": {
-    "build": "npx electron-builder --win portable"
-  },
   "build": {
     "appId": "com.spokum.app",
     "productName": "Spokum",
@@ -13,6 +10,9 @@
     "win": {
       "target": ["portable"],
       "icon": "icon.png"
+    },
+    "portable": {
+      "artifactName": "spokum.exe"
     }
   },
   "devDependencies": {

@@ -16,18 +16,26 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install Electron
         working-directory: desktop
         run: npm install
 
-      - name: Build EXE
+      - name: Build portable EXE
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --x64
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx --yes electron-builder --win portable --config.directories.output=dist
+
+      - name: Rename to spokum.exe
+        working-directory: desktop
+        run: |
+          $file = Get-ChildItem dist -Filter *.exe | Select-Object -First 1
+          if ($file) { Copy-Item $file.FullName dist/spokum.exe }
+        shell: pwsh
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop
-          files: desktop/dist/*.exe
+          files: desktop/dist/spokum.exe
