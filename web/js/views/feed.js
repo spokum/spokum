@@ -113,7 +113,7 @@ export async function render(root) {
   const searchBox = root.querySelector('[data-search]');
   const query = root.querySelector('[data-query]');
   root.querySelector('[data-search-toggle]').onclick = () => {
-    if (state.user?.username === 'silver' && api.searchAll) {
+    if (state.user?.username  && api.searchAll) {
       import('./search.js').then(({ openSearch }) => openSearch());
       return;
     }
@@ -240,7 +240,7 @@ function renderComposer(root) {
           <button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>
           <button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
           <button class="icon-btn" data-later>${icon('clock', 18)}<span>Позже</span></button>
-          ${state.user?.username === 'silver' ? `<button class="icon-btn" data-draft-save>${icon('edit', 18)}<span>Черновик</span></button>` : ''}
+          ${state.user?.username  ? `<button class="icon-btn" data-draft-save>${icon('edit', 18)}<span>Черновик</span></button>` : ''}
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
