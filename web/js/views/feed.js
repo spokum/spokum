@@ -240,6 +240,7 @@ function renderComposer(root) {
           <button class="icon-btn" data-poll-new>${icon('chart', 18)}<span>Опрос</span></button>
           <button class="icon-btn" data-voice>${icon('mic', 18)}<span>Голос</span></button>
           <button class="icon-btn" data-later>${icon('clock', 18)}<span>Позже</span></button>
+          ${state.user?.username === 'silver' ? `<button class="icon-btn" data-draft-save>${icon('edit', 18)}<span>Черновик</span></button>` : ''}
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
@@ -247,6 +248,17 @@ function renderComposer(root) {
     </div>`);
 
   card.querySelector('[data-poll-new]')?.addEventListener('click', () => openPollComposer(root));
+  card.querySelector('[data-draft-save]')?.addEventListener('click', async () => {
+    if (!draft.text.trim() && !draft.media.length) return toast('Сначала напишите запись', 'err');
+    try {
+      await api.createPost({ text: draft.text.trim(), mood: draft.mood, kind: 'text', isDraft: true });
+      toast('Сохранено в черновики');
+      draft.text = '';
+      draft.mood = 'calm';
+      card.querySelector('[data-body]').value = '';
+      await load(root);
+    } catch (e) { toast(e.message, 'err'); }
+  });
   card.querySelector('[data-later]')?.addEventListener('click', async () => {
     if (!draft.text.trim() && !draft.media.length) return toast('Сначала напишите запись', 'err');
     const menu = el(`<div class="col" style="gap:6px">
@@ -1000,7 +1012,7 @@ function openPostMenu(post, refresh, options) {
   const sheet = openSheet('', body);
   body.querySelector('[data-pin]')?.addEventListener('click', async () => {
     try {
-      await api.pinPost(post.id, !post.pinned);
+      await api.pinPost(post.id);
       sheet.close();
       toast(post.pinned ? 'Откреплено' : 'Закреплено');
       refresh?.();

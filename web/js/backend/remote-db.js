@@ -905,6 +905,7 @@ export async function createBackend(url, key) {
       const build = () => {
         let request = sb.from('posts').select(POST_SELECT());
         if (!includeRemoved) request = request.eq('removed', false);
+        request = request.eq('is_draft', false);
         if (picked) return request.in('id', picked).limit(picked.length);
         request = request.order('created_at', { ascending: false }).limit(size);
         if (later) request = request.lte('publish_at', new Date().toISOString());
@@ -999,7 +1000,7 @@ export async function createBackend(url, key) {
       return data.publicUrl;
     },
 
-    async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll, publishAt }) {
+    async createPost({ text, image, mood, kind, media, video, poster, duration, sound, poll, publishAt, isDraft }) {
       const id = requireUid();
       const body = String(text || '').trim().slice(0, 5000);
       const album = Array.isArray(media) ? media.filter(Boolean).slice(0, 10) : [];
@@ -1018,6 +1019,7 @@ export async function createBackend(url, key) {
         poll: poll || null
       };
       if (publishAt && publishAt > Date.now()) payload.publish_at = new Date(publishAt).toISOString();
+      if (isDraft) payload.is_draft = true;
       const shed = [['publish_at'], ['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
       let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
       for (const keys of shed) {
