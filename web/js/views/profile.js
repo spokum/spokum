@@ -516,6 +516,7 @@ export async function render(root) {
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-wheel>${icon('star', 20)}<div class="grow"><div class="strong small">Колесо фортуны</div><div class="tiny muted">Бесплатный приз каждый день</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-leaderboard>${icon('trophy', 20)}<div class="grow"><div class="strong small">Топ по уровням</div><div class="tiny muted">50 самых активных</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-events>${icon('spark', 20)}<div class="grow"><div class="strong small">Сезонные ивенты</div><div class="tiny muted">Временные задания с наградами</div></div>${icon('forward', 16)}</button>` : ''}
+      ${state.user?.username === 'silver' ? `<button class="card list-item" data-garden>${icon('feed', 20)}<div class="grow"><div class="strong small">Общий сад</div><div class="tiny muted">Онлайн-песочница: сажай растения вместе со всеми</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-widgets>${icon('chart', 20)}<div class="grow"><div class="strong small">Дашборд</div><div class="tiny muted">Уровень, стрик, цитата, колесо - всё в одном</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-shop>${icon('star', 20)}<div class="grow"><div class="strong small">Купить себе подарок</div><div class="tiny muted">Сразу ляжет на вашу витрину</div></div>${icon('forward', 16)}</button>
@@ -661,6 +662,10 @@ export async function render(root) {
   body.querySelector('[data-widgets]')?.addEventListener('click', async () => {
     const { openWidgets } = await import('./widgets.js');
     openWidgets();
+  });
+  body.querySelector('[data-garden]')?.addEventListener('click', async () => {
+    const { openGarden } = await import('./garden.js');
+    openGarden();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');

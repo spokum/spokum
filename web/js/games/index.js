@@ -5731,6 +5731,208 @@ function snake2(canvas, report) {
   });
 }
 
+function maze(canvas, report) {
+  return runner(canvas, () => {
+    const COLS = 11, ROWS = 15;
+    const grid = [];
+    for (let y = 0; y < ROWS; y++) { grid[y] = []; for (let x = 0; x < COLS; x++) grid[y][x] = 1; }
+    const stack = [{x:1,y:1}]; grid[1][1] = 0;
+    while (stack.length) {
+      const c = stack[stack.length-1];
+      const dirs = [[0,-2],[2,0],[0,2],[-2,0]].sort(()=>Math.random()-0.5);
+      let moved = false;
+      for (const [dx,dy] of dirs) {
+        const nx=c.x+dx, ny=c.y+dy;
+        if (nx>0&&nx<COLS-1&&ny>0&&ny<ROWS-1&&grid[ny][nx]===1) {
+          grid[c.y+dy/2][c.x+dx/2]=0; grid[ny][nx]=0; stack.push({x:nx,y:ny}); moved=true; break;
+        }
+      }
+      if (!moved) stack.pop();
+    }
+    grid[ROWS-2][COLS-2] = 0;
+    let px = 1, py = 1, over = false, won = false, score = 0, moves = 0;
+    return {
+      score: () => score,
+      bind(bind, cv) {
+        let sx, sy;
+        bind('pointerdown', (e) => { if (over) { over=false; px=1; py=1; moves=0; return; } const r=cv.getBoundingClientRect(); sx=(e.touches?.[0]?.clientX??e.clientX)-r.left; sy=(e.touches?.[0]?.clientY??e.clientY)-r.top; });
+        bind('pointerup', (e) => { if (over||!sx) return; const r=cv.getBoundingClientRect(); const ex=(e.touches?.[0]?.clientX??e.changedTouches?.[0]?.clientX??e.clientX)-r.left; const ey=(e.touches?.[0]?.clientY??e.changedTouches?.[0]?.clientY??e.clientY)-r.top; const dx=ex-sx, dy=ey-sy; if (Math.abs(dx)<20&&Math.abs(dy)<20) return; let nx=px, ny=py; if (Math.abs(dx)>Math.abs(dy)) nx+=dx>0?1:-1; else ny+=dy>0?1:-1; if (grid[ny]&&grid[ny][nx]===0) { px=nx; py=ny; moves++; if (px===COLS-2&&py===ROWS-2) { won=true; over=true; score=Math.max(0, 200-moves*5); report(score); } } });
+      },
+      update() {},
+      draw(ctx, size) {
+        const {w,h}=size; backdrop(ctx,w,h,['#0a0e14','#151c28']);
+        const cs=Math.min(w/COLS, h/ROWS); const ox=(w-cs*COLS)/2, oy=(h-cs*ROWS)/2;
+        for (let y=0;y<ROWS;y++) for (let x=0;x<COLS;x++) { if (grid[y][x]) { ctx.fillStyle='#2a3540'; ctx.fillRect(ox+x*cs,oy+y*cs,cs,cs); } }
+        ctx.fillStyle='#87b7a3'; ctx.fillRect(ox+(COLS-2)*cs+2,oy+(ROWS-2)*cs+2,cs-4,cs-4);
+        ctx.fillStyle='#e8c46a'; ctx.beginPath(); ctx.arc(ox+px*cs+cs/2,oy+py*cs+cs/2,cs*0.35,0,Math.PI*2); ctx.fill();
+        hud(ctx,w,[`Шаги ${moves}`, won?'Выход!' :'Найди выход']);
+        if (over) overText(ctx,w,h,won?`Победа! ${score}`:'Тап для рестарта','Свайп для движения');
+      }
+    };
+  });
+}
+
+function targets(canvas, report) {
+  return runner(canvas, () => {
+    let state = { score: 0, targets: [], spawn: 0, dist: 0, over: false, miss: 0, combo: 0 };
+    const reset = () => { state = { score: 0, targets: [], spawn: 0.3, dist: 0, over: false, miss: 0, combo: 0 }; };
+    reset();
+    return {
+      score: () => state.score,
+      bind(bind, cv) {
+        bind('pointerdown', (e) => {
+          if (state.over) { reset(); return; }
+          const r = cv.getBoundingClientRect();
+          const x = ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width;
+          const y = ((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height;
+          let hit = false;
+          state.targets = state.targets.filter((t) => {
+            const dx = t.x - x, dy = t.y - y;
+            if (Math.sqrt(dx*dx+dy*dy) < t.r + 0.04 && !hit) { hit = true; state.combo++; state.score += 10 + state.combo * 2; return false; }
+            return true;
+          });
+          if (!hit) { state.combo = 0; state.miss++; if (state.miss >= 5) { state.over = true; report(state.score); } }
+        });
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.spawn -= dt;
+        if (state.spawn <= 0) { state.spawn = Math.max(0.3, 0.9 - state.dist * 0.004); state.targets.push({ x: 0.1 + Math.random() * 0.8, y: 0.15 + Math.random() * 0.7, r: 0.04 + Math.random() * 0.03, life: 1.5 }); }
+        state.targets.forEach((t) => t.life -= dt);
+        const expired = state.targets.filter((t) => t.life <= 0);
+        if (expired.length) { state.miss += expired.length; state.combo = 0; }
+        state.targets = state.targets.filter((t) => t.life > 0);
+        if (state.miss >= 5) { state.over = true; report(state.score); }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0e1a0e', '#1a2a1a']);
+        state.targets.forEach((t) => {
+          const a = Math.min(1, t.life); const r = t.r * w;
+          ctx.fillStyle = `rgba(135,183,163,${a})`;
+          ctx.beginPath(); ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = `rgba(255,255,255,${a * 0.3})`; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = `rgba(255,255,255,${a * 0.5})`;
+          ctx.beginPath(); ctx.arc(t.x * w, t.y * h, r * 0.3, 0, Math.PI * 2); ctx.fill();
+        });
+        hud(ctx, w, [`Очки ${state.score}`, `Комбо ${state.combo}`, `Промахи ${state.miss}/5`]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function blocks(canvas, report) {
+  return runner(canvas, () => {
+    const N = 10;
+    let grid = Array.from({length:N},()=>Array(N).fill(0));
+    let piece = null, score = 0, over = false;
+    const SHAPES = [[[1,1,1],[0,1,0]],[[1,1],[1,1]],[[1,1,1,1]],[[1,0],[1,0],[1,1]],[[1,1,1],[1,0,0]],[[1],[1],[1]]];
+    const newPiece = () => { const s = SHAPES[Math.floor(Math.random()*SHAPES.length)]; return { shape: s, hue: Math.floor(Math.random()*360) }; };
+    if (!piece) piece = newPiece();
+    return {
+      score: () => score,
+      bind(bind, cv) {
+        let dragX = null, dragY = null;
+        bind('pointerdown', (e) => { if (over) { grid = Array.from({length:N},()=>Array(N).fill(0)); score=0; over=false; piece=newPiece(); return; } const r=cv.getBoundingClientRect(); dragX=((e.touches?.[0]?.clientX??e.clientX)-r.left)/r.width*N; dragY=((e.touches?.[0]?.clientY??e.clientY)-r.top)/r.height*N; });
+        bind('pointermove', (e) => { if (dragX===null) return; const r=cv.getBoundingClientRect(); dragX=((e.touches?.[0]?.clientX??e.clientX)-r.left)/r.width*N; dragY=((e.touches?.[0]?.clientY??e.clientY)-r.top)/r.height*N; });
+        bind('pointerup', () => {
+          if (dragX===null||over) { dragX=null; return; }
+          const gx = Math.floor(dragX - piece.shape[0].length/2);
+          const gy = Math.floor(dragY - piece.shape.length/2);
+          let canPlace = true;
+          for (let y=0;y<piece.shape.length;y++) for (let x=0;x<piece.shape[y].length;x++) { if (piece.shape[y][x]) { const nx=gx+x, ny=gy+y; if (nx<0||nx>=N||ny<0||ny>=N||grid[ny][nx]) canPlace=false; } }
+          if (canPlace) { for (let y=0;y<piece.shape.length;y++) for (let x=0;x<piece.shape[y].length;x++) if (piece.shape[y][x]) grid[gy+y][gx+x]=piece.hue+1; score+=piece.shape.flat().filter(c=>c).length; clearLines(); piece=newPiece(); if (!canFit(piece)) over=true; }
+          dragX=null;
+        });
+      },
+      update() {},
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a0a12', '#161620']);
+        const cs = Math.min(w, h) / N; const ox = (w - cs * N) / 2; const oy = (h - cs * N) / 2;
+        ctx.strokeStyle = 'rgba(255,255,255,.04)'; ctx.lineWidth = 1;
+        for (let i = 0; i <= N; i++) { ctx.beginPath(); ctx.moveTo(ox+i*cs,oy); ctx.lineTo(ox+i*cs,oy+N*cs); ctx.stroke(); ctx.beginPath(); ctx.moveTo(ox,oy+i*cs); ctx.lineTo(ox+N*cs,oy+i*cs); ctx.stroke(); }
+        for (let y=0;y<N;y++) for (let x=0;x<N;x++) if (grid[y][x]) { ctx.fillStyle=`hsl(${grid[y][x]-1},50%,45%)`; ctx.beginPath(); ctx.roundRect(ox+x*cs+1,oy+y*cs+1,cs-2,cs-2,3); ctx.fill(); }
+        if (dragX!==null && !over) { const px=Math.floor(dragX-piece.shape[0].length/2), py=Math.floor(dragY-piece.shape.length/2); for (let y=0;y<piece.shape.length;y++) for (let x=0;x<piece.shape[y].length;x++) if (piece.shape[y][x]) { ctx.globalAlpha=0.5; ctx.fillStyle=`hsl(${piece.hue},50%,45%)`; ctx.beginPath(); ctx.roundRect(ox+(px+x)*cs+1,oy+(py+y)*cs+1,cs-2,cs-2,3); ctx.fill(); ctx.globalAlpha=1; } }
+        hud(ctx, w, [`Очки ${score}`]);
+        if (over) { report(score); overText(ctx, w, h, `Итог ${score}`, 'Тап для рестарта'); }
+      }
+    };
+    function clearLines() { for (let y=N-1;y>=0;y--) { if (grid[y].every(c=>c)) { grid.splice(y,1); grid.unshift(Array(N).fill(0)); score+=100; y++; } } for (let x=0;x<N;x++) { if (grid.every(row=>row[x])) { grid.forEach(row=>row[x]=0); score+=100; } } }
+    function canFit(p) { for (let y=0;y<=N-p.shape.length;y++) for (let x=0;x<=N-p.shape[0].length;x++) { let ok=true; for (let dy=0;dy<p.shape.length&&ok;dy++) for (let dx=0;dx<p.shape[dy].length&&ok;dx++) if (p.shape[dy][dx] && grid[y+dy] && grid[y+dy][x+dx]) ok=false; if (ok) return true; } return false; }
+  });
+}
+
+function space(canvas, report) {
+  return runner(canvas, () => {
+    let s = { x: 0.5, y: 0.8, bullets: [], rocks: [], score: 0, spawn: 0, dist: 0, over: false };
+    const reset = () => { s = { x: 0.5, y: 0.8, bullets: [], rocks: [], score: 0, spawn: 0.5, dist: 0, over: false }; };
+    reset(); let target = 0.5;
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        bind('pointermove', (e) => { const r=cv.getBoundingClientRect(); target=Math.max(0.05,Math.min(0.95,((e.touches?.[0]?.clientX??e.clientX)-r.left)/r.width)); });
+        bind('pointerdown', (e) => { if (s.over) { reset(); return; } s.bullets.push({ x: s.x, y: s.y - 0.05, v: -1.2 }); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.dist += dt; s.x += (target - s.x) * Math.min(1, dt * 10);
+        s.bullets.forEach(b => b.y += b.v * dt); s.bullets = s.bullets.filter(b => b.y > -0.1);
+        s.spawn -= dt;
+        if (s.spawn <= 0) { s.spawn = Math.max(0.3, 0.8 - s.dist * 0.003); s.rocks.push({ x: Math.random(), y: -0.05, v: 0.3 + Math.random() * 0.3 + s.dist * 0.002, r: 0.03 + Math.random() * 0.02 }); }
+        s.rocks.forEach(r => r.y += r.v * dt);
+        s.rocks = s.rocks.filter(r => { if (r.y > 1.1) return false; s.bullets.forEach(b => { const dx=r.x-b.x, dy=r.y-b.y; if (Math.sqrt(dx*dx+dy*dy)<r.r+0.02) { r.dead=true; s.score+=15; } }); return !r.dead; });
+        s.rocks = s.rocks.filter(r => { const dx=r.x-s.x, dy=r.y-s.y; if (Math.sqrt(dx*dx+dy*dy)<r.r+0.03) { s.over=true; report(s.score); return false; } return true; });
+      },
+      draw(ctx, size) {
+        const { w, h } = size; backdrop(ctx, w, h, ['#050510', '#0a0a20']);
+        ctx.fillStyle='rgba(255,255,255,.15)'; for (let i=0;i<40;i++) { const sx=((i*137+s.dist*15)%w); const sy=((i*91)%h); ctx.fillRect(sx,sy,1.5,1.5); }
+        ctx.fillStyle='#f0e8a0'; s.bullets.forEach(b => { ctx.fillRect(b.x*w-1, b.y*h-6, 2, 6); });
+        ctx.fillStyle='#8a6a5a'; s.rocks.forEach(r => { ctx.beginPath(); ctx.arc(r.x*w, r.y*h, r.r*w, 0, Math.PI*2); ctx.fill(); });
+        ctx.fillStyle='#a0d8e8'; ctx.beginPath(); ctx.moveTo(s.x*w, s.y*h-12); ctx.lineTo(s.x*w+8, s.y*h+8); ctx.lineTo(s.x*w-8, s.y*h+8); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#5a8ae8'; ctx.beginPath(); ctx.arc(s.x*w, s.y*h-2, 3, 0, Math.PI*2); ctx.fill();
+        hud(ctx, w, [`Очки ${s.score}`]); if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для рестарта');
+      }
+    };
+  });
+}
+
+function racer(canvas, report) {
+  return runner(canvas, () => {
+    let s = { x: 0.5, obstacles: [], score: 0, spawn: 0, dist: 0, speed: 0.5, over: false };
+    const reset = () => { s = { x: 0.5, obstacles: [], score: 0, spawn: 0.6, dist: 0, speed: 0.5, over: false }; };
+    reset(); let target = 0.5;
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        bind('pointermove', (e) => { const r=cv.getBoundingClientRect(); target=Math.max(0.1,Math.min(0.9,((e.touches?.[0]?.clientX??e.clientX)-r.left)/r.width)); });
+        bind('pointerdown', () => { if (s.over) reset(); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.dist += dt; s.speed = Math.min(1.5, 0.5 + s.dist * 0.01); s.score += Math.floor(s.speed * dt * 10);
+        s.x += (target - s.x) * Math.min(1, dt * 8);
+        s.spawn -= dt;
+        if (s.spawn <= 0) { s.spawn = Math.max(0.3, 0.8 - s.dist * 0.005); s.obstacles.push({ x: 0.1 + Math.random() * 0.8, y: -0.1, w: 0.12 + Math.random() * 0.08 }); }
+        s.obstacles.forEach(o => o.y += s.speed * dt);
+        s.obstacles = s.obstacles.filter(o => { if (o.y > 1.1) return false; if (o.y > 0.75 && o.y < 0.9 && Math.abs(o.x - s.x) < o.w / 2 + 0.04) { s.over = true; report(s.score); return false; } return true; });
+      },
+      draw(ctx, size) {
+        const { w, h } = size; backdrop(ctx, w, h, ['#0d0d10', '#1a1a20']);
+        ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.lineWidth=2; ctx.setLineDash([20,20]); ctx.lineDashOffset = -s.dist * 100;
+        for (let i = 0; i < 4; i++) { const lx = w * (0.15 + i * 0.23); ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, h); ctx.stroke(); }
+        ctx.setLineDash([]);
+        ctx.fillStyle='#c95a3a'; s.obstacles.forEach(o => { ctx.beginPath(); ctx.roundRect(o.x*w-o.w*w/2, o.y*h, o.w*w, 20, 4); ctx.fill(); });
+        ctx.fillStyle='#e8a8a0'; ctx.beginPath(); ctx.roundRect(s.x*w-12, h*0.82, 24, 36, 6); ctx.fill();
+        ctx.fillStyle='#5a8ae8'; ctx.beginPath(); ctx.roundRect(s.x*w-8, h*0.82+4, 16, 12, 3); ctx.fill();
+        hud(ctx, w, [`Очки ${s.score}`, `Скорость ${Math.round(s.speed*100)}%`]); if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для рестарта');
+      }
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -5992,5 +6194,42 @@ export const GAMES = [
     desc: 'Классика: свайп управляет направлением',
     tint: ['#0d1420', '#1b2a3c'],
     mount: snake2
+  },
+  {
+    id: 'maze',
+    title: 'Лабиринт',
+    desc: 'Найди выход из запутанного лабиринта',
+    tint: ['#0a0e14', '#151c28'],
+    mount: maze
+  },
+  {
+    id: 'targets',
+    title: 'Мишени',
+    desc: 'Тапай по целям, не промахивайся',
+    tint: ['#0e1a0e', '#1a2a1a'],
+    mount: targets
+  },
+  {
+    id: 'blocks',
+    title: 'Блоки',
+    desc: 'Заполняй сетку и очищай линии',
+    tint: ['#0a0a12', '#161620'],
+    mount: blocks
+  },
+  {
+    id: 'space',
+    title: 'Космос',
+    desc: 'Стреляй по астероидам, уворачивайся',
+    tint: ['#050510', '#0a0a20'],
+    premium: true,
+    mount: space
+  },
+  {
+    id: 'racer',
+    title: 'Гонки',
+    desc: 'Уворачивайся от препятствий на трассе',
+    tint: ['#0d0d10', '#1a1a20'],
+    premium: true,
+    mount: racer
   }
 ];
