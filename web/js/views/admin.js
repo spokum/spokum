@@ -15,7 +15,8 @@ const TABS = [
   ['guard', 'Автофильтр'],
   ['actions', 'Наказания'],
   ['audit', 'Журнал'],
-  ['promos', 'Промокоды']
+  ['promos', 'Промокоды'],
+  ['pixel', 'Пиксель-батл']
 ];
 
 export async function openAdmin() {
@@ -67,6 +68,7 @@ export async function openAdmin() {
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
       if (active === 'promos') await drawPromos(body);
+      if (active === 'pixel') await drawPixelBattle(body);
     } catch (error) {
       body.innerHTML = emptyState('warn', 'Ошибка', error.message);
     }
@@ -1201,4 +1203,52 @@ async function drawPromos(body) {
   };
 
   await draw();
+}
+
+async function drawPixelBattle(body) {
+  body.innerHTML = `<div class="col" style="gap:12px;padding:12px">
+    <div class="card" style="padding:14px">
+      <div class="strong small" style="margin-bottom:8px">Пиксель-батл</div>
+      <p class="tiny muted" style="line-height:1.5;margin:0 0 12px">Запускает ивент на 3 дня. Все игроки рисуют на общем холсте 80x50. После 3 пикселей - кулдаун 2 минуты.</p>
+      <button class="btn btn-primary" data-start style="width:100%">Запустить пиксель-батл</button>
+    </div>
+    <div data-status></div>
+  </div>`;
+
+  const statusEl = body.querySelector('[data-status]');
+  const startBtn = body.querySelector('[data-start]');
+
+  const checkStatus = async () => {
+    statusEl.innerHTML = `<div class="card"><p class="muted center">Проверка...</p></div>`;
+    try {
+      const battle = await api.activePixelBattle();
+      if (!battle.active) {
+        statusEl.innerHTML = `<div class="card center" style="padding:14px"><div class="tiny muted">Нет активного батла</div></div>`;
+        startBtn.disabled = false;
+        startBtn.textContent = 'Запустить пиксель-батл';
+      } else {
+        const ends = new Date(battle.endsAt);
+        const daysLeft = Math.max(0, Math.ceil((ends - Date.now()) / 86400000));
+        statusEl.innerHTML = `<div class="card" style="padding:14px;border-color:var(--accent)">
+          <div class="strong small" style="color:var(--accent)">Батл активен</div>
+          <div class="tiny muted" style="margin-top:4px">Холст: ${battle.width}x${battle.height} · осталось ${daysLeft} дн.</div>
+        </div>`;
+        startBtn.disabled = true;
+        startBtn.textContent = 'Уже запущен';
+      }
+    } catch (e) {
+      statusEl.innerHTML = emptyState('warn', 'Ошибка', e.message);
+    }
+  };
+
+  startBtn.onclick = async () => {
+    if (!await confirmSheet({ title: 'Запустить пиксель-батл?', text: 'Ивент на 3 дня. Все игроки получат уведомление.', confirm: 'Запустить', danger: true })) return;
+    try {
+      await api.startPixelBattle();
+      toast('Пиксель-батл запущен!');
+      checkStatus();
+    } catch (e) { toast(e.message, 'err'); }
+  };
+
+  await checkStatus();
 }

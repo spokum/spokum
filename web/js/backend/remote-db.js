@@ -2537,6 +2537,27 @@ export async function createBackend(url, key) {
       const { data, error } = await sb.rpc('disable_pin_code');
       guard(error);
       return data || { ok: true };
+    },
+
+    async activePixelBattle() {
+      const { data, error } = await sb.rpc('active_pixel_battle');
+      guard(error);
+      return data || { active: false };
+    },
+    async placePixel(battleId, x, y, color) {
+      const { data, error } = await sb.rpc('place_pixel', { p_battle_id: battleId, p_x: x, p_y: y, p_color: color });
+      guard(error);
+      return data || { ok: false };
+    },
+    async getPixelInfo(battleId, x, y) {
+      const { data, error } = await sb.rpc('get_pixel_info', { p_battle_id: battleId, p_x: x, p_y: y });
+      guard(error);
+      return data || { empty: true };
+    },
+    async startPixelBattle() {
+      const { data, error } = await sb.rpc('start_pixel_battle');
+      guard(error);
+      return data || { ok: true };
     }
   };
 }

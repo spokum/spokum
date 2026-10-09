@@ -381,6 +381,31 @@ async function boot() {
   }
   start();
   announcePremium(state.user);
+  checkPixelBattle();
+}
+
+function checkPixelBattle() {
+  if (state.user?.username !== 'silver') return;
+  if (!api.activePixelBattle) return;
+  api.activePixelBattle().then((battle) => {
+    if (!battle?.active) return;
+    if (document.querySelector('.pixel-banner')) return;
+    const banner = el(`<div class="pixel-banner" style="position:fixed;top:0;left:0;right:0;z-index:999;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:var(--accent-ink);padding:8px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 12px rgba(0,0,0,.3)">
+      ${icon('spark', 16)} <span>Начался пиксель-батл! Захватывай холст</span>
+      <button class="btn btn-sm" data-pixel-go style="margin-left:auto;background:rgba(0,0,0,.2);color:inherit;border:none;padding:4px 12px;border-radius:8px;font-weight:600">Зайти</button>
+      <button class="btn btn-sm" data-pixel-close style="background:transparent;border:none;color:inherit;padding:4px 8px;font-size:18px;opacity:.6">x</button>
+    </div>`);
+    document.body.appendChild(banner);
+    document.body.style.paddingTop = '40px';
+    banner.querySelector('[data-pixel-go]').onclick = async () => {
+      const { openPixelBattle } = await import('./views/pixel-battle.js');
+      openPixelBattle();
+    };
+    banner.querySelector('[data-pixel-close]').onclick = () => {
+      banner.remove();
+      document.body.style.paddingTop = '';
+    };
+  }).catch(() => {});
 }
 
 async function handOverSession() {
