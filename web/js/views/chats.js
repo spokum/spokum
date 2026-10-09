@@ -235,9 +235,22 @@ export async function openChat(chatId) {
   });
   observer.observe(document.body, { childList: true });
 
+  let replyTarget = null;
+  const replyBar = el('<div class="row between" data-reply-bar style="display:none;padding:6px 14px;background:var(--bg-2);align-items:center;gap:8px"><div class="tiny muted" data-reply-text style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div><button class="btn btn-sm" data-reply-cancel style="padding:2px 8px">x</button></div>');
+  view.querySelector('.chat-foot').insertAdjacentElement('beforebegin', replyBar);
+  replyBar.querySelector('[data-reply-cancel]').onclick = () => { replyTarget = null; replyBar.style.display = 'none'; };
+  window.addEventListener('spokum:replyMessage', (e) => {
+    replyTarget = e.detail;
+    replyBar.style.display = 'flex';
+    const txt = replyTarget.body || replyTarget.kind || 'сообщение';
+    replyBar.querySelector('[data-reply-text]').textContent = 'Ответ: ' + (txt.length > 40 ? txt.slice(0, 40) + '...' : txt);
+    input.focus();
+  });
+
   const send = async (payload) => {
     if (isOffline()) return toast('Нет интернета, сообщение не уйдёт', 'err');
     try {
+      if (replyTarget) { payload.replyToId = replyTarget.id; replyTarget = null; replyBar.style.display = 'none'; }
       await api.sendMessage(chatId, payload);
       input.value = '';
       input.style.height = '';
@@ -383,8 +396,10 @@ function bubble(message, chat, lastAuthor) {
   
   const canDelete = mine && message.kind !== 'call' && message.kind !== 'gift' && message.kind !== 'system' && !message.removed;
   const delBtn = canDelete ? `<button class="bubble-del" data-del-msg title="Удалить">${icon('trash', 12)}</button>` : '';
+  const replyBtn = !message.removed && message.kind !== 'call' && message.kind !== 'gift' && message.kind !== 'system' ? `<button class="bubble-del" data-reply-msg title="Ответить">${icon('reply', 12)}</button>` : '';
+  const replyBadge = message.replyToId ? `<div class="tiny muted" style="margin-bottom:4px;opacity:.6;border-left:2px solid var(--accent);padding-left:6px">ответ</div>` : '';
   const removedBadge = message.removed ? `<div class="tiny muted" style="font-style:italic">сообщение удалено</div>` : '';
-  const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${removedBadge || inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}${delBtn}</div></div>`);
+  const node = el(`<div class="bubble ${mine ? 'mine' : ''} ${message.kind === 'sticker' ? 'bubble-sticker' : ''}">${showAuthor ? `<div class="bubble-author">${esc(message.author?.displayName || '')}</div>` : ''}${replyBadge}${removedBadge || inner}<div class="bubble-meta">${clockTime(message.createdAt)}${ticks}${replyBtn}${delBtn}</div></div>`);
 
   const reel = node.querySelector('[data-reel]');
   if (reel) {
@@ -434,13 +449,19 @@ function bubble(message, chat, lastAuthor) {
       try {
         await api.deleteMyMessage(message.id);
         toast('Удалено');
-        
         const draw2 = node.closest('[data-host')?.__draw;
         if (typeof draw2 === 'function') draw2();
         else window.location.reload();
       } catch (error) {
         toast(error.message, 'err');
       }
+    };
+  }
+  const replyMsgBtn = node.querySelector('[data-reply-msg]');
+  if (replyMsgBtn) {
+    replyMsgBtn.onclick = (event) => {
+      event.stopPropagation();
+      window.dispatchEvent(new CustomEvent('spokum:replyMessage', { detail: message }));
     };
   }
   return node;

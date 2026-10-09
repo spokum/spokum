@@ -113,6 +113,10 @@ export async function render(root) {
   const searchBox = root.querySelector('[data-search]');
   const query = root.querySelector('[data-query]');
   root.querySelector('[data-search-toggle]').onclick = () => {
+    if (state.user?.username === 'silver' && api.searchAll) {
+      import('./search.js').then(({ openSearch }) => openSearch());
+      return;
+    }
     searchBox.hidden = !searchBox.hidden;
     if (!searchBox.hidden) query.focus();
     else {

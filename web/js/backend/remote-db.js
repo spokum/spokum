@@ -1224,16 +1224,18 @@ export async function createBackend(url, key) {
 
     async sendMessage(chatId, payload) {
       const me = requireUid();
+      const msgPayload = {
+        chat_id: chatId,
+        author_id: me,
+        kind: payload.kind || 'text',
+        body: String(payload.body || '').slice(0, 4000),
+        media: payload.media || null,
+        duration: payload.duration || 0
+      };
+      if (payload.replyToId) msgPayload.reply_to_id = payload.replyToId;
       const { data, error } = await sb
         .from('messages')
-        .insert({
-          chat_id: chatId,
-          author_id: me,
-          kind: payload.kind || 'text',
-          body: String(payload.body || '').slice(0, 4000),
-          media: payload.media || null,
-          duration: payload.duration || 0
-        })
+        .insert(msgPayload)
         .select(`*, author:profiles!messages_author_id_fkey(${AUTHOR_FIELDS})`)
         .single();
       guard(error);
@@ -2447,6 +2449,92 @@ export async function createBackend(url, key) {
       const { data, error } = await sb.rpc('my_level');
       guard(error);
       return data || {};
+    },
+
+    async createGroup(name, description = '', isPrivate = false) {
+      const { data, error } = await sb.rpc('create_group', { p_name: name, p_description: description, p_is_private: isPrivate });
+      guard(error);
+      return data || { ok: true };
+    },
+    async listGroups() {
+      const { data, error } = await sb.rpc('list_groups');
+      guard(error);
+      return { groups: data || [] };
+    },
+    async joinGroup(id) {
+      const { data, error } = await sb.rpc('join_group', { p_group_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+    async leaveGroup(id) {
+      const { data, error } = await sb.rpc('leave_group', { p_group_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+    async pinPost(id) {
+      const { data, error } = await sb.rpc('pin_post', { p_post_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+    async sendFriendRequest(targetId) {
+      const { data, error } = await sb.rpc('send_friend_request', { p_target: targetId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async acceptFriend(requesterId) {
+      const { data, error } = await sb.rpc('accept_friend', { p_requester: requesterId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async removeFriend(targetId) {
+      const { data, error } = await sb.rpc('remove_friend', { p_target: targetId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async myFriends() {
+      const { data, error } = await sb.rpc('my_friends');
+      guard(error);
+      return { friends: data || [] };
+    },
+    async pendingFriendRequests() {
+      const { data, error } = await sb.rpc('pending_friend_requests');
+      guard(error);
+      return { requests: data || [] };
+    },
+    async spinWheel() {
+      const { data, error } = await sb.rpc('spin_wheel');
+      guard(error);
+      return data || { ok: false };
+    },
+    async canSpinToday() {
+      const { data, error } = await sb.rpc('can_spin_today');
+      guard(error);
+      return { can: data !== false };
+    },
+    async activeEvents() {
+      const { data, error } = await sb.rpc('active_events');
+      guard(error);
+      return { events: data || [] };
+    },
+    async levelLeaderboard() {
+      const { data, error } = await sb.rpc('level_leaderboard');
+      guard(error);
+      return { leaderboard: data || [] };
+    },
+    async searchAll(query) {
+      const { data, error } = await sb.rpc('search_all', { p_query: query });
+      guard(error);
+      return data || { users: [], posts: [], groups: [] };
+    },
+    async setPinCode(code) {
+      const { data, error } = await sb.rpc('set_pin_code', { p_code: code });
+      guard(error);
+      return data || { ok: true };
+    },
+    async disablePinCode() {
+      const { data, error } = await sb.rpc('disable_pin_code');
+      guard(error);
+      return data || { ok: true };
     }
   };
 }

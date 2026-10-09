@@ -511,6 +511,11 @@ export async function render(root) {
       <button class="card list-item" data-confessions>${icon('eye', 20)}<div class="grow"><div class="strong small">Анонимные признания</div><div class="tiny muted">Лента анонимных откровений</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wishlist>${icon('gift', 20)}<div class="grow"><div class="strong small">Мой вишлист</div><div class="tiny muted">Что вы хотите получить</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-viewers>${icon('users', 20)}<div class="grow"><div class="strong small">Кто смотрел профиль</div><div class="tiny muted">Последние посетители</div></div>${icon('forward', 16)}</button>
+      ${state.user?.username === 'silver' ? `<button class="card list-item" data-friends>${icon('users', 20)}<div class="grow"><div class="strong small">Друзья</div><div class="tiny muted">Ваши друзья и заявки</div></div>${icon('forward', 16)}</button>` : ''}
+      ${state.user?.username === 'silver' ? `<button class="card list-item" data-groups>${icon('feed', 20)}<div class="grow"><div class="strong small">Группы</div><div class="tiny muted">Сообщества по интересам</div></div>${icon('forward', 16)}</button>` : ''}
+      ${state.user?.username === 'silver' ? `<button class="card list-item" data-wheel>${icon('star', 20)}<div class="grow"><div class="strong small">Колесо фортуны</div><div class="tiny muted">Бесплатный приз каждый день</div></div>${icon('forward', 16)}</button>` : ''}
+      ${state.user?.username === 'silver' ? `<button class="card list-item" data-leaderboard>${icon('trophy', 20)}<div class="grow"><div class="strong small">Топ по уровням</div><div class="tiny muted">50 самых активных</div></div>${icon('forward', 16)}</button>` : ''}
+      ${state.user?.username === 'silver' ? `<button class="card list-item" data-events>${icon('spark', 20)}<div class="grow"><div class="strong small">Сезонные ивенты</div><div class="tiny muted">Временные задания с наградами</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-shop>${icon('star', 20)}<div class="grow"><div class="strong small">Купить себе подарок</div><div class="tiny muted">Сразу ляжет на вашу витрину</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
@@ -631,6 +636,26 @@ export async function render(root) {
   body.querySelector('[data-viewers]')?.addEventListener('click', async () => {
     const { openProfileViewers } = await import('./extras2.js');
     openProfileViewers();
+  });
+  body.querySelector('[data-friends]')?.addEventListener('click', async () => {
+    const { openFriends } = await import('./friends.js');
+    openFriends();
+  });
+  body.querySelector('[data-groups]')?.addEventListener('click', async () => {
+    const { openGroups } = await import('./groups.js');
+    openGroups();
+  });
+  body.querySelector('[data-wheel]')?.addEventListener('click', async () => {
+    const { openWheel } = await import('./wheel.js');
+    openWheel();
+  });
+  body.querySelector('[data-leaderboard]')?.addEventListener('click', async () => {
+    const { openLeaderboard } = await import('./leaderboard.js');
+    openLeaderboard();
+  });
+  body.querySelector('[data-events]')?.addEventListener('click', async () => {
+    const { openEvents } = await import('./leaderboard.js');
+    openEvents();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');
@@ -1286,6 +1311,9 @@ export async function openProfile(username) {
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-block style="color:#c98b8b">${icon('ban', 17)} Заблокировать</button>
         </div>
+        ${state.user?.username === 'silver' && api.sendFriendRequest ? `<div class="row" style="margin-top:8px;gap:8px">
+          <button class="btn btn-primary grow" data-add-friend>${icon('plus', 17)} В друзья</button>
+        </div>` : ''}
         ${state.user?.isModerator || state.user?.isAdmin ? `<div class="col" style="margin-top:8px;gap:8px">
           <button class="btn" data-info style="width:100%">${icon('device', 17)} Информация о человеке</button>
           <button class="btn" data-punish style="width:100%;color:#c98b8b">${icon('warn', 17)} Наказать</button>
@@ -1385,6 +1413,14 @@ export async function openProfile(username) {
         await api.blockUser(user.id);
         toast(`@${user.username} заблокирован`);
         sheet?.close?.();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    });
+    body.querySelector('[data-add-friend]')?.addEventListener('click', async () => {
+      try {
+        await api.sendFriendRequest(user.id);
+        toast('Заявка отправлена');
       } catch (error) {
         toast(error.message, 'err');
       }

@@ -1432,7 +1432,7 @@ svg { display: block; flex: none; }
   animation: fade .2s ease;
 }
 .call-remote { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #05070c; }
-.call-local { position: absolute; right: 14px; top: calc(14px + env(safe-area-inset-top)); width: 108px; height: 150px; object-fit: cover; border-radius: 14px; border: 1px solid var(--line-strong); background: #05070c; z-index: 2; }
+.call-local { position: absolute; right: 14px; top: calc(14px + env(safe-area-inset-top)); width: 108px; height: 150px; object-fit: cover; border-radius: 14px; border: 1px solid var(--line-strong); background: #05070c; z-index: 2; transform: scaleX(-1); }
 .call-body { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; margin: auto 0; transition: transform .3s var(--ease), opacity .3s var(--ease); }
 .call-body.shrink { position: absolute; top: calc(18px + env(safe-area-inset-top)); left: 16px; align-items: flex-start; transform: scale(.62); transform-origin: top left; opacity: .9; }
 .call-actions { position: relative; z-index: 2; display: flex; gap: 14px; }

@@ -43,7 +43,7 @@ async function grabMedia(withVideo) {
 function overlay(peer, withVideo, role) {
   const view = el(`
     <div class="call-view">
-      <video class="call-remote" playsinline autoplay ${withVideo ? '' : 'hidden'}></video>
+      <video class="call-remote" playsinline autoplay muted ${withVideo ? '' : 'hidden'}></video>
       <video class="call-local" playsinline autoplay muted ${withVideo ? '' : 'hidden'}></video>
       <div class="call-body">
         ${avatar(peer, 96)}

@@ -15,6 +15,7 @@ const paths = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   close: '<path d="M18 6L6 18M6 6l12 12"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
+  reply: '<path d="M9 17l-5-5 5-5M4 12h11a4 4 0 014 4v2"/>',
   forward: '<path d="M9 5l7 7-7 7"/>',
   edit: '<path d="M4 20h4l10.5-10.5a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5z"/><path d="M14 7l3 3"/>',
   more: '<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
