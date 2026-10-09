@@ -667,7 +667,6 @@ export async function render(root) {
     const { openPixelBattle } = await import('./pixel-battle.js');
     openPixelBattle();
   });
-  });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');
     openMyGifts(state.user.id, true);

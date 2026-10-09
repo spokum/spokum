@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v84';
+const VERSION = 'spokum-v85';
 const CORE = [
   './',
   './index.html',
@@ -32,8 +32,17 @@ const CORE = [
   './js/views/safe.js',
   './js/views/journal.js',
   './js/views/gratitude.js',
+  './js/views/quests.js',
+  './js/views/tournaments.js',
+  './js/views/confessions.js',
+  './js/views/extras2.js',
+  './js/views/wheel.js',
+  './js/views/leaderboard.js',
+  './js/views/search.js',
+  './js/views/groups.js',
+  './js/views/friends.js',
+  './js/views/widgets.js',
   './js/views/pixel-battle.js',
-  './js/views/race.js',
   './offer.html',
   './privacy.html',
   './consent.html',
