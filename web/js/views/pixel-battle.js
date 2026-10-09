@@ -6,8 +6,11 @@ import { toast, openSheet, emptyState } from '../ui.js';
 const COLORS = ['#ffffff','#e8e8e8','#c95a3a','#e8c46a','#87b7a3','#7fa8e8','#d8a8e8','#a8e8c8','#e8a8a8','#a8d4e8','#e8d8a8','#b8a8e8','#5a8ae8','#e87a5a','#5ae8a8','#e8e85a','#1a1d22','#3a3a3a','#888888','#c8c8c8'];
 
 export async function openPixelBattle() {
-  const host = el(`<div style="width:100%;height:100%;display:flex;flex-direction:column;background:#f5f5f5"></div>`);
-  const sheet = openSheet('', host, {});
+  const overlay = el('<div style="position:fixed;inset:0;z-index:1000;background:#fff;display:flex;flex-direction:column"></div>');
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  const host = overlay;
+  const close = () => { overlay.remove(); document.body.style.overflow = ''; };
 
   let battle = null;
   let cells = {};
@@ -119,16 +122,17 @@ export async function openPixelBattle() {
   }
 
   host.innerHTML = `
-    <div style="background:#fff;padding:6px 8px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e0e0e0">
-      <div style="display:flex;gap:3px;flex-wrap:wrap;flex:1" data-palette></div>
-      <button class="btn btn-sm" data-zoom-out style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer">-</button>
+    <div style="background:#fff;padding:6px 8px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e0e0e0;flex-shrink:0">
+      <button data-close style="background:#eee;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:18px;font-weight:600">x</button>
+      <div style="display:flex;gap:3px;flex-wrap:wrap;flex:1;max-height:30px;overflow:hidden" data-palette></div>
+      <button data-zoom-out style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-size:16px">-</button>
       <span data-zoom-val style="font-size:11px;color:#888;min-width:30px;text-align:center">100%</span>
-      <button class="btn btn-sm" data-zoom-in style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer">+</button>
-      <button class="btn btn-sm" data-reset style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer">Центр</button>
+      <button data-zoom-in style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-size:16px">+</button>
+      <button data-reset style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-size:11px">Центр</button>
     </div>
     <div data-status class="tiny muted" style="padding:4px 8px;background:#fafafa;font-size:11px"></div>
     <canvas data-canvas style="flex:1;width:100%;background:#fff;touch-action:none;cursor:crosshair"></canvas>
-    <div class="tiny muted" style="padding:4px 8px;background:#fafafa;text-align:center;font-size:10px">Тап - поставить пиксель. Долгий тап - кто нарисовал. Двумя пальцами - зум.</div>
+    <div class="tiny muted" style="padding:4px 8px;background:#fafafa;text-align:center;font-size:10px">Тап - поставить пиксель. Долгий тап - кто нарисовал. ПК: колесо мыши - зум, перетаскивание - двигать холст.</div>
   `;
 
   const palette = host.querySelector('[data-palette]');
@@ -172,32 +176,50 @@ export async function openPixelBattle() {
   host.querySelector('[data-zoom-out]').onclick = () => { zoom = Math.max(0.5, zoom / 1.5); updateZoomLabel(); draw(); };
   host.querySelector('[data-reset]').onclick = () => { zoom = 1; panX = 0; panY = 0; updateZoomLabel(); draw(); };
 
-  let lastTouchDist = 0;
+  let pointerDown = false;
+  let downX = 0, downY = 0;
+  let hasMoved = false;
+
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    if (e.isPrimary === false) return;
-    const cell = getCellAt(e.clientX, e.clientY);
-    if (cell) {
-      placePixel(cell.x, cell.y);
-      pressTimer = setTimeout(() => showPixelInfo(cell.x, cell.y), 500);
-    }
+    pointerDown = true;
+    hasMoved = false;
+    downX = e.clientX;
+    downY = e.clientY;
     isPanning = true;
     panStartX = e.clientX - panX;
     panStartY = e.clientY - panY;
+    pressTimer = setTimeout(() => {
+      if (!hasMoved) {
+        const cell = getCellAt(e.clientX, e.clientY);
+        if (cell) showPixelInfo(cell.x, cell.y);
+      }
+    }, 500);
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-    if (isPanning && e.isPrimary !== false) {
+    if (!pointerDown) return;
+    const dx = e.clientX - downX;
+    const dy = e.clientY - downY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      hasMoved = true;
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    }
+    if (isPanning && hasMoved) {
       panX = e.clientX - panStartX;
       panY = e.clientY - panStartY;
       draw();
     }
   });
 
-  canvas.addEventListener('pointerup', () => {
+  canvas.addEventListener('pointerup', (e) => {
+    pointerDown = false;
     isPanning = false;
     if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    if (!hasMoved) {
+      const cell = getCellAt(e.clientX, e.clientY);
+      if (cell) placePixel(cell.x, cell.y);
+    }
   });
 
   canvas.addEventListener('wheel', (e) => {
@@ -239,10 +261,9 @@ export async function openPixelBattle() {
     }
   } catch {}
 
-  const origClose = sheet.close;
-  sheet.close = () => { if (channel) try { channel.unsubscribe(); } catch {} window.removeEventListener('resize', resizeCanvas); origClose(); };
+  host.querySelector('[data-close]').onclick = () => { if (channel) try { channel.unsubscribe(); } catch {} window.removeEventListener('resize', resizeCanvas); close(); };
 
-  return sheet;
+  return { close };
 }
 
 async function getSupabaseClient() {
