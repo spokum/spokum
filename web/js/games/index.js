@@ -6241,71 +6241,100 @@ export const GAMES = [
     mount: doom
   }
 ];
+
 function doom(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     let width = w, height = h;
     const FOV = Math.PI / 3;
-    const MAP_W = 16, MAP_H = 16;
+    const MAP_W = 24, MAP_H = 24;
     const map = [
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,0,1,1,1,0,1,1,1,0,1,0,1],
-      [1,0,1,0,0,0,0,1,0,0,0,0,0,1,0,1],
-      [1,0,1,0,1,1,0,1,0,1,1,0,0,1,0,1],
-      [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1],
-      [1,0,1,0,1,0,1,1,1,0,1,0,1,1,0,1],
-      [1,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1],
-      [1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1],
-      [1,1,1,1,0,1,1,0,1,1,0,1,0,1,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,2,2,2,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,2,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,2,0,2,0,0,0,0,0,0,0,3,0,0,0,0,4,4,4,0,0,0,1],
+      [1,0,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,4,0,4,0,0,0,1],
+      [1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,5,5,5,0,0,0,0,0,0,0,4,0,4,0,0,0,1],
+      [1,0,0,0,0,0,0,5,0,0,0,0,0,0,0,0,0,4,4,4,0,0,0,1],
+      [1,0,0,0,0,0,0,5,0,0,0,0,6,6,6,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,6,0,6,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,6,0,6,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
     ];
-    let S = { px: 2.5, py: 2.5, angle: 0, score: 0, hp: 100, ammo: 30, enemies: [], bullets: [], over: false, won: false, kills: 0, level: 1, fireRate: 0, muzzle: 0 };
+    const WALL_COLORS = {
+      1: { r: 60, g: 55, b: 50 },
+      2: { r: 80, g: 50, b: 40 },
+      3: { r: 40, g: 50, b: 60 },
+      4: { r: 50, g: 40, b: 55 },
+      5: { r: 70, g: 60, b: 35 },
+      6: { r: 45, g: 55, b: 45 }
+    };
+    let S = {};
+    const ENEMY_TYPES = [
+      { name: 'тень', hp: 15, dmg: 8, speed: 0.6, color: '#3a3a4a', size: 0.35, score: 30, eyes: '#ff4444' },
+      { name: 'скелет', hp: 25, dmg: 12, speed: 0.9, color: '#c8c4b8', size: 0.3, score: 50, eyes: '#ff8800' },
+      { name: 'демон', hp: 40, dmg: 20, speed: 1.2, color: '#6a1a1a', size: 0.4, score: 80, eyes: '#ff0000' },
+      { name: 'призрак', hp: 10, dmg: 6, speed: 1.5, color: 'rgba(180,180,220,0.4)', size: 0.25, score: 40, eyes: '#aaaaff' }
+    ];
     const start = (level) => {
-      S = { px: 2.5, py: 2.5, angle: 0, score: S.score || 0, hp: 100, ammo: 30, enemies: [], bullets: [], over: false, won: false, kills: 0, level, fireRate: 0, muzzle: 0 };
-      const count = 5 + level * 3;
+      const prevScore = S.score || 0;
+      S = { px: 3.5, py: 3.5, angle: 0, score: prevScore, hp: 100, ammo: 30, enemies: [], bullets: [], over: false, won: false, kills: 0, level, fireRate: 0, muzzle: 0, hitFlash: 0, bob: 0, moveBob: 0 };
+      const count = 4 + level * 2;
       for (let i = 0; i < count; i++) {
         let ex, ey, tries = 0;
-        do { ex = 1 + Math.random() * (MAP_W - 2); ey = 1 + Math.random() * (MAP_H - 2); tries++; } while ((map[Math.floor(ey)|0][Math.floor(ex)|0] || (Math.abs(ex - S.px) < 3 && Math.abs(ey - S.py) < 3)) && tries < 50);
-        S.enemies.push({ x: ex, y: ey, hp: 20 + level * 5, alive: true, hitFlash: 0, lastShot: 0, speed: 0.5 + level * 0.1 });
+        do {
+          ex = 2 + Math.random() * (MAP_W - 4);
+          ey = 2 + Math.random() * (MAP_H - 4);
+          tries++;
+        } while ((map[Math.floor(ey)][Math.floor(ex)] || (Math.abs(ex - S.px) < 4 && Math.abs(ey - S.py) < 4)) && tries < 80);
+        const typeIdx = Math.min(ENEMY_TYPES.length - 1, Math.floor(Math.random() * (level + 1)));
+        const type = ENEMY_TYPES[typeIdx];
+        S.enemies.push({ x: ex, y: ey, hp: type.hp, type, alive: true, hitFlash: 0, anim: Math.random() * Math.PI * 2 });
       }
     };
     start(1);
-    let moveF = 0, moveS = 0, turnL = 0, turnR = 0, firing = false;
-    let touchStart = null, touchMove = null;
-
+    let moveF = 0, turnL = 0, turnR = 0, firing = false;
     const castRay = (x, y, a) => {
       const dx = Math.cos(a), dy = Math.sin(a);
-      let dist = 0, step = 0.02;
-      while (dist < 20) {
-        const tx = (x + dx * dist) | 0, ty = (y + dy * dist) | 0;
-        if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H || map[ty][tx]) break;
+      let dist = 0, step = 0.015;
+      while (dist < 30) {
+        const tx = Math.floor(x + dx * dist), ty = Math.floor(y + dy * dist);
+        if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H || map[ty][tx]) return { dist, wall: map[ty][tx], side: Math.abs(dx * dist % 1) < 0.5 ? 0 : 1 };
         dist += step;
       }
-      return dist;
+      return { dist: 30, wall: 0, side: 0 };
     };
-
     return {
-      score: () => S.score,
+      score: () => Math.floor(S.score),
       resize(size) { width = size.w; height = size.h; },
       bind(bind, cv) {
-        const handleMove = (e) => {
+        const handleInput = (e) => {
           if (S.over) return;
           const r = cv.getBoundingClientRect();
           const x = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
           const y = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
-          if (x < width * 0.4) { moveF = 1; moveS = 0; }
-          else if (x > width * 0.6) { moveF = 0; moveS = 0; turnR = 1; turnL = 0; }
-          else { moveF = 0; turnR = 0; }
-          if (y > height * 0.5) firing = true;
+          const cx = width / 2;
+          const turnDiff = (x - cx) / (width / 2);
+          S.angle += turnDiff * 0.04;
+          if (y < height * 0.4) moveF = 1;
+          else if (y > height * 0.7) firing = true;
+          else moveF = 0;
         };
-        bind('pointerdown', (e) => { if (S.over) { start(S.level); return; } capture(cv, e); handleMove(e); });
-        bind('pointermove', (e) => { if (e.buttons || e.touches) handleMove(e); });
-        bind('pointerup', () => { moveF = 0; moveS = 0; turnL = 0; turnR = 0; firing = false; });
+        bind('pointerdown', (e) => { if (S.over) { start(S.level); return; } capture(cv, e); handleInput(e); });
+        bind('pointermove', (e) => { if (e.buttons || e.touches?.[0]) handleInput(e); });
+        bind('pointerup', () => { moveF = 0; firing = false; });
         bind('keydown', (e) => {
           if (S.over && e.key === ' ') { start(S.level); return; }
           if (e.key === 'w' || e.key === 'ArrowUp') moveF = 1;
@@ -6323,122 +6352,174 @@ function doom(canvas, report) {
       },
       update(dt) {
         if (S.over) return;
-        S.angle += (turnR - turnL) * dt * 2.5;
-        const mx = Math.cos(S.angle) * moveF * dt * 2.5;
-        const my = Math.sin(S.angle) * moveF * dt * 2.5;
+        S.angle += (turnR - turnL) * dt * 2.8;
+        const mx = Math.cos(S.angle) * moveF * dt * 2.2;
+        const my = Math.sin(S.angle) * moveF * dt * 2.2;
         const nx = S.px + mx, ny = S.py + my;
-        if (!map[Math.floor(ny)|0][Math.floor(S.px)|0]) S.py = ny;
-        if (!map[Math.floor(S.py)|0][Math.floor(nx)|0]) S.px = nx;
-
+        if (!map[Math.floor(ny)][Math.floor(S.px)]) S.py = ny;
+        if (!map[Math.floor(S.py)][Math.floor(nx)]) S.px = nx;
+        S.moveBob += Math.abs(moveF) * dt * 8;
+        S.bob = Math.sin(S.moveBob) * 3;
+        S.hitFlash = Math.max(0, S.hitFlash - dt * 3);
         S.fireRate -= dt;
-        S.muzzle = Math.max(0, S.muzzle - dt * 5);
+        S.muzzle = Math.max(0, S.muzzle - dt * 6);
         if (firing && S.fireRate <= 0 && S.ammo > 0) {
-          S.fireRate = 0.15; S.ammo--; S.muzzle = 1;
-          S.bullets.push({ x: S.px, y: S.py, angle: S.angle, dist: 0, life: 0.3 });
+          S.fireRate = 0.18; S.ammo--; S.muzzle = 1;
+          S.bullets.push({ x: S.px, y: S.py, angle: S.angle, dist: 0, life: 0.4 });
         }
-
-        S.bullets.forEach(b => { b.dist += dt * 20; b.life -= dt; });
+        S.bullets.forEach(b => { b.dist += dt * 25; b.life -= dt; });
         S.bullets = S.bullets.filter(b => b.life > 0);
-
         S.enemies.forEach(e => {
           if (!e.alive) return;
-          e.hitFlash = Math.max(0, e.hitFlash - dt * 3);
+          e.hitFlash = Math.max(0, e.hitFlash - dt * 4);
+          e.anim += dt * 4;
           const dx = S.px - e.x, dy = S.py - e.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 0.5) { e.x += (dx / dist) * e.speed * dt; e.y += (dy / dist) * e.speed * dt; }
-          if (dist < 1.5) { S.hp -= dt * 15; if (S.hp <= 0) { S.hp = 0; S.over = true; report(S.score); } }
-
+          if (dist > 0.4) { e.x += (dx / dist) * e.type.speed * dt; e.y += (dy / dist) * e.type.speed * dt; }
+          else { S.hp -= e.type.dmg * dt; S.hitFlash = 1; if (S.hp <= 0) { S.hp = 0; S.over = true; report(Math.floor(S.score)); } }
           S.bullets.forEach(b => {
             const bx = b.x + Math.cos(b.angle) * b.dist;
             const by = b.y + Math.sin(b.angle) * b.dist;
-            if (Math.abs(bx - e.x) < 0.4 && Math.abs(by - e.y) < 0.4) {
-              e.hp -= 15; e.hitFlash = 1; b.life = 0;
-              if (e.hp <= 0) { e.alive = false; S.kills++; S.score += 50; S.ammo = Math.min(99, S.ammo + 3); }
+            if (Math.abs(bx - e.x) < e.type.size && Math.abs(by - e.y) < e.type.size) {
+              e.hp -= 12; e.hitFlash = 1; b.life = 0;
+              if (e.hp <= 0) { e.alive = false; S.kills++; S.score += e.type.score; S.ammo = Math.min(99, S.ammo + 2); }
             }
           });
         });
-
-        if (S.enemies.every(e => !e.alive)) {
-          S.score += 100 * S.level;
-          start(S.level + 1);
-        }
+        if (S.enemies.length && S.enemies.every(e => !e.alive)) { S.score += 100 * S.level; start(S.level + 1); }
       },
       draw(ctx) {
         const w = width, h = height;
-        const sky = ctx.createLinearGradient(0, 0, 0, h / 2);
-        sky.addColorStop(0, '#1a0a0a'); sky.addColorStop(1, '#2a1510');
-        ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h / 2);
-        ctx.fillStyle = '#0a0808'; ctx.fillRect(0, h / 2, w, h / 2);
-
-        const numRays = Math.min(w, 120);
+        const skyG = ctx.createLinearGradient(0, 0, 0, h * 0.5);
+        skyG.addColorStop(0, '#050308'); skyG.addColorStop(0.7, '#0a0810'); skyG.addColorStop(1, '#120a08');
+        ctx.fillStyle = skyG; ctx.fillRect(0, 0, w, h * 0.5);
+        const floorG = ctx.createLinearGradient(0, h * 0.5, 0, h);
+        floorG.addColorStop(0, '#120a08'); floorG.addColorStop(0.5, '#0a0606'); floorG.addColorStop(1, '#050404');
+        ctx.fillStyle = floorG; ctx.fillRect(0, h * 0.5, w, h * 0.5);
+        const numRays = Math.min(w, 160);
         const sliceW = w / numRays;
+        const horizon = h / 2 + S.bob;
         for (let i = 0; i < numRays; i++) {
           const rayAngle = S.angle - FOV / 2 + (i / numRays) * FOV;
-          const dist = castRay(S.px, S.py, rayAngle);
-          const fixDist = dist * Math.cos(rayAngle - S.angle);
-          const wallH = Math.min(h, (h / fixDist) * 0.8);
-          const wallY = (h - wallH) / 2;
-          const tx = (S.px + Math.cos(rayAngle) * dist) | 0;
-          const ty = (S.py + Math.sin(rayAngle) * dist) | 0;
-          const isHorizontal = Math.abs(Math.cos(rayAngle) * dist - (tx - S.px + 0.5)) < 0.1;
-          const shade = Math.max(0.15, Math.min(1, 1 / (fixDist * 0.3)));
-          const r = isHorizontal ? Math.floor(120 * shade) : Math.floor(80 * shade);
-          const g = isHorizontal ? Math.floor(50 * shade) : Math.floor(40 * shade);
-          const b = isHorizontal ? Math.floor(30 * shade) : Math.floor(25 * shade);
+          const hit = castRay(S.px, S.py, rayAngle);
+          const fixDist = Math.max(0.1, hit.dist * Math.cos(rayAngle - S.angle));
+          const wallH = Math.min(h * 1.5, (h / fixDist) * 0.7);
+          const wallY = horizon - wallH / 2;
+          const wc = WALL_COLORS[hit.wall] || WALL_COLORS[1];
+          const shade = Math.max(0.08, Math.min(1, 1.5 / (fixDist * 0.4)));
+          const sideMul = hit.side === 0 ? 0.7 : 1;
+          const r = Math.floor(wc.r * shade * sideMul);
+          const g = Math.floor(wc.g * shade * sideMul);
+          const b = Math.floor(wc.b * shade * sideMul);
           ctx.fillStyle = `rgb(${r},${g},${b})`;
-          ctx.fillRect(i * sliceW, wallY, sliceW + 1, wallH);
+          ctx.fillRect(i * sliceW, wallY, sliceW + 0.5, wallH);
+          if (fixDist < 3) {
+            ctx.fillStyle = `rgba(0,0,0,${(1 - fixDist / 3) * 0.15})`;
+            ctx.fillRect(i * sliceW, wallY, sliceW + 0.5, wallH);
+          }
+          ctx.fillStyle = `rgba(0,0,0,${Math.min(0.9, fixDist * 0.06)})`;
+          ctx.fillRect(i * sliceW, wallY, sliceW + 0.5, wallH);
         }
-
         S.enemies.forEach(e => {
           if (!e.alive) return;
           const dx = e.x - S.px, dy = e.y - S.py;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 15) return;
+          if (dist > 20) return;
           const ea = Math.atan2(dy, dx);
           let diff = ea - S.angle;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          if (Math.abs(diff) > FOV / 2 + 0.2) return;
-          const fixDist = dist * Math.cos(diff);
-          if (fixDist < 0.2) return;
-          const sz = Math.min(h * 0.8, (h / fixDist) * 0.4);
+          if (Math.abs(diff) > FOV / 2 + 0.3) return;
+          const fixDist = Math.max(0.1, dist * Math.cos(diff));
+          if (fixDist < 0.3) return;
+          const sz = Math.min(h * 0.9, (h / fixDist) * 0.45);
           const sx = w / 2 + (diff / (FOV / 2)) * w / 2;
-          const sy = h / 2;
-          ctx.fillStyle = e.hitFlash > 0 ? '#fff' : '#c93030';
-          ctx.beginPath(); ctx.arc(sx, sy, sz * 0.2, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = e.hitFlash > 0 ? '#fcc' : '#8a1818';
-          ctx.beginPath(); ctx.arc(sx - sz * 0.12, sy - sz * 0.08, sz * 0.06, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(sx + sz * 0.12, sy - sz * 0.08, sz * 0.06, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#400';
-          ctx.fillRect(sx - sz * 0.15, sy + sz * 0.1, sz * 0.3, sz * 0.08);
-          ctx.fillStyle = `rgba(200,50,50,${Math.max(0, 0.5 - dist * 0.03)})`;
-          ctx.fillRect(sx - sz * 0.18, sy - sz * 0.18, sz * 0.36, sz * 0.36);
+          const sy = horizon + S.bob * 0.5;
+          const bob = Math.sin(e.anim) * sz * 0.04;
+          const alpha = Math.max(0.15, Math.min(1, 2 / (fixDist * 0.5)));
+          ctx.globalAlpha = alpha;
+          const isGhost = e.type.name === 'призрак';
+          if (isGhost) ctx.globalAlpha = alpha * 0.5;
+          const bodyR = sz * e.type.size;
+          ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.type.color;
+          ctx.beginPath(); ctx.ellipse(sx, sy + bob, bodyR * 0.7, bodyR, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = e.hitFlash > 0 ? '#fcc' : 'rgba(0,0,0,0.3)';
+          ctx.beginPath(); ctx.ellipse(sx, sy + bob + bodyR * 0.3, bodyR * 0.5, bodyR * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+          const eyeY = sy - bodyR * 0.2 + bob;
+          const eyeOff = bodyR * 0.25;
+          const eyeR = bodyR * 0.12;
+          ctx.fillStyle = e.type.eyes;
+          if (e.type.name === 'демон') {
+            ctx.fillStyle = e.type.eyes;
+            ctx.shadowColor = e.type.eyes; ctx.shadowBlur = 8;
+          }
+          ctx.beginPath(); ctx.arc(sx - eyeOff, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(sx + eyeOff, eyeY, eyeR, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+          if (e.type.name === 'демон') {
+            ctx.fillStyle = '#300';
+            ctx.beginPath();
+            ctx.moveTo(sx - bodyR * 0.3, sy + bodyR * 0.1 + bob);
+            ctx.lineTo(sx, sy + bodyR * 0.4 + bob);
+            ctx.lineTo(sx + bodyR * 0.3, sy + bodyR * 0.1 + bob);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.moveTo(sx - bodyR * 0.2, sy + bodyR * 0.15 + bob);
+            ctx.lineTo(sx - bodyR * 0.1, sy + bodyR * 0.3 + bob);
+            ctx.lineTo(sx, sy + bodyR * 0.15 + bob);
+            ctx.moveTo(sx, sy + bodyR * 0.15 + bob);
+            ctx.lineTo(sx + bodyR * 0.1, sy + bodyR * 0.3 + bob);
+            ctx.lineTo(sx + bodyR * 0.2, sy + bodyR * 0.15 + bob);
+            ctx.fill();
+          } else if (e.type.name === 'скелет') {
+            ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+              ctx.beginPath();
+              ctx.moveTo(sx - bodyR * 0.4 + i * bodyR * 0.4, sy + bodyR * 0.2 + bob);
+              ctx.lineTo(sx - bodyR * 0.3 + i * bodyR * 0.4, sy + bodyR * 0.6 + bob);
+              ctx.stroke();
+            }
+          }
+          ctx.globalAlpha = 1;
         });
-
         if (S.muzzle > 0) {
-          ctx.fillStyle = `rgba(255,200,80,${S.muzzle * 0.4})`;
-          ctx.beginPath(); ctx.arc(w / 2, h * 0.7, 30 * S.muzzle, 0, Math.PI * 2); ctx.fill();
+          const grad = ctx.createRadialGradient(w / 2, h * 0.75, 0, w / 2, h * 0.75, 50 * S.muzzle);
+          grad.addColorStop(0, `rgba(255,220,100,${S.muzzle * 0.6})`);
+          grad.addColorStop(1, 'rgba(255,200,50,0)');
+          ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
         }
-        ctx.fillStyle = '#888'; ctx.fillRect(w / 2 - 2, h * 0.72, 4, 4);
-        ctx.fillStyle = '#555'; ctx.fillRect(w * 0.2, h * 0.85, w * 0.6, h * 0.15);
-        ctx.fillStyle = '#333'; ctx.fillRect(w * 0.22, h * 0.87, w * 0.56, h * 0.11);
-        ctx.fillStyle = '#888'; ctx.fillRect(w * 0.25, h * 0.9, w * 0.5 * (S.ammo / 30), h * 0.03);
-
+        if (S.hitFlash > 0) {
+          ctx.fillStyle = `rgba(200,0,0,${S.hitFlash * 0.25})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+        ctx.fillStyle = 'rgba(100,100,100,0.3)';
+        ctx.fillRect(w * 0.3, h * 0.65, w * 0.4, h * 0.08);
+        ctx.fillStyle = '#666'; ctx.fillRect(w * 0.45, h * 0.67, w * 0.1, h * 0.03);
+        ctx.fillStyle = '#444'; ctx.fillRect(w * 0.42, h * 0.72, w * 0.16, h * 0.02);
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(w / 2 - 1, h * 0.55, 2, 2);
         const hpPct = S.hp / 100;
-        ctx.fillStyle = '#330'; ctx.fillRect(w * 0.25, h * 0.94, w * 0.5, h * 0.03);
-        ctx.fillStyle = hpPct > 0.3 ? '#c93030' : '#c9a030';
-        ctx.fillRect(w * 0.25, h * 0.94, w * 0.5 * hpPct, h * 0.03);
-
-        ctx.fillStyle = '#ddd'; ctx.font = '600 12px Inter, sans-serif'; ctx.textAlign = 'left';
-        ctx.fillText(`HP ${Math.round(S.hp)} | Патроны ${S.ammo} | Убийств ${S.kills} | Уровень ${S.level}`, 10, 16);
-
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(10, h - 30, 120, 20);
+        ctx.fillStyle = hpPct > 0.3 ? '#cc3030' : '#cc9030';
+        ctx.fillRect(12, h - 28, 116 * hpPct, 16);
+        ctx.fillStyle = '#ddd'; ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`HP ${Math.round(S.hp)}`, 14, h - 16);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(w - 130, h - 30, 120, 20);
+        ctx.fillStyle = '#cccc44'; ctx.fillRect(w - 128, h - 28, 116 * (S.ammo / 30), 16);
+        ctx.fillStyle = '#ddd';
+        ctx.fillText(`Патроны ${S.ammo}`, w - 126, h - 16);
+        ctx.fillStyle = '#ddd'; ctx.font = '600 12px Inter, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`Уровень ${S.level} | Убийств ${S.kills} | Очки ${Math.floor(S.score)}`, w / 2, 18);
+        ctx.textAlign = 'start';
         if (S.over) {
-          ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#c93030'; ctx.font = '700 28px Inter, sans-serif'; ctx.textAlign = 'center';
-          ctx.fillText('ВЫ ПОГИБЛИ', w / 2, h / 2 - 10);
-          ctx.fillStyle = '#ddd'; ctx.font = '500 14px Inter, sans-serif';
-          ctx.fillText(`Очки: ${S.score} | Уровень: ${S.level}`, w / 2, h / 2 + 20);
-          ctx.fillText('Тап / Пробел для рестарта', w / 2, h / 2 + 44);
+          ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#cc3030'; ctx.font = '700 28px Inter, sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('ВЫ МЕРТВЫ', w / 2, h / 2 - 15);
+          ctx.fillStyle = '#999'; ctx.font = '500 13px Inter, sans-serif';
+          ctx.fillText(`Очки: ${Math.floor(S.score)} | Уровень: ${S.level} | Убийств: ${S.kills}`, w / 2, h / 2 + 15);
+          ctx.fillText('Тап / Пробел для реванша', w / 2, h / 2 + 40);
+          ctx.textAlign = 'start';
         }
       }
     };
