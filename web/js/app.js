@@ -116,10 +116,29 @@ function registerWorker() {
       .catch(() => {});
     return;
   }
-  
+
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'FORCE_RELOAD') {
+      setTimeout(() => location.reload(), 500);
+    }
+  });
+
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => {
+      if (reg.active) {
+        const ver = reg.active.scriptURL;
+        fetch('sw.js', { cache: 'no-store' }).then((r) => r.text()).then((text) => {
+          const m = text.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+          if (m && !text.includes(`VERSION = '${reg.active.state}'`)) {
+            reg.update().then(() => reg.unregister().then(() => location.reload())).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    });
+  }).catch(() => {});
+
   purgeStaleWorker().finally(() => {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
-      
       reg.update().catch(() => {});
     }).catch(() => {});
   });

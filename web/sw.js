@@ -1,4 +1,4 @@
-const VERSION = 'spokum-v81';
+const VERSION = 'spokum-v82';
 const CORE = [
   './',
   './index.html',
@@ -32,6 +32,8 @@ const CORE = [
   './js/views/safe.js',
   './js/views/journal.js',
   './js/views/gratitude.js',
+  './js/views/pixel-battle.js',
+  './js/views/race.js',
   './offer.html',
   './privacy.html',
   './consent.html',
@@ -47,8 +49,11 @@ const CORE = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(VERSION).then((cache) => cache.addAll(CORE.map((path) => new Request(path, { cache: 'reload' })))).then(() => self.skipWaiting())
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).then(() =>
+      caches.open(VERSION).then((cache) => cache.addAll(CORE.map((path) => new Request(path, { cache: 'reload' }))))
+    )
   );
 });
 
@@ -57,7 +62,12 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== VERSION).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll().then((clients) => clients.forEach((c) => c.postMessage({ type: 'FORCE_RELOAD' }))))
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -67,17 +77,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  
   if (sameOrigin && url.pathname.endsWith('/config.js')) {
     event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(request)));
     return;
   }
 
-  
-  
-  
-  
-  
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
@@ -96,14 +100,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   const isModuleCdn = url.hostname === 'esm.sh' || url.hostname === 'cdn.jsdelivr.net';
-
-  
-  
-  
-  
   if (!sameOrigin && !isModuleCdn) return;
 
-  
   event.respondWith(
     caches.open(VERSION).then(async (cache) => {
       const cached = await cache.match(request, { ignoreSearch: sameOrigin });
@@ -123,7 +121,6 @@ self.addEventListener('fetch', (event) => {
 
       const response = await network;
       if (response) return response;
-
       return new Response('', { status: 504, statusText: 'offline' });
     })
   );
