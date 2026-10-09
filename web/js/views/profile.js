@@ -517,7 +517,6 @@ export async function render(root) {
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-leaderboard>${icon('trophy', 20)}<div class="grow"><div class="strong small">Топ по уровням</div><div class="tiny muted">50 самых активных</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-events>${icon('spark', 20)}<div class="grow"><div class="strong small">Сезонные ивенты</div><div class="tiny muted">Временные задания с наградами</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-pixel>${icon('feed', 20)}<div class="grow"><div class="strong small">Пиксель-батл</div><div class="tiny muted">Общий холст: рисуй и захватывай</div></div>${icon('forward', 16)}</button>` : ''}
-      ${state.user?.username === 'silver' ? `<button class="card list-item" data-race>${icon('trophy', 20)}<div class="grow"><div class="strong small">Гонки</div><div class="tiny muted">Онлайн-гонки: лобби, боты, мультиплеер</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-widgets>${icon('chart', 20)}<div class="grow"><div class="strong small">Дашборд</div><div class="tiny muted">Уровень, стрик, цитата, колесо - всё в одном</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-gifts>${icon('gift', 20)}<div class="grow"><div class="strong small">Мои подарки</div><div class="tiny muted">Витрина, продажа</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-shop>${icon('star', 20)}<div class="grow"><div class="strong small">Купить себе подарок</div><div class="tiny muted">Сразу ляжет на вашу витрину</div></div>${icon('forward', 16)}</button>
@@ -668,9 +667,6 @@ export async function render(root) {
     const { openPixelBattle } = await import('./pixel-battle.js');
     openPixelBattle();
   });
-  body.querySelector('[data-race]')?.addEventListener('click', async () => {
-    const { openRace } = await import('./race.js');
-    openRace();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
     const { openMyGifts } = await import('./gifts.js');

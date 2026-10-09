@@ -6231,5 +6231,216 @@ export const GAMES = [
     tint: ['#0d0d10', '#1a1a20'],
     premium: true,
     mount: racer
+  },
+  {
+    id: 'doom',
+    title: 'Подземелье',
+    desc: '3D шутер: стреляй монстров, проходи уровни',
+    tint: ['#1a0a0a', '#2a1510'],
+    premium: true,
+    mount: doom
   }
 ];
+function doom(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w, height = h;
+    const FOV = Math.PI / 3;
+    const MAP_W = 16, MAP_H = 16;
+    const map = [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,0,1,1,1,0,1,1,1,0,1,0,1],
+      [1,0,1,0,0,0,0,1,0,0,0,0,0,1,0,1],
+      [1,0,1,0,1,1,0,1,0,1,1,0,0,1,0,1],
+      [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1],
+      [1,0,1,0,1,0,1,1,1,0,1,0,1,1,0,1],
+      [1,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1],
+      [1,1,1,1,0,1,1,0,1,1,0,1,0,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ];
+    let S = { px: 2.5, py: 2.5, angle: 0, score: 0, hp: 100, ammo: 30, enemies: [], bullets: [], over: false, won: false, kills: 0, level: 1, fireRate: 0, muzzle: 0 };
+    const start = (level) => {
+      S = { px: 2.5, py: 2.5, angle: 0, score: S.score || 0, hp: 100, ammo: 30, enemies: [], bullets: [], over: false, won: false, kills: 0, level, fireRate: 0, muzzle: 0 };
+      const count = 5 + level * 3;
+      for (let i = 0; i < count; i++) {
+        let ex, ey, tries = 0;
+        do { ex = 1 + Math.random() * (MAP_W - 2); ey = 1 + Math.random() * (MAP_H - 2); tries++; } while ((map[Math.floor(ey)|0][Math.floor(ex)|0] || (Math.abs(ex - S.px) < 3 && Math.abs(ey - S.py) < 3)) && tries < 50);
+        S.enemies.push({ x: ex, y: ey, hp: 20 + level * 5, alive: true, hitFlash: 0, lastShot: 0, speed: 0.5 + level * 0.1 });
+      }
+    };
+    start(1);
+    let moveF = 0, moveS = 0, turnL = 0, turnR = 0, firing = false;
+    let touchStart = null, touchMove = null;
+
+    const castRay = (x, y, a) => {
+      const dx = Math.cos(a), dy = Math.sin(a);
+      let dist = 0, step = 0.02;
+      while (dist < 20) {
+        const tx = (x + dx * dist) | 0, ty = (y + dy * dist) | 0;
+        if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H || map[ty][tx]) break;
+        dist += step;
+      }
+      return dist;
+    };
+
+    return {
+      score: () => S.score,
+      resize(size) { width = size.w; height = size.h; },
+      bind(bind, cv) {
+        const handleMove = (e) => {
+          if (S.over) return;
+          const r = cv.getBoundingClientRect();
+          const x = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
+          const y = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
+          if (x < width * 0.4) { moveF = 1; moveS = 0; }
+          else if (x > width * 0.6) { moveF = 0; moveS = 0; turnR = 1; turnL = 0; }
+          else { moveF = 0; turnR = 0; }
+          if (y > height * 0.5) firing = true;
+        };
+        bind('pointerdown', (e) => { if (S.over) { start(S.level); return; } capture(cv, e); handleMove(e); });
+        bind('pointermove', (e) => { if (e.buttons || e.touches) handleMove(e); });
+        bind('pointerup', () => { moveF = 0; moveS = 0; turnL = 0; turnR = 0; firing = false; });
+        bind('keydown', (e) => {
+          if (S.over && e.key === ' ') { start(S.level); return; }
+          if (e.key === 'w' || e.key === 'ArrowUp') moveF = 1;
+          if (e.key === 's' || e.key === 'ArrowDown') moveF = -1;
+          if (e.key === 'a' || e.key === 'ArrowLeft') turnL = 1;
+          if (e.key === 'd' || e.key === 'ArrowRight') turnR = 1;
+          if (e.key === ' ') firing = true;
+        }, window);
+        bind('keyup', (e) => {
+          if (e.key === 'w' || e.key === 'ArrowUp' || e.key === 's' || e.key === 'ArrowDown') moveF = 0;
+          if (e.key === 'a' || e.key === 'ArrowLeft') turnL = 0;
+          if (e.key === 'd' || e.key === 'ArrowRight') turnR = 0;
+          if (e.key === ' ') firing = false;
+        }, window);
+      },
+      update(dt) {
+        if (S.over) return;
+        S.angle += (turnR - turnL) * dt * 2.5;
+        const mx = Math.cos(S.angle) * moveF * dt * 2.5;
+        const my = Math.sin(S.angle) * moveF * dt * 2.5;
+        const nx = S.px + mx, ny = S.py + my;
+        if (!map[Math.floor(ny)|0][Math.floor(S.px)|0]) S.py = ny;
+        if (!map[Math.floor(S.py)|0][Math.floor(nx)|0]) S.px = nx;
+
+        S.fireRate -= dt;
+        S.muzzle = Math.max(0, S.muzzle - dt * 5);
+        if (firing && S.fireRate <= 0 && S.ammo > 0) {
+          S.fireRate = 0.15; S.ammo--; S.muzzle = 1;
+          S.bullets.push({ x: S.px, y: S.py, angle: S.angle, dist: 0, life: 0.3 });
+        }
+
+        S.bullets.forEach(b => { b.dist += dt * 20; b.life -= dt; });
+        S.bullets = S.bullets.filter(b => b.life > 0);
+
+        S.enemies.forEach(e => {
+          if (!e.alive) return;
+          e.hitFlash = Math.max(0, e.hitFlash - dt * 3);
+          const dx = S.px - e.x, dy = S.py - e.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0.5) { e.x += (dx / dist) * e.speed * dt; e.y += (dy / dist) * e.speed * dt; }
+          if (dist < 1.5) { S.hp -= dt * 15; if (S.hp <= 0) { S.hp = 0; S.over = true; report(S.score); } }
+
+          S.bullets.forEach(b => {
+            const bx = b.x + Math.cos(b.angle) * b.dist;
+            const by = b.y + Math.sin(b.angle) * b.dist;
+            if (Math.abs(bx - e.x) < 0.4 && Math.abs(by - e.y) < 0.4) {
+              e.hp -= 15; e.hitFlash = 1; b.life = 0;
+              if (e.hp <= 0) { e.alive = false; S.kills++; S.score += 50; S.ammo = Math.min(99, S.ammo + 3); }
+            }
+          });
+        });
+
+        if (S.enemies.every(e => !e.alive)) {
+          S.score += 100 * S.level;
+          start(S.level + 1);
+        }
+      },
+      draw(ctx) {
+        const w = width, h = height;
+        const sky = ctx.createLinearGradient(0, 0, 0, h / 2);
+        sky.addColorStop(0, '#1a0a0a'); sky.addColorStop(1, '#2a1510');
+        ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h / 2);
+        ctx.fillStyle = '#0a0808'; ctx.fillRect(0, h / 2, w, h / 2);
+
+        const numRays = Math.min(w, 120);
+        const sliceW = w / numRays;
+        for (let i = 0; i < numRays; i++) {
+          const rayAngle = S.angle - FOV / 2 + (i / numRays) * FOV;
+          const dist = castRay(S.px, S.py, rayAngle);
+          const fixDist = dist * Math.cos(rayAngle - S.angle);
+          const wallH = Math.min(h, (h / fixDist) * 0.8);
+          const wallY = (h - wallH) / 2;
+          const tx = (S.px + Math.cos(rayAngle) * dist) | 0;
+          const ty = (S.py + Math.sin(rayAngle) * dist) | 0;
+          const isHorizontal = Math.abs(Math.cos(rayAngle) * dist - (tx - S.px + 0.5)) < 0.1;
+          const shade = Math.max(0.15, Math.min(1, 1 / (fixDist * 0.3)));
+          const r = isHorizontal ? Math.floor(120 * shade) : Math.floor(80 * shade);
+          const g = isHorizontal ? Math.floor(50 * shade) : Math.floor(40 * shade);
+          const b = isHorizontal ? Math.floor(30 * shade) : Math.floor(25 * shade);
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(i * sliceW, wallY, sliceW + 1, wallH);
+        }
+
+        S.enemies.forEach(e => {
+          if (!e.alive) return;
+          const dx = e.x - S.px, dy = e.y - S.py;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 15) return;
+          const ea = Math.atan2(dy, dx);
+          let diff = ea - S.angle;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          if (Math.abs(diff) > FOV / 2 + 0.2) return;
+          const fixDist = dist * Math.cos(diff);
+          if (fixDist < 0.2) return;
+          const sz = Math.min(h * 0.8, (h / fixDist) * 0.4);
+          const sx = w / 2 + (diff / (FOV / 2)) * w / 2;
+          const sy = h / 2;
+          ctx.fillStyle = e.hitFlash > 0 ? '#fff' : '#c93030';
+          ctx.beginPath(); ctx.arc(sx, sy, sz * 0.2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = e.hitFlash > 0 ? '#fcc' : '#8a1818';
+          ctx.beginPath(); ctx.arc(sx - sz * 0.12, sy - sz * 0.08, sz * 0.06, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(sx + sz * 0.12, sy - sz * 0.08, sz * 0.06, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#400';
+          ctx.fillRect(sx - sz * 0.15, sy + sz * 0.1, sz * 0.3, sz * 0.08);
+          ctx.fillStyle = `rgba(200,50,50,${Math.max(0, 0.5 - dist * 0.03)})`;
+          ctx.fillRect(sx - sz * 0.18, sy - sz * 0.18, sz * 0.36, sz * 0.36);
+        });
+
+        if (S.muzzle > 0) {
+          ctx.fillStyle = `rgba(255,200,80,${S.muzzle * 0.4})`;
+          ctx.beginPath(); ctx.arc(w / 2, h * 0.7, 30 * S.muzzle, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = '#888'; ctx.fillRect(w / 2 - 2, h * 0.72, 4, 4);
+        ctx.fillStyle = '#555'; ctx.fillRect(w * 0.2, h * 0.85, w * 0.6, h * 0.15);
+        ctx.fillStyle = '#333'; ctx.fillRect(w * 0.22, h * 0.87, w * 0.56, h * 0.11);
+        ctx.fillStyle = '#888'; ctx.fillRect(w * 0.25, h * 0.9, w * 0.5 * (S.ammo / 30), h * 0.03);
+
+        const hpPct = S.hp / 100;
+        ctx.fillStyle = '#330'; ctx.fillRect(w * 0.25, h * 0.94, w * 0.5, h * 0.03);
+        ctx.fillStyle = hpPct > 0.3 ? '#c93030' : '#c9a030';
+        ctx.fillRect(w * 0.25, h * 0.94, w * 0.5 * hpPct, h * 0.03);
+
+        ctx.fillStyle = '#ddd'; ctx.font = '600 12px Inter, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`HP ${Math.round(S.hp)} | Патроны ${S.ammo} | Убийств ${S.kills} | Уровень ${S.level}`, 10, 16);
+
+        if (S.over) {
+          ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#c93030'; ctx.font = '700 28px Inter, sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('ВЫ ПОГИБЛИ', w / 2, h / 2 - 10);
+          ctx.fillStyle = '#ddd'; ctx.font = '500 14px Inter, sans-serif';
+          ctx.fillText(`Очки: ${S.score} | Уровень: ${S.level}`, w / 2, h / 2 + 20);
+          ctx.fillText('Тап / Пробел для рестарта', w / 2, h / 2 + 44);
+        }
+      }
+    };
+  });
+}
