@@ -1,0 +1,31 @@
+{
+  "name": "spokum-desktop",
+  "version": "2.1.0",
+  "description": "СпокУм - соцсеть про спокойствие",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.spokum.app",
+    "productName": "СпокУм",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "icon.ico"],
+    "win": {
+      "target": ["nsis"],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "СпокУм"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
