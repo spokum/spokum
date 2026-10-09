@@ -1,47 +1,88 @@
 import { api, state } from '../store.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
-import { toast, openSheet, avatar, emptyState } from '../ui.js';
+import { toast, openSheet, emptyState } from '../ui.js';
 
-const COLORS = ['#1a1d22','#e8e8e8','#c95a3a','#e8c46a','#87b7a3','#7fa8e8','#d8a8e8','#a8e8c8','#e8a8a8','#a8d4e8','#e8d8a8','#b8a8e8','#5a8ae8','#e87a5a','#5ae8a8','#e8e85a'];
+const COLORS = ['#ffffff','#e8e8e8','#c95a3a','#e8c46a','#87b7a3','#7fa8e8','#d8a8e8','#a8e8c8','#e8a8a8','#a8d4e8','#e8d8a8','#b8a8e8','#5a8ae8','#e87a5a','#5ae8a8','#e8e85a','#1a1d22','#3a3a3a','#888888','#c8c8c8'];
 
 export async function openPixelBattle() {
-  const host = el('<div class="col" style="gap:10px;padding:10px"></div>');
-  const sheet = openSheet('Пиксель-батл', host, {});
-  host.innerHTML = `<div class="card"><p class="muted center">Загрузка...</p></div>`;
+  const host = el(`<div style="width:100%;height:100%;display:flex;flex-direction:column;background:#f5f5f5"></div>`);
+  const sheet = openSheet('', host, {});
 
   let battle = null;
   let cells = {};
   let selectedColor = COLORS[0];
-  let canvas = null;
-  let ctx = null;
+  let canvas, ctx;
   let channel = null;
   let pressTimer = null;
+  let zoom = 1;
+  let panX = 0, panY = 0;
+  let isPanning = false;
+  let panStartX = 0, panStartY = 0;
 
   const draw = () => {
     if (!ctx || !battle) return;
-    const cs = canvas.width / battle.width;
-    ctx.fillStyle = '#0a0e14';
+    const cs = (canvas.width / battle.width) * zoom;
+    const offsetX = panX;
+    const offsetY = panY;
+
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= battle.width; i++) {
+      const x = offsetX + i * cs;
+      if (x >= 0 && x <= canvas.width) { ctx.beginPath(); ctx.moveTo(x, offsetY); ctx.lineTo(x, offsetY + battle.height * cs); ctx.stroke(); }
+    }
+    for (let i = 0; i <= battle.height; i++) {
+      const y = offsetY + i * cs;
+      if (y >= 0 && y <= canvas.height) { ctx.beginPath(); ctx.moveTo(offsetX, y); ctx.lineTo(offsetX + battle.width * cs, y); ctx.stroke(); }
+    }
+
     for (const key in cells) {
       const [x, y] = key.split(',').map(Number);
-      ctx.fillStyle = cells[key];
-      ctx.fillRect(x * cs, y * cs, cs, cs);
+      const px = offsetX + x * cs;
+      const py = offsetY + y * cs;
+      if (px + cs >= 0 && px <= canvas.width && py + cs >= 0 && py <= canvas.height) {
+        ctx.fillStyle = cells[key];
+        ctx.fillRect(px, py, cs, cs);
+      }
+    }
+
+    if (cs > 4) {
+      ctx.strokeStyle = '#d0d0d0';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= battle.width; i++) {
+        const x = offsetX + i * cs;
+        if (x >= 0 && x <= canvas.width) { ctx.beginPath(); ctx.moveTo(x, offsetY); ctx.lineTo(x, offsetY + battle.height * cs); ctx.stroke(); }
+      }
+      for (let i = 0; i <= battle.height; i++) {
+        const y = offsetY + i * cs;
+        if (y >= 0 && y <= canvas.height) { ctx.beginPath(); ctx.moveTo(offsetX, y); ctx.lineTo(offsetX + battle.width * cs, y); ctx.stroke(); }
+      }
     }
   };
 
-  const loadCells = async () => {
-    if (!battle) return;
+  const getCellAt = (clientX, clientY) => {
+    const r = canvas.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const cs = (canvas.width / battle.width) * zoom;
+    const gx = Math.floor((x - panX) / cs);
+    const gy = Math.floor((y - panY) / cs);
+    if (gx >= 0 && gx < battle.width && gy >= 0 && gy < battle.height) return { x: gx, y: gy };
+    return null;
+  };
+
+  const placePixel = async (gx, gy) => {
+    if (!battle || !state.user) return;
     try {
-      const sb = await getSupabaseClient();
-      if (!sb) return;
-      const { data } = await sb.from('pixel_cells').select('x,y,color').eq('battle_id', battle.id);
-      if (data) {
-        cells = {};
-        data.forEach((c) => cells[`${c.x},${c.y}`] = c.color);
-        draw();
-      }
-    } catch {}
+      const result = await api.placePixel(battle.id, gx, gy, selectedColor);
+      cells[`${gx},${gy}`] = selectedColor;
+      draw();
+      updateStatus(result);
+    } catch (e) { toast(e.message, 'err'); }
   };
 
   const showPixelInfo = async (gx, gy) => {
@@ -50,7 +91,7 @@ export async function openPixelBattle() {
       const info = await api.getPixelInfo(battle.id, gx, gy);
       if (info.empty) { toast('Пусто', 'err'); return; }
       const body = el(`<div class="col" style="gap:10px;align-items:center;padding:12px">
-        <div style="width:48px;height:48px;border-radius:8px;background:${info.color};border:1px solid var(--line)"></div>
+        <div style="width:48px;height:48px;border-radius:8px;background:${info.color};border:1px solid #ddd"></div>
         ${info.avatar ? `<div style="display:flex;gap:8px;align-items:center">
           <img src="${info.avatar}" style="width:32px;height:32px;border-radius:50%">
           <div><div class="strong small">${esc(info.displayName || info.username)}</div><div class="tiny muted">@${esc(info.username)}</div></div>
@@ -61,18 +102,14 @@ export async function openPixelBattle() {
     } catch (e) { toast(e.message, 'err'); }
   };
 
-  const placePixel = async (gx, gy) => {
-    if (!battle || !state.user) return;
-    try {
-      const result = await api.placePixel(battle.id, gx, gy, selectedColor);
-      cells[`${gx},${gy}`] = selectedColor;
-      draw();
-      if (result.cooldown) {
-        toast(`Поставлено! Кулдаун ${result.cooldown}с`, 'ok');
-      } else if (result.remaining !== undefined) {
-        toast(`Поставлено! Осталось ${result.remaining} пикселей`, 'ok');
-      }
-    } catch (e) { toast(e.message, 'err'); }
+  const updateStatus = (result) => {
+    if (!result) return;
+    const statusEl = host.querySelector('[data-status]');
+    if (result.cooldown) {
+      statusEl.textContent = `Кулдаун ${result.cooldown}с`;
+    } else if (result.remaining !== undefined) {
+      statusEl.textContent = `Осталось пикселей: ${result.remaining}`;
+    }
   };
 
   battle = await api.activePixelBattle();
@@ -82,60 +119,114 @@ export async function openPixelBattle() {
   }
 
   host.innerHTML = `
-    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center" data-palette></div>
-    <div data-status class="tiny muted center" style="line-height:1.5"></div>
-    <canvas data-canvas style="width:100%;max-width:340px;aspect-ratio:${battle.width / battle.height};border-radius:10px;background:#0a0e14;touch-action:none;margin:0 auto;display:block;cursor:crosshair"></canvas>
-    <div data-info class="tiny muted center">Тап - поставить пиксель. Долгий тап - кто нарисовал.</div>
+    <div style="background:#fff;padding:6px 8px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e0e0e0">
+      <div style="display:flex;gap:3px;flex-wrap:wrap;flex:1" data-palette></div>
+      <button class="btn btn-sm" data-zoom-out style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer">-</button>
+      <span data-zoom-val style="font-size:11px;color:#888;min-width:30px;text-align:center">100%</span>
+      <button class="btn btn-sm" data-zoom-in style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer">+</button>
+      <button class="btn btn-sm" data-reset style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer">Центр</button>
+    </div>
+    <div data-status class="tiny muted" style="padding:4px 8px;background:#fafafa;font-size:11px"></div>
+    <canvas data-canvas style="flex:1;width:100%;background:#fff;touch-action:none;cursor:crosshair"></canvas>
+    <div class="tiny muted" style="padding:4px 8px;background:#fafafa;text-align:center;font-size:10px">Тап - поставить пиксель. Долгий тап - кто нарисовал. Двумя пальцами - зум.</div>
   `;
 
   const palette = host.querySelector('[data-palette]');
   canvas = host.querySelector('[data-canvas]');
   ctx = canvas.getContext('2d');
-  const statusEl = host.querySelector('[data-status]');
 
   COLORS.forEach((c, i) => {
-    const btn = el(`<button data-color="${c}" style="width:28px;height:28px;border-radius:6px;background:${c};border:${i===0?'2px solid var(--accent)':'1px solid var(--line)'};cursor:pointer"></button>`);
+    const btn = el(`<button data-color="${c}" style="width:24px;height:24px;border-radius:5px;background:${c};border:${i===0?'2px solid #87b7a3':'1px solid #ccc'};cursor:pointer;flex-shrink:0"></button>`);
     btn.onclick = () => {
       selectedColor = c;
-      palette.querySelectorAll('[data-color]').forEach((b) => b.style.border = '1px solid var(--line)');
-      btn.style.border = '2px solid var(--accent)';
+      palette.querySelectorAll('[data-color]').forEach((b) => b.style.border = '1px solid #ccc');
+      btn.style.border = '2px solid #87b7a3';
     };
     palette.appendChild(btn);
   });
 
-  const updateCanvas = () => {
+  const resizeCanvas = () => {
     const r = canvas.getBoundingClientRect();
     canvas.width = r.width;
     canvas.height = r.height;
+    if (zoom === 1) { panX = 0; panY = 0; }
     draw();
   };
-  updateCanvas();
 
-  const getXY = (e) => {
-    const r = canvas.getBoundingClientRect();
-    const x = Math.floor(((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width * battle.width);
-    const y = Math.floor(((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height * battle.height);
-    return { x: Math.max(0, Math.min(battle.width - 1, x)), y: Math.max(0, Math.min(battle.height - 1, y)) };
+  setTimeout(() => {
+    resizeCanvas();
+    const fitZoom = Math.min(canvas.width / (battle.width * 8), canvas.height / (battle.height * 8));
+    zoom = Math.max(1, fitZoom);
+    panX = (canvas.width - battle.width * (canvas.width / battle.width) * zoom) / 2;
+    panY = (canvas.height - battle.height * (canvas.height / battle.height) * zoom) / 2;
+    panX = Math.max(0, (canvas.width - battle.width * (canvas.width / battle.width) * zoom) / 2);
+    panY = Math.max(0, (canvas.height - battle.height * (canvas.width / battle.width) * zoom) / 2);
+    draw();
+  }, 100);
+
+  const updateZoomLabel = () => {
+    host.querySelector('[data-zoom-val]').textContent = Math.round(zoom * 100) + '%';
   };
 
+  host.querySelector('[data-zoom-in]').onclick = () => { zoom = Math.min(10, zoom * 1.5); updateZoomLabel(); draw(); };
+  host.querySelector('[data-zoom-out]').onclick = () => { zoom = Math.max(0.5, zoom / 1.5); updateZoomLabel(); draw(); };
+  host.querySelector('[data-reset]').onclick = () => { zoom = 1; panX = 0; panY = 0; updateZoomLabel(); draw(); };
+
+  let lastTouchDist = 0;
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    const { x, y } = getXY(e);
-    placePixel(x, y);
-    pressTimer = setTimeout(() => showPixelInfo(x, y), 500);
+    if (e.isPrimary === false) return;
+    const cell = getCellAt(e.clientX, e.clientY);
+    if (cell) {
+      placePixel(cell.x, cell.y);
+      pressTimer = setTimeout(() => showPixelInfo(cell.x, cell.y), 500);
+    }
+    isPanning = true;
+    panStartX = e.clientX - panX;
+    panStartY = e.clientY - panY;
   });
-  canvas.addEventListener('pointerup', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
-  canvas.addEventListener('pointermove', () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    if (isPanning && e.isPrimary !== false) {
+      panX = e.clientX - panStartX;
+      panY = e.clientY - panStartY;
+      draw();
+    }
+  });
+
+  canvas.addEventListener('pointerup', () => {
+    isPanning = false;
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const oldZoom = zoom;
+    zoom = Math.max(0.5, Math.min(10, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+    panX = mx - (mx - panX) * (zoom / oldZoom);
+    panY = my - (my - panY) * (zoom / oldZoom);
+    updateZoomLabel();
+    draw();
+  });
+
+  window.addEventListener('resize', resizeCanvas);
 
   const endsAt = new Date(battle.endsAt);
   const daysLeft = Math.max(0, Math.ceil((endsAt - Date.now()) / 86400000));
-  statusEl.textContent = `Осталось ${daysLeft} дн. · Поставлено: ${battle.pixelsPlaced}/${battle.maxPixels}`;
+  host.querySelector('[data-status]').textContent = `Осталось ${daysLeft} дн. | Поставлено: ${battle.pixelsPlaced}/${battle.maxPixels}`;
 
-  if (battle.cooldownUntil && new Date(battle.cooldownUntil) > new Date()) {
-    const secs = Math.ceil((new Date(battle.cooldownUntil) - new Date()) / 1000);
-    statusEl.textContent += ` · Кулдаун ${secs}с`;
-  }
-
+  const loadCells = async () => {
+    try {
+      const sb = await getSupabaseClient();
+      if (!sb) return;
+      const { data } = await sb.from('pixel_cells').select('x,y,color').eq('battle_id', battle.id);
+      if (data) { cells = {}; data.forEach((c) => cells[`${c.x},${c.y}`] = c.color); draw(); }
+    } catch {}
+  };
   await loadCells();
 
   try {
@@ -149,9 +240,8 @@ export async function openPixelBattle() {
   } catch {}
 
   const origClose = sheet.close;
-  sheet.close = () => { if (channel) try { channel.unsubscribe(); } catch {} origClose(); };
+  sheet.close = () => { if (channel) try { channel.unsubscribe(); } catch {} window.removeEventListener('resize', resizeCanvas); origClose(); };
 
-  window.addEventListener('resize', updateCanvas);
   return sheet;
 }
 
