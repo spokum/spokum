@@ -430,11 +430,11 @@ export async function render(root) {
       <div class="spacer"></div>
       <button class="btn btn-icon" data-edit title="Редактировать">${icon('edit', 18)}</button>
     </div>
-    ${user ? `<div data-quote-host></div>` : ''}
+    ${user?.username === 'silver' ? `<div data-quote-host></div>` : ''}
     <div data-body></div>`;
 
   const body = root.querySelector('[data-body]');
-  if (user && api.todayQuote) {
+  if (user?.username === 'silver' && api.todayQuote) {
     api.todayQuote().then((q) => {
       if (!q?.text) return;
       const host = root.querySelector('[data-quote-host]');
@@ -505,12 +505,12 @@ export async function render(root) {
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">За что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-quests>${icon('star', 20)}<div class="grow"><div class="strong small">Задания дня</div><div class="tiny muted">3 задания + челлендж дня за монеты</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-tournaments>${icon('trophy', 20)}<div class="grow"><div class="strong small">Турниры</div><div class="tiny muted">Еженедельные соревнования с призами</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-confessions>${icon('eye', 20)}<div class="grow"><div class="strong small">Анонимные признания</div><div class="tiny muted">Лента анонимных откровений</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-wishlist>${icon('gift', 20)}<div class="grow"><div class="strong small">Мой вишлист</div><div class="tiny muted">Что вы хотите получить</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-viewers>${icon('users', 20)}<div class="grow"><div class="strong small">Кто смотрел профиль</div><div class="tiny muted">Последние посетители</div></div>${icon('forward', 16)}</button>
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">За что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-quests>${icon('star', 20)}<div class="grow"><div class="strong small">Задания дня</div><div class="tiny muted">3 задания + челлендж дня за монеты</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-tournaments>${icon('trophy', 20)}<div class="grow"><div class="strong small">Турниры</div><div class="tiny muted">Еженедельные соревнования с призами</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-confessions>${icon('eye', 20)}<div class="grow"><div class="strong small">Анонимные признания</div><div class="tiny muted">Лента анонимных откровений</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-wishlist>${icon('gift', 20)}<div class="grow"><div class="strong small">Мой вишлист</div><div class="tiny muted">Что вы хотите получить</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username === 'silver' ? `<button class="card list-item" data-viewers>${icon('users', 20)}<div class="grow"><div class="strong small">Кто смотрел профиль</div><div class="tiny muted">Последние посетители</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-friends>${icon('users', 20)}<div class="grow"><div class="strong small">Друзья</div><div class="tiny muted">Ваши друзья и заявки</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-groups>${icon('feed', 20)}<div class="grow"><div class="strong small">Группы</div><div class="tiny muted">Сообщества по интересам</div></div>${icon('forward', 16)}</button>` : ''}
       ${state.user?.username === 'silver' ? `<button class="card list-item" data-wheel>${icon('star', 20)}<div class="grow"><div class="strong small">Колесо фортуны</div><div class="tiny muted">Бесплатный приз каждый день</div></div>${icon('forward', 16)}</button>` : ''}
