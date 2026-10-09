@@ -4685,7 +4685,7 @@ function tube(canvas, report) {
         if (Math.random() < 0.72) {
           const gates = 1 + (Math.random() < 0.3 ? 1 : 0);
           for (let i = 0; i < gates; i++) {
-            bars.push({ at: Math.random() * Math.PI * 2, span: 0.55 + Math.random() * 0.5 });
+            bars.push({ at: Math.random() * Math.PI * 2, span: 0.3 + Math.random() * 0.25 });
           }
         }
         S.rings.push({ z: S.ahead, bars, hue: 180 + Math.random() * 90, coin: Math.random() < 0.45 ? Math.random() * Math.PI * 2 : null, taken: false });
@@ -4756,7 +4756,7 @@ function tube(canvas, report) {
         grow();
 
         for (const ring of S.rings) {
-          if (Math.abs(ring.z - S.z) > 0.9) continue;
+          if (Math.abs(ring.z - S.z) > 0.5) continue;
           if (ring.coin !== null && !ring.taken) {
             const gap = Math.abs(((ring.coin - S.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
             if (gap > Math.PI - 0.45) {
@@ -4767,7 +4767,7 @@ function tube(canvas, report) {
           }
           for (const bar of ring.bars) {
             const gap = Math.abs(((bar.at - S.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-            if (gap > Math.PI - bar.span / 2) {
+            if (gap > Math.PI - bar.span / 3) {
               S.over = true;
               report?.(Math.floor(S.score));
               return;

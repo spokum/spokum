@@ -22,7 +22,6 @@ export async function openGarden() {
   const info = host.querySelector('[data-info]');
   let selectedColor = COLORS[0];
   let cells = {};
-  let channel = null;
 
   COLORS.forEach((c, i) => {
     const btn = el(`<button data-color="${c}" style="width:32px;height:32px;border-radius:8px;background:${c};border:${i===0?'2px solid var(--accent)':'2px solid transparent'};cursor:pointer"></button>`);
@@ -56,10 +55,11 @@ export async function openGarden() {
   };
 
   const placeCell = async (gx, gy) => {
+    if (!state.user) { toast('Нужен вход', 'err'); return; }
     try {
-      const sb = window.__spokum?.sb;
-      if (!sb) return;
-      await sb.from('garden_cells').upsert({ x: gx, y: gy, color: selectedColor, user_id: state.user?.id });
+      const sb = await getSupabaseClient();
+      if (!sb) { toast('Не удалось подключиться', 'err'); return; }
+      await sb.from('garden_cells').upsert({ x: gx, y: gy, color: selectedColor, user_id: state.user.id });
       cells[`${gx},${gy}`] = selectedColor;
       draw();
       const count = Object.keys(cells).length;
@@ -78,11 +78,12 @@ export async function openGarden() {
   });
 
   try {
-    const sb = window.__spokum?.sb;
+    const sb = await getSupabaseClient();
     if (sb) {
       const { data } = await sb.from('garden_cells').select('x,y,color');
       if (data) data.forEach((c) => cells[`${c.x},${c.y}`] = c.color);
-      channel = sb.channel('garden').on('postgres_changes', { event: '*', schema: 'public', table: 'garden_cells' }, (payload) => {
+
+      sb.channel('garden').on('postgres_changes', { event: '*', schema: 'public', table: 'garden_cells' }, (payload) => {
         const d = payload.new || payload.old;
         if (d) {
           if (payload.eventType === 'DELETE') delete cells[`${d.x},${d.y}`];
@@ -97,7 +98,34 @@ export async function openGarden() {
   const count = Object.keys(cells).length;
   info.textContent = count ? `Посажено: ${count} растений` : 'Сад пуст. Посадите первое!';
 
-  const origClose = sheet.close;
-  sheet.close = () => { if (channel) try { channel.unsubscribe(); } catch {} origClose(); };
   return sheet;
+}
+
+async function getSupabaseClient() {
+  if (window.__spokumSb) return window.__spokumSb;
+  try {
+    const url = window.SPOKUM_SUPABASE_URL;
+    const key = window.SPOKUM_SUPABASE_KEY;
+    if (!url || !key) return null;
+    if (window.supabase?.createClient) {
+      window.__spokumSb = window.supabase.createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+    } else {
+      const mod = await import('https://esm.sh/@supabase/supabase-js@2.45.4');
+      window.__spokumSb = mod.createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
+    }
+    const token = localStorage.getItem('spokum.session.keep');
+    if (token) {
+      const session = JSON.parse(token);
+      if (session?.access_token) {
+        await window.__spokumSb.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+      }
+    }
+    return window.__spokumSb;
+  } catch (e) {
+    return null;
+  }
 }
