@@ -1,0 +1,148 @@
+const VERSION = 'spokum-v90';
+const CORE = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './css/app.css',
+  './css/ui-v2.css',
+  './js/app.js',
+  './js/store.js',
+  './js/ui.js',
+  './js/util.js',
+  './js/icons.js',
+  './js/backend/local.js',
+  './js/backend/remote.js',
+  './js/backend/remote-db.js',
+  './js/games/index.js',
+  './js/call.js',
+  './js/saved.js',
+  './js/accounts.js',
+  './js/views/auth.js',
+  './js/views/videos.js',
+  './js/views/rules.js',
+  './js/views/notifications.js',
+  './js/views/feed.js',
+  './js/views/chats.js',
+  './js/views/games.js',
+  './js/views/settings.js',
+  './js/views/profile.js',
+  './js/views/admin.js',
+  './js/views/mod.js',
+  './js/views/stories.js',
+  './js/views/safe.js',
+  './js/views/journal.js',
+  './js/views/gratitude.js',
+  './js/views/quests.js',
+  './js/views/tournaments.js',
+  './js/views/confessions.js',
+  './js/views/extras2.js',
+  './js/views/wheel.js',
+  './js/views/leaderboard.js',
+  './js/views/search.js',
+  './js/views/groups.js',
+  './js/views/friends.js',
+  './js/views/widgets.js',
+  './js/views/pixel-battle.js',
+  './offer.html',
+  './privacy.html',
+  './consent.html',
+  './vendor/client.js',
+  './fonts/inter-cyrillic-400.woff2',
+  './fonts/inter-cyrillic-500.woff2',
+  './fonts/inter-cyrillic-600.woff2',
+  './fonts/inter-cyrillic-700.woff2',
+  './fonts/inter-latin-400.woff2',
+  './fonts/inter-latin-500.woff2',
+  './fonts/inter-latin-600.woff2',
+  './fonts/inter-latin-700.woff2'
+];
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).then(() =>
+      caches.open(VERSION).then((cache) => cache.addAll(CORE.map((path) => new Request(path, { cache: 'reload' }))))
+    )
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== VERSION).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll().then((clients) => clients.forEach((c) => c.postMessage({ type: 'FORCE_RELOAD' }))))
+  );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  const sameOrigin = url.origin === self.location.origin;
+
+  if (sameOrigin && url.pathname.endsWith('/config.js')) {
+    event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(request)));
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' })
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(VERSION).then((cache) => cache.put('./index.html', copy)).catch(() => {});
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(VERSION);
+          const fallback = await cache.match('./index.html');
+          return fallback || new Response('offline', { status: 503 });
+        })
+    );
+    return;
+  }
+
+  const isModuleCdn = url.hostname === 'esm.sh' || url.hostname === 'cdn.jsdelivr.net';
+  if (!sameOrigin && !isModuleCdn) return;
+
+  event.respondWith(
+    caches.open(VERSION).then(async (cache) => {
+      const cached = await cache.match(request, { ignoreSearch: sameOrigin });
+      const network = fetch(request)
+        .then((response) => {
+          if (response && response.status === 200 && response.type !== 'opaque') {
+            cache.put(request, response.clone());
+          }
+          return response;
+        })
+        .catch(() => null);
+
+      if (cached) {
+        network.catch(() => {});
+        return cached;
+      }
+
+      const response = await network;
+      if (response) return response;
+      return new Response('', { status: 504, statusText: 'offline' });
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) return client.focus();
+      }
+      return self.clients.openWindow('./');
+    })
+  );
+});
