@@ -5,6 +5,8 @@ import { openSheet, toast, emptyState } from '../ui.js';
 
 const GAMES_KEY = 'spokum.gamesPlayed';
 const STREAK_KEY = 'spokum.streak.day';
+const PIN_KEY = 'spokum.pinnedAchievements';
+const MAX_PINS = 3;
 
 export const RARITY = {
   common: { label: 'Обычное', color: '#9aa3b0', glow: 'rgba(154,163,176,.32)' },
@@ -101,7 +103,78 @@ export function evaluate(list, stats) {
   });
 }
 
-function badgeCell(item) {
+function readPins() {
+  try {
+    const raw = localStorage.getItem(PIN_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((x) => typeof x === 'string').slice(0, MAX_PINS);
+    }
+  } catch {}
+  return [];
+}
+
+function writePins(list) {
+  try {
+    localStorage.setItem(PIN_KEY, JSON.stringify((list || []).slice(0, MAX_PINS)));
+  } catch {}
+}
+
+export function pinnedAchievementIds() {
+  return readPins();
+}
+
+// Toggle pin for an achievement. Returns the new pin list.
+// Only unlocked achievements can be pinned; max MAX_PINS.
+export async function toggleAchievementPin(id) {
+  if (!id) return readPins();
+  const list = readPins();
+  const idx = list.indexOf(String(id));
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    writePins(list);
+    return list;
+  }
+  // Need to verify it's unlocked before pinning.
+  const all = achievementsList();
+  const item = all.find((a) => a.id === String(id));
+  if (!item) return list;
+  let stats;
+  try { stats = await computeStats(); } catch { return list; }
+  let unlocked = false;
+  try { unlocked = !!item.check(stats); } catch {}
+  if (!unlocked) {
+    toast('Сначала откройте достижение', 'err');
+    return list;
+  }
+  if (list.length >= MAX_PINS) {
+    toast(`Максимум ${MAX_PINS} закреплённых`, 'err');
+    return list;
+  }
+  list.push(String(id));
+  writePins(list);
+  return list;
+}
+
+// Returns the achievement objects for currently-pinned IDs (only those still unlocked).
+export async function pinnedAchievements() {
+  const ids = readPins();
+  if (!ids.length) return [];
+  const all = achievementsList();
+  let stats;
+  try { stats = await computeStats(); } catch { return []; }
+  const result = [];
+  for (const id of ids) {
+    const item = all.find((a) => a.id === id);
+    if (!item) continue;
+    let unlocked = false;
+    try { unlocked = !!item.check(stats); } catch {}
+    if (unlocked) result.push({ ...item, unlocked });
+  }
+  return result;
+}
+
+function badgeCell(item, pinned) {
   const r = RARITY[item.rarity] || RARITY.common;
   const got = item.unlocked;
   const color = got ? r.color : 'var(--muted)';
@@ -110,8 +183,10 @@ function badgeCell(item) {
     ? `background:radial-gradient(80% 80% at 50% 30%, ${r.color}26, transparent 70%)`
     : 'background:var(--surface-2)';
   const filter = got ? '' : 'filter:grayscale(1);opacity:.5';
+  const pinMark = pinned ? `<span style="position:absolute;top:4px;right:6px;color:${r.color}">${icon('star', 11)}</span>` : '';
   return `<button class="card achv-cell" type="button" data-id="${esc(item.id)}"
-    style="padding:14px 6px;border:1px solid var(--line);text-align:center;cursor:pointer;${bg};${glow};${filter}">
+    style="position:relative;padding:14px 6px;border:1px solid var(--line);text-align:center;cursor:pointer;${bg};${glow};${filter}">
+    ${pinMark}
     <div style="color:${color};display:flex;justify-content:center;margin-bottom:6px">${icon(item.icon, 28)}</div>
     <div class="tiny strong" style="color:${got ? 'var(--text)' : 'var(--muted)'};line-height:1.25;font-size:11.5px">${esc(item.title)}</div>
     ${got
@@ -120,7 +195,7 @@ function badgeCell(item) {
   </button>`;
 }
 
-function openBadgeDetail(item) {
+function openBadgeDetail(item, pinned, onToggle) {
   const r = RARITY[item.rarity] || RARITY.common;
   const got = item.unlocked;
   const color = got ? r.color : 'var(--muted)';
@@ -132,9 +207,25 @@ function openBadgeDetail(item) {
     <div class="pill" style="color:${color};background:${color}22;border:1px solid ${color}44">
       ${got ? 'Открыто' : 'Закрыто'} · ${esc(r.label)}
     </div>
-    ${got ? '' : '<p class="tiny muted" style="margin:0;max-width:280px;line-height:1.5">Продолжайте пользоваться СпокУмом — достижение откроется само</p>'}
+    ${got
+      ? `<button class="btn ${pinned ? '' : 'btn-primary'}" data-pin style="width:100%">${icon('star', 15)} ${pinned ? 'Открепить' : 'Закрепить'}</button>`
+      : '<p class="tiny muted" style="margin:0;max-width:280px;line-height:1.5">Продолжайте пользоваться СпокУмом — достижение откроется само</p>'}
   </div>`);
-  openSheet(item.title, body);
+  const sheet = openSheet(item.title, body);
+  const pinBtn = body.querySelector('[data-pin]');
+  if (pinBtn) {
+    pinBtn.onclick = async () => {
+      pinBtn.disabled = true;
+      try {
+        const next = await toggleAchievementPin(item.id);
+        onToggle?.(next);
+      } catch (error) {
+        toast(error?.message || 'Не удалось закрепить', 'err');
+      }
+      sheet.close();
+    };
+  }
+  return sheet;
 }
 
 export async function openAchievements() {
@@ -149,36 +240,41 @@ export async function openAchievements() {
     return sheet;
   }
 
-  const list = achievementsList();
-  const evaluated = evaluate(list, stats);
-  const count = evaluated.filter((a) => a.unlocked).length;
-  const total = evaluated.length;
-  const pct = total ? Math.round((count / total) * 100) : 0;
+  const draw = () => {
+    const list = achievementsList();
+    const evaluated = evaluate(list, stats);
+    const pins = readPins();
+    const count = evaluated.filter((a) => a.unlocked).length;
+    const total = evaluated.length;
+    const pct = total ? Math.round((count / total) * 100) : 0;
 
-  body.innerHTML = `
-    <div class="card" style="padding:14px">
-      <div class="row between" style="align-items:center;gap:8px">
-        <div style="min-width:0">
-          <div class="strong">${count} / ${total} открыто</div>
-          <div class="tiny muted" style="margin-top:2px;line-height:1.4">Открывайте новые, пишите посты и заходите каждый день</div>
+    body.innerHTML = `
+      <div class="card" style="padding:14px">
+        <div class="row between" style="align-items:center;gap:8px">
+          <div style="min-width:0">
+            <div class="strong">${count} / ${total} открыто</div>
+            <div class="tiny muted" style="margin-top:2px;line-height:1.4">Открывайте новые, пишите посты и заходите каждый день · можно закрепить до ${MAX_PINS}</div>
+          </div>
+          <div class="pill ${count === total && total ? 'good' : ''}" style="flex:none">${pct}%</div>
         </div>
-        <div class="pill ${count === total && total ? 'good' : ''}" style="flex:none">${pct}%</div>
+        <div class="meter" style="margin-top:10px"><i style="width:${pct}%"></i></div>
       </div>
-      <div class="meter" style="margin-top:10px"><i style="width:${pct}%"></i></div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      ${evaluated.map(badgeCell).join('')}
-    </div>
-    <p class="tiny muted" style="margin:0;line-height:1.5;text-align:center">
-      ${icon('spark', 12)} Достижения видны только вам и не отражают вашу ценность
-    </p>`;
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${evaluated.map((a) => badgeCell(a, pins.includes(a.id))).join('')}
+      </div>
+      <p class="tiny muted" style="margin:0;line-height:1.5;text-align:center">
+        ${icon('spark', 12)} Достижения видны только вам и не отражают вашу ценность
+      </p>`;
 
-  body.querySelectorAll('[data-id]').forEach((btn) => {
-    btn.onclick = () => {
-      const item = evaluated.find((a) => a.id === btn.dataset.id);
-      if (!item) return;
-      openBadgeDetail(item);
-    };
-  });
+    body.querySelectorAll('[data-id]').forEach((btn) => {
+      btn.onclick = () => {
+        const item = evaluated.find((a) => a.id === btn.dataset.id);
+        if (!item) return;
+        openBadgeDetail(item, readPins().includes(item.id), draw);
+      };
+    });
+  };
+
+  draw();
   return sheet;
 }

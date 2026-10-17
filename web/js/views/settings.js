@@ -184,6 +184,12 @@ export async function render(root) {
     </div>
 
     <div class="card appear">
+      <div class="row" style="margin-bottom:10px">${icon('wave', 18)}<span class="strong small">Спокойствие</span></div>
+      <p class="tiny muted" style="margin:0 0 12px;line-height:1.5">Звуки, которые помогают выдохнуть и уснуть. Создаются прямо в браузере, без интернета.</p>
+      <button class="list-item" data-sounds>${icon('volume', 18)}<div class="grow"><div class="small strong">Звуки для спокойствия</div><div class="tiny muted">Дождь, океан, лес, костёр, ночь, ветер</div></div>${icon('forward', 15)}</button>
+    </div>
+
+    <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('lock', 18)}<span class="strong small">Безопасность</span></div>
       <button class="list-item" data-password>${icon('key', 18)}<div class="grow"><div class="small strong">Сменить пароль</div><div class="tiny muted">Другие сессии закроются</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-pin>${icon('lock', 18)}<div class="grow"><div class="small strong">Код на вход</div><div class="tiny muted" data-pin-state>Спрашивать код при запуске</div></div>${icon('forward', 15)}</button>
@@ -347,6 +353,11 @@ export async function render(root) {
     const { openRules } = await import('./rules.js?v=20251018');
     openRules();
   };
+
+  root.querySelector('[data-sounds]')?.addEventListener('click', async () => {
+    const { openSounds } = await import('./sounds.js?v=20251018');
+    openSounds();
+  });
 
   root.querySelector('[data-video-sound]').onchange = (event) => {
     localStorage.setItem('spokum.sound', event.target.checked ? 'on' : 'off');

@@ -2,6 +2,7 @@ import { uid } from '../util.js';
 
 const KEY = 'spokum.db.v3';
 const SESSION_KEY = 'spokum.session.v3';
+const GROUPS_KEY = 'spokum.groups';
 const MOODS = ['calm', 'joy', 'sad', 'anger', 'anxiety', 'tired', 'love', 'inspired'];
 
 function blank() {
@@ -68,6 +69,34 @@ function save() {
     localStorage.setItem(KEY, JSON.stringify(state));
   }
 }
+
+// Groups live in their own localStorage key so they survive main DB resets
+// and stay lightweight. Each group: { id, name, hue, ownerId, memberIds: [] }.
+function loadGroups() {
+  try {
+    const raw = localStorage.getItem(GROUPS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveGroups(list) {
+  try {
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(list || []));
+  } catch {}
+}
+
+function hueFromName(name) {
+  const text = String(name || '');
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) % 360;
+  return h;
+}
+
+let groupsState = loadGroups();
 
 function next(kind) {
   if (!state.seq[kind]) state.seq[kind] = 0;
@@ -3102,9 +3131,61 @@ export const local = {
     };
   },
 
+  async listGroups() {
+    const user = me();
+    const viewerId = user?.id || null;
+    return {
+      groups: groupsState.map((g) => ({
+        id: g.id,
+        name: g.name,
+        hue: g.hue,
+        members: Array.isArray(g.memberIds) ? g.memberIds.length : 0,
+        joined: viewerId ? (Array.isArray(g.memberIds) && g.memberIds.includes(viewerId)) : false
+      }))
+    };
+  },
+
+  async createGroup(name) {
+    const user = need();
+    const trimmed = String(name || '').trim();
+    if (!trimmed) fail('Введите название группы');
+    if (trimmed.length > 60) fail('Название слишком длинное (макс. 60 символов)');
+    const group = {
+      id: Date.now(),
+      name: trimmed,
+      hue: hueFromName(trimmed),
+      ownerId: user.id,
+      memberIds: [user.id]
+    };
+    groupsState.push(group);
+    saveGroups(groupsState);
+    return { ok: true, id: group.id };
+  },
+
+  async joinGroup(id) {
+    const user = need();
+    const group = groupsState.find((g) => g.id === id);
+    if (!group) fail('Группа не найдена');
+    if (!Array.isArray(group.memberIds)) group.memberIds = [];
+    if (!group.memberIds.includes(user.id)) group.memberIds.push(user.id);
+    saveGroups(groupsState);
+    return { ok: true };
+  },
+
+  async leaveGroup(id) {
+    const user = need();
+    const group = groupsState.find((g) => g.id === id);
+    if (!group) fail('Группа не найдена');
+    group.memberIds = (Array.isArray(group.memberIds) ? group.memberIds : []).filter((u) => u !== user.id);
+    saveGroups(groupsState);
+    return { ok: true };
+  },
+
   reset() {
     localStorage.removeItem(KEY);
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(GROUPS_KEY);
     state = load();
+    groupsState = loadGroups();
   }
 };

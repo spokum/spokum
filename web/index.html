@@ -27,12 +27,12 @@
 <div id="app"></div>
 <!-- Version indicator: if you see "v15" in the corner, you have the latest version.
      If you don't see it, your browser is serving a stale cached version. -->
-<div id="version-stamp" style="position:fixed;bottom:2px;left:2px;font-size:9px;color:rgba(255,255,255,.15);pointer-events:none;z-index:9999;font-family:monospace">v15-nocache</div>
+<div id="version-stamp" style="position:fixed;bottom:2px;left:2px;font-size:9px;color:rgba(255,255,255,.15);pointer-events:none;z-index:9999;font-family:monospace">v16-nocache</div>
 <script>
   // === VERSION CHECK ===
   // This runs IMMEDIATELY. If the page is stale (served by old Service Worker),
   // this version stamp won't be present and the page will look wrong.
-  window.__SPOKUM_VERSION__ = 'v15-nocache';
+  window.__SPOKUM_VERSION__ = 'v16-nocache';
 </script>
 <script>
   (function () {
@@ -81,8 +81,8 @@
     }).catch(function () {});
   }
 </script>
-<script src="config.js?v=20251018"></script>
-<script src="vendor/client.js?v=20251018"></script>
-<script type="module" src="js/app.js?v=20251018"></script>
+<script src="config.js?v=20251019"></script>
+<script src="vendor/client.js?v=20251019"></script>
+<script type="module" src="js/app.js?v=20251019"></script>
 </body>
 </html>

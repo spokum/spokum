@@ -12,10 +12,14 @@ export async function render(root) {
       <div><h1>Игры</h1><p class="sub">Разгрузить голову на пять минут</p></div>
     </div>
     <div class="game-grid" data-grid></div>
-    <div class="row between" style="margin:22px 2px 10px"><div class="strong small">Таблица лидеров</div>
-      <select class="select" data-game style="width:auto;padding:6px 10px;font-size:12px">
-        ${GAMES.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
-      </select>
+    <div class="row between" style="margin:22px 2px 10px">
+      <div class="strong small">Таблица лидеров</div>
+      <div class="row" style="gap:8px">
+        <button class="btn btn-sm" data-game-achv title="Игровые достижения">${icon('trophy', 14)} Достижения</button>
+        <select class="select" data-game style="width:auto;padding:6px 10px;font-size:12px">
+          ${GAMES.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
+        </select>
+      </div>
     </div>
     <div class="card" data-board></div>`;
 
@@ -50,6 +54,11 @@ export async function render(root) {
       openBilling?.();
     };
     grid.appendChild(card);
+  });
+
+  root.querySelector('[data-game-achv]')?.addEventListener('click', async () => {
+    const { openGameAchievements } = await import('./game-achievements.js?v=20251018');
+    openGameAchievements();
   });
 
   const select = root.querySelector('[data-game]');
@@ -96,6 +105,7 @@ function launch(game, done) {
 
   let paidFor = 0;
   let busy = false;
+  let recorded = false;
 
   const report = async (score) => {
     if (score > best) {
@@ -103,6 +113,16 @@ function launch(game, done) {
       localStorage.setItem(bestKey(game.id), String(score));
       bestBox.textContent = `Рекорд ${best}`;
       toast(`Новый рекорд ${score}`);
+    }
+    // Track game achievements (local-only stats). Fire-and-forget.
+    // Guard against double-counting when the game calls report on game-over
+    // AND the back button calls it again on exit.
+    if (!recorded) {
+      recorded = true;
+      try {
+        const { recordGamePlay } = await import('./game-achievements.js?v=20251018');
+        recordGamePlay(game.id, score);
+      } catch {}
     }
     if (!state.user || busy) return;
     busy = true;

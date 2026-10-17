@@ -481,6 +481,7 @@ export async function render(root) {
         <span class="strong" style="font-size:20px">${esc(fresh.displayName)}</span>${badges(fresh)}
       </div>
       <div class="small muted" style="margin-top:2px">@${esc(fresh.username)}</div>
+      <div data-pinned-achv style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px;min-height:0"></div>
       <div class="tiny muted" data-status-line style="margin-top:4px;line-height:1.4;min-height:0"></div>
       ${fresh.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(fresh.bio)}</p>` : ''}
       <div style="display:flex;justify-content:center;margin-top:12px">
@@ -548,6 +549,9 @@ export async function render(root) {
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div><span class="pill" data-achv-count style="margin-right:6px">—</span>${icon('forward', 16)}</button>
       <button class="card list-item" data-breathe>${icon('wave', 20)}<div class="grow"><div class="strong small">Дыхание</div><div class="tiny muted">Вдох на четыре, выдох на шесть</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-noise>${icon('volume', 20)}<div class="grow"><div class="strong small">Звуки для сна</div><div class="tiny muted">Дождь, волны, лес, ночь</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-sounds>${icon('wave', 20)}<div class="grow"><div class="strong small">Звуки для спокойствия</div><div class="tiny muted">Шесть атмосфер с таймером сна</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-compliments>${icon('spark', 20)}<div class="grow"><div class="strong small">Комплименты</div><div class="tiny muted">Мягкие слова, когда они нужны</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-gratitude-journal>${icon('heart', 20)}<div class="grow"><div class="strong small">Благодарность</div><div class="tiny muted">Три вещи, за что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Как дела у всех сразу</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
@@ -657,13 +661,34 @@ export async function render(root) {
       if (node) node.textContent = String(visitorsCount());
     }).catch(() => {});
   });
-  import('./achievements.js?v=20251018').then(({ computeStats, achievementsList, evaluate }) => {
+  import('./achievements.js?v=20251018').then(({ computeStats, achievementsList, evaluate, pinnedAchievements, RARITY }) => {
     computeStats().then((stats) => {
       const list = achievementsList();
       const evaluated = evaluate(list, stats);
       const count = evaluated.filter((a) => a.unlocked).length;
       const node = body.querySelector('[data-achv-count]');
       if (node) node.textContent = `${count}/${list.length}`;
+    }).catch(() => {});
+    // Render pinned achievement badges near the user's name.
+    pinnedAchievements().then((items) => {
+      const host = body.querySelector('[data-pinned-achv]');
+      if (!host) return;
+      if (!items.length) { host.innerHTML = ''; return; }
+      host.innerHTML = items.map((a) => {
+        const r = RARITY[a.rarity] || RARITY.common;
+        return `<span class="achv-pin" title="${esc(a.title)} — ${esc(r.label)}" data-achv-id="${esc(a.id)}"
+          style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;
+          background:${r.color}1f;border:1px solid ${r.color}55;color:${r.color};font-size:11px;font-weight:700">
+          ${icon(a.icon, 13)}<span style="max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.title)}</span>
+        </span>`;
+      }).join('');
+      host.querySelectorAll('[data-achv-id]').forEach((node) => {
+        node.style.cursor = 'pointer';
+        node.onclick = async () => {
+          const { openAchievements } = await import('./achievements.js?v=20251018');
+          openAchievements();
+        };
+      });
     }).catch(() => {});
   }).catch(() => {});
   body.querySelector('[data-breathe]')?.addEventListener('click', async () => {
@@ -704,6 +729,18 @@ export async function render(root) {
   body.querySelector('[data-gratitude]')?.addEventListener('click', async () => {
     const { openGratitude } = await import('./gratitude.js?v=20251018');
     openGratitude();
+  });
+  body.querySelector('[data-gratitude-journal]')?.addEventListener('click', async () => {
+    const { openGratitudeJournal } = await import('./gratitude.js?v=20251018');
+    openGratitudeJournal();
+  });
+  body.querySelector('[data-sounds]')?.addEventListener('click', async () => {
+    const { openSounds } = await import('./sounds.js?v=20251018');
+    openSounds();
+  });
+  body.querySelector('[data-compliments]')?.addEventListener('click', async () => {
+    const { openCompliments } = await import('./compliments.js?v=20251018');
+    openCompliments();
   });
   body.querySelector('[data-quests]')?.addEventListener('click', async () => {
     const { openQuests } = await import('./quests.js?v=20251018');
@@ -803,28 +840,40 @@ function openBannerMenu(user, done) {
   const body = el(`
     <div class="col" style="gap:6px">
       <button class="list-item" data-pick>${icon('image', 18)}<span>Загрузить картинку</span></button>
-      ${user.banner ? `<button class="list-item" data-clear style="color:#c98b8b">${icon('trash', 18)}<span>Убрать баннер</span></button>` : ''}
+      ${user?.banner ? `<button class="list-item" data-clear style="color:#c98b8b">${icon('trash', 18)}<span>Убрать баннер</span></button>` : ''}
       <p class="tiny muted" style="margin:6px 4px 0">Баннер виден всем в вашем профиле. Лучше широкая картинка.</p>
     </div>`);
   const sheet = openSheet('Баннер профиля', body);
 
   const apply = async (banner) => {
     try {
-      const { user: updated } = await api.updateMe({ banner });
+      const result = await api.updateMe({ banner });
+      const updated = result?.user;
+      if (!updated) throw new Error('Не удалось сохранить баннер');
       setUser(updated);
       sheet.close();
       toast(banner ? 'Баннер обновлён' : 'Баннер убран');
       done?.();
     } catch (error) {
-      toast(error.message, 'err');
+      toast(error?.message || 'Не удалось сохранить баннер', 'err');
     }
   };
 
-  body.querySelector('[data-pick]').onclick = async () => {
-    const image = await pickImage(1400);
-    if (image) apply(image);
+  const pickBtn = body.querySelector('[data-pick]');
+  pickBtn.onclick = async () => {
+    if (pickBtn.disabled) return;
+    pickBtn.disabled = true;
+    try {
+      const image = await pickImage(1400);
+      if (image) await apply(image);
+    } catch (error) {
+      toast(error?.message || 'Не удалось загрузить картинку', 'err');
+    } finally {
+      pickBtn.disabled = false;
+    }
   };
-  body.querySelector('[data-clear]')?.addEventListener('click', () => apply(null));
+  const clearBtn = body.querySelector('[data-clear]');
+  if (clearBtn) clearBtn.onclick = () => apply(null);
 }
 
 function openPinEditor(user, done) {
