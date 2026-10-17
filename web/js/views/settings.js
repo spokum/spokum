@@ -41,7 +41,11 @@ const THEMES = [
   ['mist', 'Туман', 'linear-gradient(140deg,#1a1d22,#3a3f47)', '#e8eaed', false],
   ['coral', 'Коралл', 'linear-gradient(140deg,#1f1410,#4a2820)', '#f0c4b8', false],
   ['steel', 'Сталь', 'linear-gradient(140deg,#12161a,#2a323a)', '#c8d4dc', false],
-  ['halloween', 'Хэллоуин', 'linear-gradient(140deg,#1a0a00,#3a1500)', '#e8a030', false]
+  ['halloween', 'Хэллоуин', 'linear-gradient(140deg,#1a0a00,#3a1500)', '#e8a030', false],
+  ['midnight', 'Полночь', 'linear-gradient(140deg,#050010,#150525)', '#c0a0ff', false],
+  ['ocean', 'Океан', 'linear-gradient(140deg,#001a2a,#003355)', '#80d0ff', false],
+  ['forest2', 'Тёмный лес', 'linear-gradient(140deg,#050a05,#0a1a0a)', '#90c090', false],
+  ['cherry', 'Сакура ночь', 'linear-gradient(140deg,#1a0a14,#3a1528)', '#ff9ab0', false]
 ];
 
 const ACCENTS = [

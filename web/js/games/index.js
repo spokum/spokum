@@ -6275,6 +6275,20 @@ export const GAMES = [
     desc: 'Лови призраков, не дай им коснуться тебя',
     tint: ['#0a0a14', '#141420'],
     mount: ghost
+  },
+  {
+    id: 'catchFall',
+    title: 'Ловец',
+    desc: 'Лови хорошие предметы, избегай плохих',
+    tint: ['#0a0a1a', '#141430'],
+    mount: catchFall
+  },
+  {
+    id: 'tapRhythm',
+    title: 'Ритм-тап',
+    desc: 'Тапай по кругам в ритме, не промахивайся',
+    tint: ['#100a1a', '#1a1030'],
+    mount: tapRhythm
   }
 ];
 
@@ -6773,6 +6787,93 @@ function ghost(canvas, report) {
         ctx.fillStyle = '#e8a030'; ctx.beginPath(); ctx.arc(s.x*w, s.y*h, 12, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.x*w-4, s.y*h-2, 3, 0, Math.PI*2); ctx.arc(s.x*w+4, s.y*h-2, 3, 0, Math.PI*2); ctx.fill();
         hud(ctx, w, [`Очки ${s.score}`, `Жизни ${s.lives}`]);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function catchFall(canvas, report) {
+  return runner(canvas, () => {
+    let s = { x: 0.5, score: 0, items: [], spawn: 0, dist: 0, over: false, miss: 0, combo: 0 };
+    const reset = () => { s = { x: 0.5, score: 0, items: [], spawn: 0.4, dist: 0, over: false, miss: 0, combo: 0 }; };
+    reset();
+    let target = 0.5;
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        bind('pointermove', (e) => { const r = cv.getBoundingClientRect(); target = Math.max(0.05, Math.min(0.95, ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width)); });
+        bind('pointerdown', () => { if (s.over) reset(); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.dist += dt; s.x += (target - s.x) * Math.min(1, dt * 8);
+        s.spawn -= dt;
+        if (s.spawn <= 0) { s.spawn = Math.max(0.3, 0.8 - s.dist * 0.003); const isBad = Math.random() < 0.25; s.items.push({ x: 0.1 + Math.random() * 0.8, y: -0.05, v: 0.4 + Math.random() * 0.3 + s.dist * 0.003, bad: isBad, r: 0.03 }); }
+        s.items.forEach(i => i.y += i.v * dt);
+        s.items = s.items.filter(i => {
+          if (i.y > 1.1) { if (!i.bad) { s.miss++; s.combo = 0; if (s.miss >= 5) { s.over = true; report(s.score); } } return false; }
+          const dx = i.x - s.x, dy = i.y - 0.85;
+          if (Math.sqrt(dx * dx + dy * dy) < i.r + 0.04) {
+            if (i.bad) { s.miss++; s.combo = 0; if (s.miss >= 5) { s.over = true; report(s.score); } }
+            else { s.combo++; s.score += 10 + s.combo * 2; }
+            return false;
+          }
+          return true;
+        });
+      },
+      draw(ctx, size) {
+        const { w, h } = size; backdrop(ctx, w, h, ['#0a0a1a', '#141430']);
+        s.items.forEach(i => { ctx.fillStyle = i.bad ? '#c93030' : '#50d878'; ctx.beginPath(); ctx.arc(i.x * w, i.y * h, i.r * w, 0, Math.PI * 2); ctx.fill(); });
+        ctx.fillStyle = '#e8c46a'; ctx.beginPath(); ctx.moveTo(s.x * w, h * 0.85 - 15); ctx.lineTo(s.x * w + 20, h * 0.85 + 10); ctx.lineTo(s.x * w - 20, h * 0.85 + 10); ctx.closePath(); ctx.fill();
+        hud(ctx, w, [`Очки ${s.score}`, `Комбо ${s.combo}`, `Промахи ${s.miss}/5`]);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function tapRhythm(canvas, report) {
+  return runner(canvas, () => {
+    let s = { score: 0, targets: [], spawn: 0, dist: 0, over: false, miss: 0, combo: 0 };
+    const reset = () => { s = { score: 0, targets: [], spawn: 0.6, dist: 0, over: false, miss: 0, combo: 0 }; };
+    reset();
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        bind('pointerdown', (e) => {
+          if (s.over) { reset(); return; }
+          const r = cv.getBoundingClientRect();
+          const x = ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width;
+          const y = ((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height;
+          let hit = false;
+          s.targets = s.targets.filter(t => {
+            const dx = t.x - x, dy = t.y - y;
+            if (Math.sqrt(dx * dx + dy * dy) < t.r + 0.05 && !hit) { hit = true; s.combo++; s.score += 15 + s.combo * 3; return false; }
+            return true;
+          });
+          if (!hit) { s.combo = 0; s.miss++; if (s.miss >= 7) { s.over = true; report(s.score); } }
+        });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.dist += dt; s.spawn -= dt;
+        if (s.spawn <= 0) { s.spawn = Math.max(0.35, 0.8 - s.dist * 0.004); s.targets.push({ x: 0.1 + Math.random() * 0.8, y: 0.15 + Math.random() * 0.7, r: 0.05, life: 1.2, color: ['#50d878','#e8c46a','#7fa8e8','#d8a8e8'][Math.floor(Math.random()*4)] }); }
+        s.targets.forEach(t => t.life -= dt);
+        const expired = s.targets.filter(t => t.life <= 0);
+        if (expired.length) { s.miss += expired.length; s.combo = 0; }
+        s.targets = s.targets.filter(t => t.life > 0);
+        if (s.miss >= 7) { s.over = true; report(s.score); }
+      },
+      draw(ctx, size) {
+        const { w, h } = size; backdrop(ctx, w, h, ['#100a1a', '#1a1030']);
+        s.targets.forEach(t => {
+          const a = Math.min(1, t.life); const r = t.r * w * (1 + (1 - a) * 0.5);
+          ctx.strokeStyle = t.color; ctx.globalAlpha = a; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2); ctx.stroke();
+          ctx.fillStyle = t.color; ctx.globalAlpha = a * 0.3; ctx.beginPath(); ctx.arc(t.x * w, t.y * h, r * 0.6, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+        hud(ctx, w, [`Очки ${s.score}`, `Комбо ${s.combo}`, `Промахи ${s.miss}/7`]);
         if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
       }
     };

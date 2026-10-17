@@ -44,6 +44,7 @@ export async function openAIChat() {
           <div class="tiny muted" id="ai-status">Онлайн</div>
         </div>
         <button class="btn btn-sm" id="ai-clear" style="padding:4px 8px;font-size:11px">Очистить</button>
+        <div class="tiny muted" id="ai-tokens" style="font-size:10px;min-width:60px;text-align:right">0 токенов</div>
       </div>
       <div id="ai-messages" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:300px"></div>
       <div style="padding:8px 12px;background:var(--bg-2);border-top:1px solid var(--line);flex-shrink:0">
@@ -64,6 +65,8 @@ export async function openAIChat() {
 
   let history = loadHistory();
   let busy = false;
+  let totalTokens = 0;
+  const tokensEl = host.querySelector('#ai-tokens');
 
   const addMessage = (role, text, animate = false) => {
     const isUser = role === 'user';
@@ -135,6 +138,9 @@ export async function openAIChat() {
       addMessage('assistant', reply, true);
       history.push({ role: 'assistant', content: reply });
       saveHistory(history);
+      const tokens = data.usage?.total_tokens || 0;
+      totalTokens += tokens;
+      tokensEl.textContent = `${totalTokens} токенов`;
       statusEl.textContent = 'Онлайн';
       statusEl.style.color = 'var(--muted)';
     } catch (e) {
