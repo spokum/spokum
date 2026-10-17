@@ -2377,3 +2377,12 @@ body.still *::after {
   --glow-2: rgba(200,100,30,.07);
   --glow: .55;
 }
+
+.gift-limited {
+  border-color: rgba(201,48,48,.3) !important;
+  box-shadow: 0 0 12px rgba(201,48,48,.15);
+}
+.gift-limited:hover {
+  border-color: rgba(201,48,48,.5) !important;
+  box-shadow: 0 0 20px rgba(201,48,48,.25);
+}
