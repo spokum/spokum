@@ -102,6 +102,10 @@ function teardown(reason) {
   const call = active;
   active = null;
   clearInterval(call.timer);
+  if (call.iceDisconnectTimer) {
+    clearTimeout(call.iceDisconnectTimer);
+    call.iceDisconnectTimer = null;
+  }
   call.stopRing?.();
   call.stream?.getTracks().forEach((track) => track.stop());
   call.remoteStream?.getTracks().forEach((track) => track.stop());
@@ -150,6 +154,32 @@ function wire(call) {
     api.callSignal?.(call.chatId, call.peer.id, 'ice', { candidate: event.candidate.toJSON() }).catch(() => {});
   };
 
+  // Grace period for ICE disconnect — peer might be temporarily unreachable
+  const ICE_GRACE = 4000;
+
+  pc.oniceconnectionstatechange = () => {
+    const st = pc.iceConnectionState;
+    // Clear any pending disconnect timer if ICE recovers
+    if (call.iceDisconnectTimer) {
+      clearTimeout(call.iceDisconnectTimer);
+      call.iceDisconnectTimer = null;
+    }
+    if (st === 'disconnected') {
+      // Peer likely hung up or network dropped — wait briefly, then end
+      status.textContent = 'Соединение потеряно…';
+      call.iceDisconnectTimer = setTimeout(() => {
+        const cur = pc.iceConnectionState;
+        if (cur === 'disconnected' || cur === 'closed' || cur === 'failed') {
+          call.notifySide = false; // peer already ended, don't re-send
+          teardown('Собеседник завершил звонок');
+        }
+      }, ICE_GRACE);
+    } else if (st === 'closed' || st === 'failed') {
+      call.notifySide = false;
+      teardown('Собеседник завершил звонок');
+    }
+  };
+
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'connected') {
       call.stopRing?.();
@@ -163,7 +193,15 @@ function wire(call) {
       view.querySelector('.call-body').classList.toggle('shrink', call.withVideo);
     }
     if (pc.connectionState === 'failed') teardown('Связь не установилась');
-    if (pc.connectionState === 'disconnected') status.textContent = 'Связь пропала';
+    // Don't tear down on 'disconnected' here — ICE handler above manages it with a grace period.
+    // Just update the label so the user sees something is wrong.
+    if (pc.connectionState === 'disconnected' && call.connectedAt) {
+      status.textContent = 'Связь пропала…';
+    }
+    if (pc.connectionState === 'closed' && call.connectedAt) {
+      call.notifySide = false;
+      teardown('Звонок завершён');
+    }
   };
 
   view.querySelector('[data-mic]').onclick = (event) => {
@@ -373,7 +411,9 @@ export function initCalls() {
 
   const check = async () => {
     if (!state.user || !api.callInbox) return;
-    if (document.hidden) return;
+    // Keep polling even when tab is hidden IF a call is active —
+    // the user needs to know immediately when the peer hangs up.
+    if (document.hidden && !active && !pending) return;
     try {
       const { signals } = await api.callInbox(lastSignal);
       for (const signal of signals) await handle(signal);
@@ -383,7 +423,13 @@ export function initCalls() {
   const pace = () => {
     clearInterval(poller);
     const alive = live || api.realtimeUp?.();
-    const gap = document.hidden ? 45000 : alive ? 20000 : 7000;
+    // Poll fast (3s) while a call is active so hang-up signals arrive promptly.
+    // Otherwise scale by visibility and realtime status.
+    let gap;
+    if (active || pending) gap = 3000;
+    else if (document.hidden) gap = 45000;
+    else if (alive) gap = 20000;
+    else gap = 7000;
     poller = setInterval(check, gap);
   };
 
