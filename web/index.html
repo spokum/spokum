@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="theme-color" content="#101318">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -22,6 +25,15 @@
 </head>
 <body>
 <div id="app"></div>
+<!-- Version indicator: if you see "v15" in the corner, you have the latest version.
+     If you don't see it, your browser is serving a stale cached version. -->
+<div id="version-stamp" style="position:fixed;bottom:2px;left:2px;font-size:9px;color:rgba(255,255,255,.15);pointer-events:none;z-index:9999;font-family:monospace">v15-nocache</div>
+<script>
+  // === VERSION CHECK ===
+  // This runs IMMEDIATELY. If the page is stale (served by old Service Worker),
+  // this version stamp won't be present and the page will look wrong.
+  window.__SPOKUM_VERSION__ = 'v15-nocache';
+</script>
 <script>
   (function () {
     var root = document.documentElement;
@@ -34,8 +46,43 @@
     }
   })();
 </script>
-<script src="config.js"></script>
-<script src="vendor/client.js"></script>
-<script type="module" src="js/app.js"></script>
+<script>
+  // === NUCLEAR CACHE BUSTER ===
+  // If the user's browser has a stale version (from old Service Worker), force a reload
+  // with a unique URL query so the SW cache misses and fresh files are loaded.
+  (function () {
+    var REQUIRED = '20251018-final';
+    try {
+      var current = localStorage.getItem('spokum.build');
+      // If build mismatch OR no cache-bust query in URL → reload with fresh query
+      if (current !== REQUIRED || !/[?&]fresh=/.test(location.search)) {
+        localStorage.setItem('spokum.build', REQUIRED);
+        // Build fresh URL: keep path, replace query with fresh timestamp
+        var fresh = '/?fresh=' + Date.now();
+        // Use replace so we don't add to history
+        location.replace(fresh);
+        return;
+      }
+    } catch (e) {}
+  })();
+</script>
+<script>
+  // === AGGRESSIVE CACHE BUSTING ===
+  // 1. Unregister ALL service workers immediately (before app.js loads).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      regs.forEach(function (r) { r.unregister(); });
+    }).catch(function () {});
+  }
+  // 2. Clear all Cache API storage.
+  if ('caches' in window) {
+    caches.keys().then(function (keys) {
+      keys.forEach(function (k) { caches.delete(k); });
+    }).catch(function () {});
+  }
+</script>
+<script src="config.js?v=20251018"></script>
+<script src="vendor/client.js?v=20251018"></script>
+<script type="module" src="js/app.js?v=20251018"></script>
 </body>
 </html>

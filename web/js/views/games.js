@@ -1,4 +1,4 @@
-import { api, state, isPremium } from '../store.js';
+import { api, state, isPremium, isBeta } from '../store.js';
 import { GAMES } from '../games/index.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
@@ -21,10 +21,11 @@ export async function render(root) {
 
   const grid = root.querySelector('[data-grid]');
   const paid = isPremium(state.user);
-  const shown = [...GAMES].sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
+  const beta = isBeta(state.user);
+  const shown = [...GAMES].sort((a, b) => Number(!!b.premium) - Number(!!a.premium) || Number(!!b.silver) - Number(!!a.silver));
   shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
-    const locked = !!game.premium && !paid;
+    const locked = (!!game.premium && !paid) || (!!game.silver && !beta);
     const card = el(`
       <button class="game-card appear${locked ? ' locked' : ''}">
         <div class="art" style="background:linear-gradient(150deg,${game.tint[0]},${game.tint[1]})"></div>
@@ -32,7 +33,7 @@ export async function render(root) {
         <div class="row" style="position:relative;margin-bottom:auto;color:#eef2fb;opacity:.9">
           ${icon(locked ? 'lock' : 'play', 22)}
           <div class="spacer"></div>
-          ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>Премиум</span></span>` : ''}
+          ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>Премиум</span></span>` : (game.silver ? `<span class="game-pro" style="background:linear-gradient(135deg,#c0a0ff,#8060d0)">${icon('star', 11)}<span>Silver</span></span>` : '')}
         </div>
         <div class="label" style="color:#eef2fb">${esc(game.title)}</div>
         <div class="desc">${esc(game.desc)}</div>
@@ -40,8 +41,12 @@ export async function render(root) {
       </button>`);
     card.onclick = async () => {
       if (!locked) return launch(game, () => render(root));
+      if (game.silver && !beta) {
+        toast('Игра пока доступна только для @silver', 'err');
+        return;
+      }
       toast('Игра открыта по подписке СпокУм Премиум', 'err');
-      const { openBilling } = await import('./settings.js');
+      const { openBilling } = await import('./settings.js?v=20251018');
       openBilling?.();
     };
     grid.appendChild(card);
@@ -70,6 +75,10 @@ export async function render(root) {
 }
 
 function launch(game, done) {
+  try {
+    const current = Number(localStorage.getItem('spokum.gamesPlayed')) || 0;
+    localStorage.setItem('spokum.gamesPlayed', String(current + 1));
+  } catch {}
   const stage = el(`
     <div class="game-stage">
       <header>
@@ -105,7 +114,7 @@ function launch(game, done) {
         const purse = await api.grantCoins(earned, `Игра: ${game.title}`);
         if (purse?.added > 0) {
           toast(`+${purse.added} монет`);
-          const { setUser } = await import('../store.js');
+          const { setUser } = await import('../store.js?v=20251018');
           const { user } = await api.me();
           if (user) setUser(user);
         }

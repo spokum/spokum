@@ -24,17 +24,29 @@ export async function initBackend() {
 
   if (supabaseUrl && supabaseKey) {
     if (backend.mode === 'supabase') return backend.mode;
-    
-    
+
     if (starting) return starting;
     starting = (async () => {
       try {
-        const { createBackend } = await import('./backend/remote-db.js');
+        // Quick health check — if the server is unreachable, fall back to local mode
+        // so the app still works (offline mode with browser storage).
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const healthResp = await fetch(supabaseUrl + '/rest/v1/', {
+          headers: { apikey: supabaseKey },
+          signal: controller.signal
+        }).catch(() => null);
+        clearTimeout(timeout);
+        if (!healthResp) {
+          console.warn('[СпокУм] Сервер недоступен — работаем в локальном режиме');
+          return backend.mode; // stays 'local'
+        }
+        const { createBackend } = await import('./backend/remote-db.js?v=20251018');
         const made = await createBackend(supabaseUrl, supabaseKey);
         if (backend.mode !== 'supabase') backend = made;
         return backend.mode;
       } catch (error) {
-        console.error(error);
+        console.error('[СпокУм] Backend init failed, staying local:', error.message);
         return backend.mode;
       } finally {
         starting = null;
@@ -65,7 +77,7 @@ export function forget(key) {
 
 export function isBeta(user) {
   const who = user || state.user;
-  return !!(who && (who.isBeta || who.username === 'silver'));
+  return !!(who && (who.isBeta || who.username === 'silver' || localStorage.getItem('spokum.debugBeta') === '1'));
 }
 
 export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];

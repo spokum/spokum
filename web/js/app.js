@@ -14,12 +14,12 @@ const TABS = [
 ];
 
 const views = {
-  feed: () => import('./views/feed.js'),
-  videos: () => import('./views/videos.js'),
-  chats: () => import('./views/chats.js'),
-  games: () => import('./views/games.js'),
-  settings: () => import('./views/settings.js'),
-  profile: () => import('./views/profile.js')
+  feed: () => import('./views/feed.js?v=20251018'),
+  videos: () => import('./views/videos.js?v=20251018'),
+  chats: () => import('./views/chats.js?v=20251018'),
+  games: () => import('./views/games.js?v=20251018'),
+  settings: () => import('./views/settings.js?v=20251018'),
+  profile: () => import('./views/profile.js?v=20251018')
 };
 
 const root = document.getElementById('app');
@@ -83,12 +83,11 @@ function watchNetwork() {
 
 const IN_APP = location.hostname === 'spokum.local' || location.hostname === 'appassets.androidplatform.net';
 
-const REQUIRED_SW_VERSION = 'spokum-v93';
+const REQUIRED_SW_VERSION = 'spokum-v100-halloween';
 
 async function purgeStaleWorker() {
   if (!('serviceWorker' in navigator)) return;
-  if (sessionStorage.getItem('spokum.sw.purged')) return;
-  sessionStorage.setItem('spokum.sw.purged', '1');
+  // Always unregister — no "once per session" gate. SW caches were breaking updates.
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const reg of registrations) {
@@ -205,7 +204,7 @@ function guardHistory() {
     }
     if (window.SpokumHost || Date.now() - leaveHint > 2500) {
       leaveHint = Date.now();
-      import('./ui.js').then(({ toast }) => toast('Ещё раз назад, чтобы выйти')).catch(() => {});
+      import('./ui.js?v=20251018').then(({ toast }) => toast('Ещё раз назад, чтобы выйти')).catch(() => {});
       try {
         history.pushState({ spokum: 'guard' }, '');
       } catch {}
@@ -218,7 +217,7 @@ function guardHistory() {
 async function checkDevice(fresh) {
   if (!api.touchDevice) return false;
   try {
-    const { deviceInfo, rememberBlock } = await import('./device.js');
+    const { deviceInfo, rememberBlock } = await import('./device.js?v=20251018');
     const info = await deviceInfo();
     const { state: ban } = await api.touchDevice(info, fresh);
     rememberBlock(ban);
@@ -315,11 +314,21 @@ async function boot() {
   applyAppearance(null);
   await detectLogo();
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
-  registerWorker();
+  // Service Worker disabled — it was caching stale JS files and users couldn't see updates.
+  purgeStaleWorker();
+  // Nuclear option: aggressively nuke any AI chat button that might appear from stale cache.
+  // This runs continuously and removes [data-ai-chat] from the DOM if it ever shows up.
+  const nukeAI = () => {
+    document.querySelectorAll('[data-ai-chat]').forEach((el) => el.remove());
+  };
+  nukeAI();
+  setInterval(nukeAI, 1000);
+  // Also nuke when DOM changes
+  new MutationObserver(nukeAI).observe(document.body, { childList: true, subtree: true });
   watchNetwork();
   watchSwipes();
   guardHistory();
-  import('./views/settings.js').then((module) => {
+  import('./views/settings.js?v=20251018').then((module) => {
     module.applyNight?.();
     module.applyComfort?.();
     setInterval(() => module.applyNight?.(), 300000);
@@ -361,7 +370,7 @@ async function boot() {
     networkBar();
     setInterval(bringBackSession, 30000);
   }
-  const { pinOn, askPin } = await import('./pin.js');
+  const { pinOn, askPin } = await import('./pin.js?v=20251018');
   if (pinOn()) {
     const ok = await askPin(root);
     if (!ok) {
@@ -390,7 +399,7 @@ function checkPixelBattle() {
     document.body.appendChild(banner);
     document.body.style.paddingTop = '40px';
     banner.querySelector('[data-pixel-go]').onclick = async () => {
-      const { openPixelBattle } = await import('./views/pixel-battle.js');
+      const { openPixelBattle } = await import('./views/pixel-battle.js?v=20251018');
       openPixelBattle();
     };
     banner.querySelector('[data-pixel-close]').onclick = () => {
@@ -419,12 +428,12 @@ function start() {
   openTab(state.tab || 'feed');
   connectSocket();
   askJournal();
-  import('./call.js').then((module) => module.initCalls()).catch(() => {});
-  import('./views/notifications.js').then((module) => {
+  import('./call.js?v=20251018').then((module) => module.initCalls()).catch(() => {});
+  import('./views/notifications.js?v=20251018').then((module) => {
     module.refreshBell();
     setTimeout(() => module.offerNotifications?.(), 4000);
   }).catch(() => {});
-  import('./accounts.js').then((module) => module.rememberCurrent()).catch(() => {});
+  import('./accounts.js?v=20251018').then((module) => module.rememberCurrent()).catch(() => {});
   if (api.tidyProfile) {
     setTimeout(() => {
       api.tidyProfile()
@@ -440,7 +449,7 @@ function start() {
 async function askJournal() {
   if (!state.user || !navigator.onLine) return;
   try {
-    const journal = await import('./views/journal.js');
+    const journal = await import('./views/journal.js?v=20251018');
     if (!(await journal.shouldAskToday())) return;
     setTimeout(() => journal.openJournal(), 1200);
   } catch {}
@@ -517,7 +526,7 @@ async function openTab(tab) {
   window.__spokum = { openTab };
   const host = shell.querySelector('[data-view]');
   if (state.user && navigator.onLine) {
-    const { loadStories } = await import('./views/stories.js');
+    const { loadStories } = await import('./views/stories.js?v=20251018');
     await Promise.race([loadStories(), new Promise((done) => setTimeout(done, 4000))]);
   }
   shell.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
@@ -531,7 +540,7 @@ async function openTab(tab) {
     host.innerHTML = `<div class="empty">${error.message}</div>`;
   }
   try {
-    const bell = await import('./views/notifications.js');
+    const bell = await import('./views/notifications.js?v=20251018');
     bell.mountBell(host, tab);
     if (Date.now() - bellAt > 20000) {
       bellAt = Date.now();
@@ -610,7 +619,7 @@ document.addEventListener('click', async (event) => {
   if (!shot || !shot.src) return;
   event.preventDefault();
   event.stopPropagation();
-  const { openLightbox } = await import('./ui.js');
+  const { openLightbox } = await import('./ui.js?v=20251018');
   const group = shot.closest('[data-album]');
   if (group) {
     const all = [...group.querySelectorAll('img')].map((node) => node.dataset.full || node.src);
@@ -626,7 +635,7 @@ window.addEventListener('spokum:message', () => {
 });
 
 window.addEventListener('spokum:notify', async (event) => {
-  const bell = await import('./views/notifications.js');
+  const bell = await import('./views/notifications.js?v=20251018');
   const item = event.detail || {};
   if (!bell.markShown(item.id)) return;
   bell.bumpBell();
@@ -650,7 +659,7 @@ async function pullNews() {
     } catch {}
   }
   try {
-    const bell = await import('./views/notifications.js');
+    const bell = await import('./views/notifications.js?v=20251018');
     await bell.pullNotifications();
   } catch {}
   if (Date.now() - unreadAt > 45000) {

@@ -93,7 +93,8 @@ const paths = {
   volume: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5M18.5 6.5a8 8 0 0 1 0 11"/>',
   cam_off: '<path d="M2 6h11v12H5a3 3 0 0 1-3-3z"/><path d="M15 10.5l7-3.5v10l-4-2"/><path d="M3 3l18 18"/>',
   download: '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>',
-  switch_cam: '<circle cx="12" cy="13" r="4"/><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H8l1.5-2h5L16 6h2.5A2.5 2.5 0 0 1 21 8.5V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+  switch_cam: '<circle cx="12" cy="13" r="4"/><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H8l1.5-2h5L16 6h2.5A2.5 2.5 0 0 1 21 8.5V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
 };
 
 let logoSource = null;

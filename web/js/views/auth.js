@@ -55,13 +55,14 @@ async function probe(label, run) {
 }
 
 export async function runDiagnostics() {
-  const { openSheet } = await import('../ui.js');
+  const { openSheet } = await import('../ui.js?v=20251018');
   const body = el('<div class="col"><div class="small muted center">Проверяем</div></div>');
   openSheet('Проверка связи', body);
 
   const url = String(window.SPOKUM_SUPABASE_URL || '').replace(/\/$/, '');
   const key = window.SPOKUM_SUPABASE_KEY || '';
   const results = [];
+  let serverDown = false;
 
   results.push({
     label: 'Настройки приложения',
@@ -86,6 +87,8 @@ export async function runDiagnostics() {
       const response = await fetch(`${url}/auth/v1/health`, { headers: { apikey: key } });
       return response.ok ? 'отвечает' : `не отвечает, код ${response.status}`;
     }));
+    // If server check failed, mark for the local-mode notice
+    if (!results[results.length - 1].ok) serverDown = true;
 
     results.push(await probe('Данные', async () => {
       const response = await fetch(`${url}/rest/v1/profiles?select=id&limit=1`, {
@@ -131,7 +134,21 @@ export async function runDiagnostics() {
           </div>
         </div>`).join('')}
     </div>
-    <p class="tiny muted" style="margin:4px 0 0">Если сервер не отвечает, попробуйте позже или напишите администратору.</p>`;
+    ${serverDown ? `
+      <div class="card" style="padding:12px;border-color:rgba(232,160,48,.3);background:rgba(232,160,48,.05);margin-top:8px">
+        <div class="row" style="gap:8px">
+          <span style="color:#e8a030">${icon('warn', 18)}</span>
+          <div class="grow">
+            <div class="small strong" style="color:#e8a030">Сервер недоступен</div>
+            <div class="tiny muted" style="margin-top:4px;line-height:1.5">
+              Приложение переключилось в <b>локальный режим</b> — все данные хранятся в этом браузере.
+              Вы можете регистрироваться, писать посты, играть и пользоваться всеми функциями.
+              Когда сервер снова станет доступен, данные можно будет синхронизировать.
+            </div>
+          </div>
+        </div>
+      </div>` : ''}
+    <p class="tiny muted" style="margin:4px 0 0">Если сервер не отвечает — приложение работает локально. Регистрируйтесь и пользуйтесь.</p>`;
 }
 
 export function renderAuth(root, done) {
@@ -175,7 +192,7 @@ export function renderAuth(root, done) {
       ${mode === 'register' ? '<p class="tiny muted center" style="margin:0;line-height:1.6">Создавая аккаунт, вы принимаете <a href="/offer.html" target="_blank" class="link-btn">пользовательское соглашение</a>, <a href="/privacy.html" target="_blank" class="link-btn">политику конфиденциальности</a> и <a href="/consent.html" target="_blank" class="link-btn">согласие на обработку данных</a></p>' : ''}`;
 
     form.querySelector('[data-rules]')?.addEventListener('click', async () => {
-      const { openRules } = await import('./rules.js');
+      const { openRules } = await import('./rules.js?v=20251018');
       openRules();
     });
 
@@ -220,7 +237,7 @@ export function renderAuth(root, done) {
           } catch {}
         }
         try {
-          const { deviceInfo, rememberBlock } = await import('../device.js');
+          const { deviceInfo, rememberBlock } = await import('../device.js?v=20251018');
           const info = await deviceInfo();
           const { state: ban } = await api.touchDevice(info, mode === 'register');
           rememberBlock(ban);
@@ -233,7 +250,7 @@ export function renderAuth(root, done) {
           }
         } catch {}
         try {
-          const { rememberCurrent } = await import('../accounts.js');
+          const { rememberCurrent } = await import('../accounts.js?v=20251018');
           await rememberCurrent();
         } catch {}
         done();

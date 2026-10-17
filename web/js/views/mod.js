@@ -168,7 +168,7 @@ async function drawReels(body) {
           </div>
         </div>`);
       card.querySelector('[data-watch]').onclick = async () => {
-        const { openVideo } = await import('./videos.js');
+        const { openVideo } = await import('./videos.js?v=20251018');
         openVideo(post);
       };
       card.querySelector('[data-author]').onclick = () => openProfile(post.author.username);
@@ -506,7 +506,7 @@ async function drawReports(body) {
       </div>`);
     card.querySelector('[data-punish]')?.addEventListener('click', () => openPunish(report.target, () => drawReports(body)));
     card.querySelector('[data-cut]')?.addEventListener('click', async () => {
-      const { promptSheet } = await import('../ui.js');
+      const { promptSheet } = await import('../ui.js?v=20251018');
       const reason = await promptSheet({ title: 'Причина снятия', label: 'Её увидят автор и админ', placeholder: 'Например: оскорбление', multiline: true });
       if (!reason) return;
       try {
@@ -574,7 +574,7 @@ async function drawAppeals(body) {
     </div>`);
 
     const judge = async (verdict) => {
-      const { promptSheet } = await import('../ui.js');
+      const { promptSheet } = await import('../ui.js?v=20251018');
       const note = await promptSheet({
         title: verdict === 'accept' ? 'Снять наказание' : 'Оставить наказание',
         label: 'Что написать человеку',

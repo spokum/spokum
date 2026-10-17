@@ -192,7 +192,19 @@ export const GIFT_TYPES = [
   { id: 'acorn', title: 'Жёлудь', price: 70, rarity: 'common', art: 'acorn', hue: 32, season: 'autumn' },
   { id: 'maple', title: 'Кленовый лист', price: 130, rarity: 'rare', art: 'maple', hue: 18, season: 'autumn' },
   { id: 'plaid', title: 'Тёплый плед', price: 260, rarity: 'epic', art: 'plaid', hue: 8, season: 'autumn' },
-  { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' }
+  { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' },
+  // Новые лимитированные подарки (чистые версии — заменяют "LIMITED: ..." из удалённой БД)
+  { id: 'phoenix', title: 'Феникс', price: 2500, rarity: 'legend', art: 'phoenix', hue: 18, isLimited: true },
+  { id: 'dragon', title: 'Дракон', price: 2200, rarity: 'legend', art: 'dragon', hue: 280, isLimited: true },
+  { id: 'unicorn', title: 'Единорог', price: 1800, rarity: 'legend', art: 'unicorn', hue: 320, isLimited: true },
+  // Новые подарки (не дублируют remote)
+  { id: 'rose', title: 'Алая роза', price: 650, rarity: 'epic', art: 'rose', hue: 350, isLimited: true },
+  { id: 'trophy', title: 'Кубок', price: 1000, rarity: 'legend', art: 'trophy', hue: 45 },
+  { id: 'hourglass', title: 'Песочные часы', price: 550, rarity: 'epic', art: 'hourglass', hue: 40 },
+  { id: 'key', title: 'Золотой ключ', price: 380, rarity: 'epic', art: 'key', hue: 50 },
+  { id: 'cat', title: 'Котик', price: 240, rarity: 'rare', art: 'cat', hue: 30 },
+  { id: 'candy', title: 'Конфета', price: 50, rarity: 'common', art: 'candy', hue: 320 },
+  { id: 'heart_hands', title: 'Руки с сердцем', price: 340, rarity: 'rare', art: 'heart_hands', hue: 350, isLimited: true }
 ];
 
 const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];

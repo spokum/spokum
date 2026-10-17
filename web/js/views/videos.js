@@ -418,7 +418,7 @@ function pulse(node) {
 }
 
 async function openReelComments(post, node) {
-  const { openComments } = await import('./feed.js');
+  const { openComments } = await import('./feed.js?v=20251018');
   openComments(post, () => {
     node.querySelector('[data-comment] span').textContent = post.comments;
   });
@@ -441,12 +441,12 @@ function openReelMenu(post, node, stage) {
   const sheet = openSheet('', body);
   body.querySelector('[data-send]').onclick = async () => {
     sheet.close();
-    const { sendPostToChat } = await import('./chats.js');
+    const { sendPostToChat } = await import('./chats.js?v=20251018');
     sendPostToChat(post);
   };
   body.querySelector('[data-repost]').onclick = async () => {
     sheet.close();
-    const { promptSheet } = await import('../ui.js');
+    const { promptSheet } = await import('../ui.js?v=20251018');
     const note = await promptSheet({ title: 'Репост', label: 'Подпись, если хотите', placeholder: 'Можно оставить пустым', multiline: true, confirm: 'Репостнуть' });
     if (note === null) return;
     try {
@@ -474,15 +474,15 @@ function openReelMenu(post, node, stage) {
   };
   body.querySelector('[data-report]').onclick = async () => {
     sheet.close();
-    const { openReport } = await import('./feed.js');
+    const { openReport } = await import('./feed.js?v=20251018');
     openReport('post', post.id);
   };
   body.querySelector('[data-take]')?.addEventListener('click', async () => {
     sheet.close();
-    const { promptSheet } = await import('../ui.js');
+    const { promptSheet } = await import('../ui.js?v=20251018');
     const reason = await promptSheet({ title: 'Причина снятия', label: 'Её увидит админ', placeholder: 'Например: запрещённый контент', multiline: true });
     if (!reason) return;
-    const { askProofShot } = await import('./mod.js');
+    const { askProofShot } = await import('./mod.js?v=20251018');
     const proof = await askProofShot(reason);
     if (!proof) return;
     try {
@@ -526,7 +526,7 @@ export async function publishReel(done) {
 }
 
 async function shootVideo(done) {
-  const { pickVideo } = await import('../ui.js');
+  const { pickVideo } = await import('../ui.js?v=20251018');
   const picked = await pickVideo(isPremium(state.user) ? 180 : 90);
   if (!picked) return;
   openPublisher({
@@ -553,7 +553,7 @@ async function shootAlbum(done) {
     if (!image) break;
     shots.push(image);
     if (shots.length >= limit) break;
-    const { confirmSheet } = await import('../ui.js');
+    const { confirmSheet } = await import('../ui.js?v=20251018');
     if (!(await confirmSheet({ title: `Фото: ${shots.length}`, text: 'Добавить ещё одно?', confirm: 'Добавить' }))) break;
   }
   if (!shots.length) return;
@@ -565,7 +565,7 @@ async function shootAlbum(done) {
     wire(body) {
       const button = body.querySelector('[data-tune]');
       button.onclick = async () => {
-        const { pickAudio } = await import('../ui.js');
+        const { pickAudio } = await import('../ui.js?v=20251018');
         const picked = await pickAudio(isPremium(state.user) ? 120 : 60);
         if (!picked) return;
         tune = picked;

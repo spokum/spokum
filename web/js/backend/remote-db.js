@@ -1,6 +1,8 @@
 const CLIENT_URL = 'https://esm.sh/@supabase/supabase-js@2.45.4';
 const EMAIL_DOMAIN = 'spokum.app';
 
+import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js';
+
 const ms = (value) => (value ? Date.parse(value) : 0);
 const emailFor = (username) => `${username}@${EMAIL_DOMAIN}`;
 
@@ -1451,7 +1453,18 @@ export async function createBackend(url, key) {
     async giftTypes() {
       const { data, error } = await sb.from('gift_types').select('*').order('sort');
       guard(error);
-      return { types: data || [] };
+      // Merge remote gift types with local limited-edition gifts.
+      // Remote DB stores some limited gifts with "LIMITED: " prefix in the title and no isLimited flag.
+      // We drop those ugly remote entries and replace them with clean local versions that have isLimited: true.
+      const rawRemote = data || [];
+      const remote = rawRemote.filter((g) => !/^LIMITED\s*:/i.test(g.title || ''));
+      // Build dedupe sets from the cleaned remote list
+      const seenIds = new Set(remote.map((g) => g.id));
+      const seenTitles = new Set(remote.map((g) => (g.title || '').toLowerCase().trim()));
+      const localOnly = LOCAL_GIFT_TYPES.filter((g) =>
+        !seenIds.has(g.id) && !seenTitles.has((g.title || '').toLowerCase().trim())
+      );
+      return { types: [...remote, ...localOnly] };
     },
 
     async gifts(userId) {

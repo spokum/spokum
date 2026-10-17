@@ -54,7 +54,7 @@ export async function openSearch(initialQuery = '') {
       }
       if (!html) html = emptyState('search', 'Ничего не найдено', 'Попробуйте другой запрос');
       results.innerHTML = html;
-      results.querySelectorAll('[data-user]').forEach((el) => { el.onclick = () => { import('./profile.js').then(m => m.openProfile(el.dataset.user)); }; });
+      results.querySelectorAll('[data-user]').forEach((el) => { el.onclick = () => { import('./profile.js?v=20251018').then(m => m.openProfile(el.dataset.user)); }; });
     } catch (e) { results.innerHTML = emptyState('warn', 'Ошибка', e.message); }
   };
 

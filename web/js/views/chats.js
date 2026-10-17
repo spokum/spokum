@@ -16,14 +16,6 @@ export async function render(root) {
       <div class="spacer"></div>
       <button class="btn btn-icon" data-new title="Создать">${icon('plus', 18)}</button>
     </div>
-    ${state.user?.username === 'silver' ? `<button class="card list-item" data-ai-chat style="padding:12px;margin-bottom:8px;border-color:rgba(184,230,201,.2)">
-      <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon('spark', 20)}</div>
-      <div class="grow" style="text-align:left">
-        <div class="strong small">AI Помощник <span class="pill ok" style="font-size:9px;padding:1px 6px;margin-left:4px">БОТ</span></div>
-        <div class="tiny muted">Поговори с ИИ, обсуди эмоции, получи поддержку</div>
-      </div>
-      ${icon('forward', 16)}
-    </button>` : ''}
     <div class="row" style="margin-bottom:12px">
       <div class="grow" style="position:relative">
         <input class="input" data-search placeholder="Поиск людей по @юзернейму или словам" style="padding-left:42px">
@@ -34,10 +26,6 @@ export async function render(root) {
     <div class="col" data-list style="gap:2px"></div>`;
 
   root.querySelector('[data-new]').onclick = openCreate;
-  root.querySelector('[data-ai-chat]')?.addEventListener('click', async () => {
-    const { openAIChat } = await import('./ai-chat.js');
-    openAIChat();
-  });
   const search = root.querySelector('[data-search]');
   const results = root.querySelector('[data-results]');
   search.addEventListener('input', debounce(async () => {
@@ -205,11 +193,11 @@ export async function openChat(chatId) {
   };
   view.querySelector('[data-menu]').onclick = () => openChatMenu(chat, view);
   view.querySelector('[data-call]')?.addEventListener('click', async () => {
-    const { startCall } = await import('../call.js');
+    const { startCall } = await import('../call.js?v=20251018');
     startCall(chat);
   });
   view.querySelector('[data-video-call]')?.addEventListener('click', async () => {
-    const { startCall } = await import('../call.js');
+    const { startCall } = await import('../call.js?v=20251018');
     startCall(chat, { video: true });
   });
 
@@ -695,7 +683,7 @@ function openChatMenu(chat, view) {
   });
   body.querySelector('[data-report]')?.addEventListener('click', async () => {
     sheet.close();
-    const { openReport } = await import('./feed.js');
+    const { openReport } = await import('./feed.js?v=20251018');
     openReport('user', chat.peer.id);
   });
   body.querySelector('[data-close]').onclick = () => {

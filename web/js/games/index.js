@@ -5933,6 +5933,410 @@ function racer(canvas, report) {
   });
 }
 
+function nebula(canvas, report) {
+  return runner(canvas, () => {
+    let s = { x: 0.5, y: 0.7, dust: [], rocks: [], score: 0, spawn: 0.4, dist: 0, over: false, trail: [] };
+    const reset = () => { s = { x: 0.5, y: 0.7, dust: [], rocks: [], score: 0, spawn: 0.4, dist: 0, over: false, trail: [] }; };
+    reset();
+    let target = { x: 0.5, y: 0.7 };
+    const stars = Array.from({ length: 30 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.4 + 0.3 }));
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        const aim = (e) => { const r = cv.getBoundingClientRect(); target = { x: ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width, y: ((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height }; };
+        bind('pointermove', aim);
+        bind('pointerdown', (e) => { if (s.over) { reset(); return; } aim(e); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.dist += dt;
+        s.x += (target.x - s.x) * Math.min(1, dt * 6);
+        s.y += (target.y - s.y) * Math.min(1, dt * 6);
+        s.trail.push({ x: s.x, y: s.y, life: 0.4 });
+        s.trail.forEach(t => t.life -= dt);
+        s.trail = s.trail.filter(t => t.life > 0);
+        s.spawn -= dt;
+        if (s.spawn <= 0) {
+          s.spawn = Math.max(0.18, 0.55 - s.dist * 0.003);
+          s.dust.push({ x: Math.random(), y: Math.random(), r: 0.018 });
+        }
+        s.dust = s.dust.filter(d => {
+          const dx = d.x - s.x, dy = d.y - s.y;
+          if (Math.sqrt(dx * dx + dy * dy) < d.r + 0.03) { s.score += 1; return false; }
+          return true;
+        });
+        if (Math.random() < dt * (0.5 + s.dist * 0.04)) {
+          const side = Math.floor(Math.random() * 4);
+          const sp = 0.15 + s.dist * 0.005;
+          let x, y, vx, vy;
+          if (side === 0) { x = -0.05; y = Math.random(); vx = sp; vy = (Math.random() - 0.5) * 0.1; }
+          else if (side === 1) { x = 1.05; y = Math.random(); vx = -sp; vy = (Math.random() - 0.5) * 0.1; }
+          else if (side === 2) { x = Math.random(); y = -0.05; vx = (Math.random() - 0.5) * 0.1; vy = sp; }
+          else { x = Math.random(); y = 1.05; vx = (Math.random() - 0.5) * 0.1; vy = -sp; }
+          s.rocks.push({ x, y, vx, vy, r: 0.025 + Math.random() * 0.02, rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 2 });
+        }
+        s.rocks.forEach(r => { r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt; });
+        s.rocks = s.rocks.filter(r => r.x > -0.15 && r.x < 1.15 && r.y > -0.15 && r.y < 1.15);
+        for (const r of s.rocks) {
+          const dx = r.x - s.x, dy = r.y - s.y;
+          if (Math.sqrt(dx * dx + dy * dy) < r.r + 0.022) { s.over = true; report(s.score); break; }
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a0820', '#2a1d5c']);
+        ctx.fillStyle = 'rgba(200,210,255,0.4)';
+        stars.forEach(st => { ctx.beginPath(); ctx.arc(st.x * w, st.y * h, st.s, 0, Math.PI * 2); ctx.fill(); });
+        s.trail.forEach(t => { const a = t.life / 0.4; ctx.fillStyle = `rgba(180,160,255,${a * 0.3})`; ctx.beginPath(); ctx.arc(t.x * w, t.y * h, 10 * a, 0, Math.PI * 2); ctx.fill(); });
+        s.dust.forEach(d => {
+          const r = d.r * w;
+          const grd = ctx.createRadialGradient(d.x * w, d.y * h, 0, d.x * w, d.y * h, r * 2);
+          grd.addColorStop(0, 'rgba(255,240,180,0.95)');
+          grd.addColorStop(1, 'rgba(255,200,120,0)');
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(d.x * w, d.y * h, r * 2, 0, Math.PI * 2); ctx.fill();
+        });
+        s.rocks.forEach(r => {
+          ctx.save();
+          ctx.translate(r.x * w, r.y * h);
+          ctx.rotate(r.rot);
+          ctx.fillStyle = '#5a4a7a';
+          ctx.beginPath();
+          for (let i = 0; i < 7; i++) {
+            const a = (i / 7) * Math.PI * 2;
+            const rad = r.r * w * (0.8 + Math.sin(i * 3.7) * 0.2);
+            ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+          }
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
+        });
+        const grd = ctx.createRadialGradient(s.x * w, s.y * h, 0, s.x * w, s.y * h, 22);
+        grd.addColorStop(0, 'rgba(220,200,255,1)');
+        grd.addColorStop(1, 'rgba(140,100,220,0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.arc(s.x * w, s.y * h, 22, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(s.x * w, s.y * h, 6, 0, Math.PI * 2); ctx.fill();
+        hud(ctx, w, [`Пыль ${s.score}`, `Время ${Math.floor(s.dist)}с`]);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function samurai(canvas, report) {
+  return runner(canvas, () => {
+    let s = { fruits: [], score: 0, spawn: 0.6, dist: 0, over: false, blade: [], combo: 0 };
+    const reset = () => { s = { fruits: [], score: 0, spawn: 0.6, dist: 0, over: false, blade: [], combo: 0 }; };
+    reset();
+    const colors = ['#a8d8a8', '#d8b8a8', '#c8a8d8', '#a8c8d8', '#d8d8a8'];
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        const cut = (e) => {
+          if (s.over) return;
+          const r = cv.getBoundingClientRect();
+          const x = ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width;
+          const y = ((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height;
+          s.blade.push({ x, y, life: 0.2 });
+          let bomb = false;
+          s.fruits = s.fruits.filter(f => {
+            const dx = f.x - x, dy = f.y - y;
+            if (Math.sqrt(dx * dx + dy * dy) > 0.06) return true;
+            if (f.bomb) { bomb = true; return false; }
+            s.combo++; s.score += 1; return false;
+          });
+          if (bomb) { s.over = true; report(s.score); }
+        };
+        bind('pointermove', (e) => { if (e.buttons || e.pointerType === 'touch') cut(e); });
+        bind('pointerdown', (e) => { if (s.over) { reset(); return; } cut(e); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.dist += dt;
+        s.blade.forEach(b => b.life -= dt);
+        s.blade = s.blade.filter(b => b.life > 0);
+        s.spawn -= dt;
+        if (s.spawn <= 0) {
+          s.spawn = Math.max(0.4, 1.0 - s.dist * 0.005);
+          const count = 1 + Math.floor(Math.random() * 2);
+          for (let i = 0; i < count; i++) {
+            s.fruits.push({
+              x: 0.15 + Math.random() * 0.7, y: 1.05,
+              vx: (Math.random() - 0.5) * 0.4, vy: -(0.9 + Math.random() * 0.4),
+              r: 0.04 + Math.random() * 0.02, bomb: Math.random() < 0.18,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              rot: 0, vr: (Math.random() - 0.5) * 4
+            });
+          }
+        }
+        s.fruits.forEach(f => { f.vy += 1.6 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt; });
+        s.fruits = s.fruits.filter(f => f.y < 1.2);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#1a0e1a', '#2c1a2c']);
+        if (s.blade.length > 1) {
+          ctx.lineCap = 'round'; ctx.lineWidth = 3;
+          ctx.beginPath();
+          s.blade.forEach((b, i) => {
+            ctx.globalAlpha = b.life / 0.2;
+            const X = b.x * w, Y = b.y * h;
+            if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+          });
+          ctx.strokeStyle = 'rgba(220,180,255,0.8)';
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        s.fruits.forEach(f => {
+          ctx.save();
+          ctx.translate(f.x * w, f.y * h);
+          ctx.rotate(f.rot);
+          if (f.bomb) {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath(); ctx.arc(0, 0, f.r * w, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#c04040'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = '#e0a040';
+            ctx.beginPath(); ctx.arc(0, -f.r * w * 0.9, 2, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.fillStyle = f.color;
+            ctx.beginPath(); ctx.arc(0, 0, f.r * w, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.beginPath(); ctx.arc(-f.r * w * 0.3, -f.r * w * 0.3, f.r * w * 0.3, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.restore();
+        });
+        hud(ctx, w, [`Срезано ${s.score}`, `Комбо ${s.combo}`]);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function zen(canvas, report) {
+  return runner(canvas, () => {
+    let s = null;
+    const drop = () => {
+      const top = s.stack[s.stack.length - 1];
+      const left = Math.max(s.current.x, top.x);
+      const right = Math.min(s.current.x + s.current.w, top.x + top.w);
+      const newW = right - left;
+      if (newW <= 0.004) { s.over = true; report(s.score); return; }
+      s.stack.push({ x: left, w: newW });
+      s.score += 1;
+      s.current = { x: newW < 0.99 ? (Math.random() < 0.5 ? 0 : 1 - newW) : 0, w: newW, dir: Math.random() < 0.5 ? 1 : -1 };
+      if (s.stack.length > 18) s.stack.shift();
+    };
+    const reset = () => {
+      s = { stack: [], current: { x: 0, w: 0.4, dir: 1 }, score: 0, over: false };
+      s.stack.push({ x: 0.3, w: 0.4 });
+    };
+    reset();
+    const blockH = 0.04;
+    const speed = () => 0.35 + s.score * 0.018;
+    return {
+      score: () => s.score,
+      bind(bind) {
+        bind('pointerdown', () => { if (s.over) { reset(); return; } drop(); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.current.x += s.current.dir * speed() * dt;
+        if (s.current.x < 0) { s.current.x = 0; s.current.dir = 1; }
+        if (s.current.x + s.current.w > 1) { s.current.x = 1 - s.current.w; s.current.dir = -1; }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0e1424', '#1a2440']);
+        const bh = blockH * h;
+        s.stack.forEach((b, i) => {
+          ctx.fillStyle = i === s.stack.length - 1 ? '#8a6fcf' : '#5b4c8c';
+          ctx.fillRect(b.x * w, h - (i + 1) * bh, b.w * w, bh);
+        });
+        if (!s.over) {
+          ctx.fillStyle = '#a8d8e8';
+          const y = h - (s.stack.length + 1) * bh;
+          ctx.fillRect(s.current.x * w, y, s.current.w * w, bh);
+        }
+        hud(ctx, w, [`Высота ${s.score}`, `Ширина ${Math.round(s.current.w * 100)}%`]);
+        if (s.over) overText(ctx, w, h, `Высота ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function glow(canvas, report) {
+  return runner(canvas, () => {
+    const DURATION = 60;
+    let s = null;
+    const addFly = () => {
+      const side = Math.floor(Math.random() * 4);
+      let x, y;
+      if (side === 0) { x = -0.05; y = Math.random(); }
+      else if (side === 1) { x = 1.05; y = Math.random(); }
+      else if (side === 2) { x = Math.random(); y = -0.05; }
+      else { x = Math.random(); y = 1.05; }
+      s.flies.push({ x, y });
+    };
+    const reset = () => {
+      s = { flies: [], jars: [], wasps: [], score: 0, t: 0, flySpawn: 1.5, jarSpawn: 3, waspSpawn: 5, over: false, target: { x: 0.5, y: 0.5 } };
+      for (let i = 0; i < 5; i++) addFly();
+      s.jars.push({ x: 0.3, y: 0.4, r: 0.05, glow: 0 });
+      s.jars.push({ x: 0.7, y: 0.6, r: 0.05, glow: 0 });
+    };
+    reset();
+    return {
+      score: () => s.score,
+      bind(bind, cv) {
+        const aim = (e) => { const r = cv.getBoundingClientRect(); s.target = { x: ((e.touches?.[0]?.clientX ?? e.clientX) - r.left) / r.width, y: ((e.touches?.[0]?.clientY ?? e.clientY) - r.top) / r.height }; };
+        bind('pointermove', aim);
+        bind('pointerdown', (e) => { if (s.over) { reset(); return; } aim(e); });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.t += dt;
+        if (s.t >= DURATION) { s.over = true; report(s.score); return; }
+        s.flySpawn -= dt;
+        if (s.flySpawn <= 0 && s.flies.length < 8) { s.flySpawn = 1.5; addFly(); }
+        s.jarSpawn -= dt;
+        if (s.jarSpawn <= 0 && s.jars.length < 3) { s.jarSpawn = 3; s.jars.push({ x: 0.15 + Math.random() * 0.7, y: 0.2 + Math.random() * 0.6, r: 0.05, glow: 0 }); }
+        s.waspSpawn -= dt;
+        if (s.waspSpawn <= 0 && s.wasps.length < 3) { s.waspSpawn = 5; s.wasps.push({ x: Math.random(), y: Math.random(), vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5 }); }
+        s.flies.forEach(f => {
+          const k = Math.min(1, dt * 4);
+          f.x += (s.target.x - f.x) * k;
+          f.y += (s.target.y - f.y) * k;
+        });
+        s.jars.forEach(j => { j.glow = Math.max(0, j.glow - dt); });
+        for (let i = s.flies.length - 1; i >= 0; i--) {
+          const f = s.flies[i];
+          for (const j of s.jars) {
+            const dx = f.x - j.x, dy = f.y - j.y;
+            if (Math.sqrt(dx * dx + dy * dy) < j.r + 0.02) {
+              s.flies.splice(i, 1); s.score += 1; j.glow = 0.8; break;
+            }
+          }
+        }
+        s.wasps.forEach(w => {
+          w.x += w.vx * dt; w.y += w.vy * dt;
+          if (w.x < 0 || w.x > 1) w.vx *= -1;
+          if (w.y < 0 || w.y > 1) w.vy *= -1;
+        });
+        s.flies = s.flies.filter(f => {
+          for (const w of s.wasps) {
+            const dx = f.x - w.x, dy = f.y - w.y;
+            if (Math.sqrt(dx * dx + dy * dy) < 0.03) return false;
+          }
+          return true;
+        });
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a1420', '#142a3a']);
+        s.jars.forEach(j => {
+          const r = j.r * w;
+          const grd = ctx.createRadialGradient(j.x * w, j.y * h, 0, j.x * w, j.y * h, r * 2);
+          grd.addColorStop(0, `rgba(180,230,255,${0.35 + j.glow * 0.5})`);
+          grd.addColorStop(1, 'rgba(120,180,220,0)');
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(j.x * w, j.y * h, r * 2, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = 'rgba(180,220,255,0.7)'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(j.x * w, j.y * h, r, 0, Math.PI * 2); ctx.stroke();
+        });
+        s.wasps.forEach(wp => {
+          ctx.fillStyle = '#a04040';
+          ctx.beginPath(); ctx.arc(wp.x * w, wp.y * h, 8, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#602020'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(wp.x * w - 10, wp.y * h); ctx.lineTo(wp.x * w + 10, wp.y * h); ctx.stroke();
+        });
+        s.flies.forEach(f => {
+          ctx.fillStyle = 'rgba(255,230,140,0.2)';
+          ctx.beginPath(); ctx.arc(f.x * w, f.y * h, 8, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,230,140,0.95)';
+          ctx.beginPath(); ctx.arc(f.x * w, f.y * h, 3, 0, Math.PI * 2); ctx.fill();
+        });
+        hud(ctx, w, [`Собрано ${s.score}`, `Осталось ${Math.max(0, Math.ceil(DURATION - s.t))}с`, `Светлячки ${s.flies.length}`]);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function orbit2(canvas, report) {
+  return runner(canvas, () => {
+    const R_INNER = 0.16, R_OUTER = 0.28;
+    let s = null;
+    const reset = () => { s = { angle: 0, lane: 'outer', rocks: [], score: 0, t: 0, spawn: 1.2, over: false }; };
+    reset();
+    return {
+      score: () => s.score,
+      bind(bind) {
+        bind('pointerdown', () => {
+          if (s.over) { reset(); return; }
+          s.lane = s.lane === 'outer' ? 'inner' : 'outer';
+        });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.t += dt;
+        s.angle += dt * 0.9;
+        s.score = Math.floor(s.t * 10);
+        s.spawn -= dt;
+        if (s.spawn <= 0) {
+          s.spawn = Math.max(0.5, 1.4 - s.t * 0.01);
+          s.rocks.push({ a: Math.random() * Math.PI * 2, r: 0.5, v: 0.25 + s.t * 0.003 });
+        }
+        const planetR = s.lane === 'outer' ? R_OUTER : R_INNER;
+        s.rocks.forEach(rk => { rk.r -= rk.v * dt; });
+        s.rocks = s.rocks.filter(rk => {
+          if (rk.r < 0.04) return false;
+          if (Math.abs(rk.r - planetR) < 0.015) {
+            let diff = (rk.a - s.angle) % (Math.PI * 2);
+            if (diff < 0) diff += Math.PI * 2;
+            if (diff > Math.PI) diff = Math.PI * 2 - diff;
+            if (diff < 0.22) { s.over = true; report(s.score); }
+          }
+          return true;
+        });
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#080a18', '#1a1838']);
+        const cx = w / 2, cy = h / 2;
+        const scale = Math.min(w, h);
+        ctx.strokeStyle = 'rgba(150,160,220,0.18)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(cx, cy, R_INNER * scale, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, R_OUTER * scale, 0, Math.PI * 2); ctx.stroke();
+        const sunGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 24);
+        sunGrd.addColorStop(0, 'rgba(255,220,150,1)');
+        sunGrd.addColorStop(1, 'rgba(255,180,80,0)');
+        ctx.fillStyle = sunGrd;
+        ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff5d0';
+        ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill();
+        s.rocks.forEach(rk => {
+          const rx = cx + Math.cos(rk.a) * rk.r * scale;
+          const ry = cy + Math.sin(rk.a) * rk.r * scale;
+          ctx.fillStyle = '#7a6a9a';
+          ctx.beginPath(); ctx.arc(rx, ry, 5, 0, Math.PI * 2); ctx.fill();
+        });
+        const planetR = s.lane === 'outer' ? R_OUTER : R_INNER;
+        const px = cx + Math.cos(s.angle) * planetR * scale;
+        const py = cy + Math.sin(s.angle) * planetR * scale;
+        const pgrd = ctx.createRadialGradient(px, py, 0, px, py, 12);
+        pgrd.addColorStop(0, 'rgba(160,200,255,1)');
+        pgrd.addColorStop(1, 'rgba(80,120,200,0)');
+        ctx.fillStyle = pgrd;
+        ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#c8d8ff';
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+        hud(ctx, w, [`Очки ${s.score}`, `Время ${Math.floor(s.t)}с`, `Орбита ${s.lane === 'outer' ? 'внешняя' : 'внутренняя'}`]);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -6289,6 +6693,46 @@ export const GAMES = [
     desc: 'Тапай по кругам в ритме, не промахивайся',
     tint: ['#100a1a', '#1a1030'],
     mount: tapRhythm
+  },
+  {
+    id: 'nebula',
+    title: 'Туманность',
+    desc: 'Собери звёздную пыль сквозь астероиды',
+    tint: ['#0a0820', '#2a1d5c'],
+    silver: true,
+    mount: nebula
+  },
+  {
+    id: 'samurai',
+    title: 'Самурай',
+    desc: 'Режь фрукты свайпом, не задень бомбы',
+    tint: ['#1a0e1a', '#2c1a2c'],
+    silver: true,
+    mount: samurai
+  },
+  {
+    id: 'zen',
+    title: 'Дзен',
+    desc: 'Ставь блоки друг на друга точно в размер',
+    tint: ['#0e1424', '#1a2440'],
+    silver: true,
+    mount: zen
+  },
+  {
+    id: 'glow',
+    title: 'Светлячки',
+    desc: 'Веди рой мимо ос в светящиеся банки',
+    tint: ['#0a1420', '#142a3a'],
+    silver: true,
+    mount: glow
+  },
+  {
+    id: 'orbit2',
+    title: 'Гравитация',
+    desc: 'Прыгай по орбитам мимо астероидов',
+    tint: ['#080a18', '#1a1838'],
+    silver: true,
+    mount: orbit2
   }
 ];
 

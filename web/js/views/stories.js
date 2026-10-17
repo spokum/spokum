@@ -176,7 +176,7 @@ export function publishStory(done) {
         <input class="input" data-caption maxlength="200" placeholder="Подпись, если хочется">
         <button class="btn btn-primary" data-send>Выложить на 24 часа</button>
       </div>`);
-    const { openSheet } = await import('../ui.js');
+    const { openSheet } = await import('../ui.js?v=20251018');
     const sheet = openSheet('Новая история', body);
     body.querySelector('[data-send]').onclick = async (event) => {
       const button = event.currentTarget;

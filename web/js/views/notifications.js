@@ -230,39 +230,39 @@ async function jump(item, sheet) {
   const meta = item.meta || {};
   sheet.close();
   if (item.kind === 'message' && meta.chat) {
-    const { openChat } = await import('./chats.js');
+    const { openChat } = await import('./chats.js?v=20251018');
     openChat(meta.chat);
     return;
   }
   if (item.kind === 'report') {
-    const { openMod } = await import('./mod.js');
+    const { openMod } = await import('./mod.js?v=20251018');
     openMod();
     return;
   }
   if (item.kind === 'modaction' || item.kind === 'payment') {
-    const { openAdmin } = await import('./admin.js');
+    const { openAdmin } = await import('./admin.js?v=20251018');
     openAdmin();
     return;
   }
   if (item.kind === 'newpost' && meta.author) {
-    const { openProfile } = await import('./profile.js');
+    const { openProfile } = await import('./profile.js?v=20251018');
     const { users } = await api.searchUsers('');
     const author = users.find((row) => String(row.id) === String(meta.author));
     if (author) openProfile(author.username);
     return;
   }
   if (item.kind === 'gift') {
-    const { openMyGifts } = await import('./gifts.js');
+    const { openMyGifts } = await import('./gifts.js?v=20251018');
     openMyGifts(state.user.id, true);
     return;
   }
   if (item.kind === 'letter') {
-    const { openLetters } = await import('./letters.js');
+    const { openLetters } = await import('./letters.js?v=20251018');
     openLetters();
     return;
   }
   if (item.kind === 'capsule') {
-    const { openCapsules } = await import('./capsule.js');
+    const { openCapsules } = await import('./capsule.js?v=20251018');
     openCapsules();
     return;
   }
@@ -277,6 +277,24 @@ export async function openNotifications() {
   const sheet = openSheet('Уведомления', body);
 
   const draw = async () => {
+    // Quiet hours: show a banner instead of the notification list.
+    try {
+      const { isQuietHour } = await import('./quiet-hours.js?v=20251018');
+      if (isQuietHour()) {
+        const now = new Date();
+        const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        body.innerHTML = `
+          <div class="card" style="padding:22px 16px;text-align:center">
+            <div style="color:var(--muted);margin-bottom:10px">${icon('moon', 32)}</div>
+            <div class="strong">Тихие часы активны</div>
+            <div class="tiny muted" style="margin-top:6px;line-height:1.55">
+              Уведомления скрыты · сейчас ${esc(time)}. Список вернётся, когда окно закончится.
+            </div>
+          </div>`;
+        return;
+      }
+    } catch {}
+
     let items = [];
     try {
       const result = await api.notifications();

@@ -114,9 +114,12 @@ async function serveStatic(req, res, pathname) {
   }
   try {
     const data = await readFile(file);
+    const ext = extname(file);
+    // HTML and JS: never cache (frequent updates). CSS/fonts/images: cache 10 min.
+    const cache = (ext === '.html' || ext === '.js') ? 'no-cache, no-store, must-revalidate' : 'public, max-age=600';
     res.writeHead(200, {
-      'Content-Type': MIME[extname(file)] || 'application/octet-stream',
-      'Cache-Control': extname(file) === '.html' ? 'no-cache' : 'public, max-age=600'
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': cache
     });
     res.end(data);
   } catch {
