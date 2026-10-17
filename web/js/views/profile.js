@@ -1,4 +1,4 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, isBeta, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
@@ -462,14 +462,14 @@ export async function render(root) {
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-halloween>
+    <button class="hw-profile-btn" data-halloween>
       <span class="hw-profile-icon">${icon('pumpkin', 24)}</span>
       <span class="grow" style="text-align:left">
         <span class="strong small">Хэллоуин ивент</span>
-        <span class="tiny muted">Жуткий сезон · только для @silver</span>
+        <span class="tiny muted">Жуткий сезон · до 31 октября</span>
       </span>
       ${icon('forward', 18)}
-    </button>` : ''}
+    </button>
     <div class="card profile-card appear">
       <div class="banner" style="${bannerStyle(fresh)}">
         <div class="banner-inner">${bannerPins(fresh)}</div>

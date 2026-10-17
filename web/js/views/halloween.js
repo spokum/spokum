@@ -1,10 +1,10 @@
-import { state, isBeta } from '../store.js';
+import { state } from '../store.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { toast } from '../ui.js';
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Halloween Event — exclusive for @silver (beta) users.
+   Halloween Event — everyone.
    Vanilla JS, ES modules. Three canvas mini-games follow the same
    runner() pattern as js/games/index.js (setup object with
    { score(), bind(bind, canvas), update(dt, size), draw(ctx, size) }).
@@ -939,7 +939,7 @@ function paintGames(view) {
   });
 }
 
-/* ── locked screen for non-silver / not-logged-in ──────────────────────── */
+/* ── locked screen for not-logged-in ──────────────────────── */
 
 function openLocked(reason) {
   const view = el(`
@@ -970,8 +970,7 @@ function openLocked(reason) {
 
 export function openHalloween() {
   const user = state.user;
-  if (!user) return openLocked('Нужен вход для участия. Войдите как @silver, чтобы открыть ивент.');
-  if (!isBeta(user)) return openLocked('Этот ивент только для @silver. Войдите как silver, чтобы участвовать.');
+  if (!user) return openLocked('Нужен вход для участия. Войдите, чтобы открыть ивент.');
 
   const view = el(`
     <div class="hw-view hw-bg">
@@ -980,7 +979,7 @@ export function openHalloween() {
       <header class="hw-head">
         <button class="btn btn-icon btn-ghost" data-back>${icon('back', 20)}</button>
         <div class="grow"></div>
-        <span class="hw-badge">Только для @silver</span>
+        <span class="hw-badge">Хэллоуин 2026</span>
       </header>
 
       <div class="hw-scroll">

@@ -6699,7 +6699,6 @@ export const GAMES = [
     title: 'Туманность',
     desc: 'Собери звёздную пыль сквозь астероиды',
     tint: ['#0a0820', '#2a1d5c'],
-    silver: true,
     mount: nebula
   },
   {
@@ -6707,7 +6706,6 @@ export const GAMES = [
     title: 'Самурай',
     desc: 'Режь фрукты свайпом, не задень бомбы',
     tint: ['#1a0e1a', '#2c1a2c'],
-    silver: true,
     mount: samurai
   },
   {
@@ -6715,7 +6713,6 @@ export const GAMES = [
     title: 'Дзен',
     desc: 'Ставь блоки друг на друга точно в размер',
     tint: ['#0e1424', '#1a2440'],
-    silver: true,
     mount: zen
   },
   {
@@ -6723,7 +6720,6 @@ export const GAMES = [
     title: 'Светлячки',
     desc: 'Веди рой мимо ос в светящиеся банки',
     tint: ['#0a1420', '#142a3a'],
-    silver: true,
     mount: glow
   },
   {
@@ -6731,7 +6727,6 @@ export const GAMES = [
     title: 'Гравитация',
     desc: 'Прыгай по орбитам мимо астероидов',
     tint: ['#080a18', '#1a1838'],
-    silver: true,
     mount: orbit2
   }
 ];
