@@ -1994,6 +1994,39 @@ export const local = {
     return { ok: true, coins: target.coins };
   },
 
+  // ── Halloween admin grants ──────────────────────────────────────────────
+  // Halloween stats are stored per-user in localStorage on their device.
+  // Admin can grant to themselves (local mode) — for other users, we record
+  // a pending grant that gets applied when they next load the app.
+  async adminGrantHalloween(userId, kind, amount) {
+    needAdmin();
+    if (!['pumpkins', 'candies', 'ghosts'].includes(kind)) fail('Неизвестный тип награды');
+    amount = Math.max(0, Math.min(99999, Number(amount) || 0));
+    const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+    if (!pending[userId]) pending[userId] = {};
+    pending[userId][kind] = (pending[userId][kind] || 0) + amount;
+    localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+    return { ok: true, kind, amount };
+  },
+
+  async adminGrantHalloweenItem(userId, itemId) {
+    needAdmin();
+    const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+    if (!pending[userId]) pending[userId] = {};
+    if (!Array.isArray(pending[userId].items)) pending[userId].items = [];
+    if (!pending[userId].items.includes(itemId)) pending[userId].items.push(itemId);
+    localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+    return { ok: true, itemId };
+  },
+
+  async adminResetHalloween(userId) {
+    needAdmin();
+    const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+    pending[userId] = { reset: true };
+    localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+    return { ok: true };
+  },
+
   async react(id, kind) {
     const user = need();
     notMuted(user);

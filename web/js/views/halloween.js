@@ -22,6 +22,54 @@ const KEYS = {
   bestBrew: 'spokum.halloween.best.witchBrew'
 };
 
+// Apply pending admin grants for the current user (queued by admins in localStorage).
+// Called when the Halloween view opens so granted rewards show up immediately.
+function applyHalloweenPending() {
+  try {
+    const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+    const me = (window.__spokumState?.user) || null;
+    const myId = me?.id || 'self';
+    const myPending = pending[myId] || pending['self'];
+    if (!myPending) return;
+    if (myPending.reset) {
+      ['pumpkins', 'candies', 'ghosts', 'owned', 'lastReward', 'mood'].forEach((k) =>
+        localStorage.removeItem(KEYS[k])
+      );
+      delete pending[myId];
+      delete pending['self'];
+      localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+      return;
+    }
+    let granted = [];
+    ['pumpkins', 'candies', 'ghosts'].forEach((k) => {
+      if (myPending[k]) {
+        const cur = Number(localStorage.getItem(KEYS[k]) || 0);
+        localStorage.setItem(KEYS[k], String(cur + myPending[k]));
+        granted.push(`${myPending[k]} ${k === 'pumpkins' ? 'тыкв' : k === 'candies' ? 'конфет' : 'призраков'}`);
+      }
+    });
+    if (Array.isArray(myPending.items) && myPending.items.length) {
+      const owned = JSON.parse(localStorage.getItem(KEYS.owned) || '[]');
+      myPending.items.forEach((id) => { if (!owned.includes(id)) owned.push(id); });
+      localStorage.setItem(KEYS.owned, JSON.stringify(owned));
+      granted.push(`${myPending.items.length} предмет(ов)`);
+    }
+    delete pending[myId];
+    delete pending['self'];
+    localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+    if (granted.length) {
+      // Defer toast so the UI is ready
+      setTimeout(() => {
+        try {
+          import('../ui.js?v=20251020').then(({ toast }) =>
+            toast('🎁 Админ выдал: ' + granted.join(', '), 'ok')
+          );
+        } catch {}
+      }, 600);
+    }
+  } catch {}
+}
+
 const MOODS = [
   { id: 'spooky', label: 'Жуткий', color: '#9b59b6', emoji: 'ghost' },
   { id: 'mystic', label: 'Мистический', color: '#8e44ad', emoji: 'moon' },
@@ -971,6 +1019,9 @@ function openLocked(reason) {
 export function openHalloween() {
   const user = state.user;
   if (!user) return openLocked('Нужен вход для участия. Войдите, чтобы открыть ивент.');
+
+  // Apply any pending admin grants before showing the event
+  applyHalloweenPending();
 
   const view = el(`
     <div class="hw-view hw-bg">

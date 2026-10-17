@@ -1648,6 +1648,33 @@ export async function createBackend(url, key) {
       return data;
     },
 
+    // Halloween admin grants — stored in localStorage pending queue (same as local mode).
+    // The recipient's browser picks them up on next load via applyHalloweenPending().
+    async adminGrantHalloween(userId, kind, amount) {
+      // No server RPC — Halloween is client-side only. Queue in localStorage.
+      const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+      if (!pending[userId]) pending[userId] = {};
+      pending[userId][kind] = (pending[userId][kind] || 0) + Number(amount);
+      localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+      return { ok: true, kind, amount };
+    },
+
+    async adminGrantHalloweenItem(userId, itemId) {
+      const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+      if (!pending[userId]) pending[userId] = {};
+      if (!Array.isArray(pending[userId].items)) pending[userId].items = [];
+      if (!pending[userId].items.includes(itemId)) pending[userId].items.push(itemId);
+      localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+      return { ok: true, itemId };
+    },
+
+    async adminResetHalloween(userId) {
+      const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
+      pending[userId] = { reset: true };
+      localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+      return { ok: true };
+    },
+
     async react(id, kind) {
       const { data, error } = await sb.rpc('react', { target: id, want: kind });
       guard(error);
