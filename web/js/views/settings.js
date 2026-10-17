@@ -40,7 +40,8 @@ const THEMES = [
   ['lavender', 'Лаванда', 'linear-gradient(140deg,#1a1426,#3a2c5c)', '#e0d6f0', false],
   ['mist', 'Туман', 'linear-gradient(140deg,#1a1d22,#3a3f47)', '#e8eaed', false],
   ['coral', 'Коралл', 'linear-gradient(140deg,#1f1410,#4a2820)', '#f0c4b8', false],
-  ['steel', 'Сталь', 'linear-gradient(140deg,#12161a,#2a323a)', '#c8d4dc', false]
+  ['steel', 'Сталь', 'linear-gradient(140deg,#12161a,#2a323a)', '#c8d4dc', false],
+  ['halloween', 'Хэллоуин', 'linear-gradient(140deg,#1a0a00,#3a1500)', '#e8a030', false]
 ];
 
 const ACCENTS = [

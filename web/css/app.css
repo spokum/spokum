@@ -2361,3 +2361,19 @@ body.still *::after {
   --glow-2: rgba(150,180,210,.06);
   --glow: .5;
 }
+
+[data-theme='halloween'] {
+  --bg: #1a0a00;
+  --bg-2: #2a1500;
+  --bg-3: #3a2000;
+  --surface: rgba(232,160,48,.035);
+  --surface-2: rgba(232,160,48,.06);
+  --line: rgba(232,160,48,.08);
+  --line-strong: rgba(232,160,48,.15);
+  --text: #f0d8a0;
+  --muted: #8a6a30;
+  --shadow: 0 16px 40px rgba(20,5,0,.5);
+  --glow-1: rgba(232,160,48,.07);
+  --glow-2: rgba(200,100,30,.07);
+  --glow: .55;
+}
