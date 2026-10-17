@@ -27,12 +27,12 @@
 <div id="app"></div>
 <!-- Version indicator: if you see "v15" in the corner, you have the latest version.
      If you don't see it, your browser is serving a stale cached version. -->
-<div id="version-stamp" style="position:fixed;bottom:2px;left:2px;font-size:9px;color:rgba(255,255,255,.15);pointer-events:none;z-index:9999;font-family:monospace">v18-nocache</div>
+<div id="version-stamp" style="position:fixed;bottom:2px;left:2px;font-size:9px;color:rgba(255,255,255,.15);pointer-events:none;z-index:9999;font-family:monospace">v19-nocache</div>
 <script>
   // === VERSION CHECK ===
   // This runs IMMEDIATELY. If the page is stale (served by old Service Worker),
   // this version stamp won't be present and the page will look wrong.
-  window.__SPOKUM_VERSION__ = 'v18-nocache';
+  window.__SPOKUM_VERSION__ = 'v19-nocache';
 </script>
 <script>
   (function () {
@@ -47,19 +47,21 @@
   })();
 </script>
 <script>
-  // === NUCLEAR CACHE BUSTER ===
+  // === NUCLEAR CACHE BUSTER (web only — disabled in Android WebView) ===
   // If the user's browser has a stale version (from old Service Worker), force a reload
   // with a unique URL query so the SW cache misses and fresh files are loaded.
+  // Skip in Android APK: WebView uses asset loader, no SW cache, and location.replace
+  // with query would break asset resolution.
   (function () {
+    // Detect Android WebView: host is appassets.androidplatform.net or file://
+    var isWebView = location.hostname === 'appassets.androidplatform.net' || location.protocol === 'file:';
+    if (isWebView) return;
     var REQUIRED = '20251018-final';
     try {
       var current = localStorage.getItem('spokum.build');
-      // If build mismatch OR no cache-bust query in URL → reload with fresh query
       if (current !== REQUIRED || !/[?&]fresh=/.test(location.search)) {
         localStorage.setItem('spokum.build', REQUIRED);
-        // Build fresh URL: keep path, replace query with fresh timestamp
         var fresh = '/?fresh=' + Date.now();
-        // Use replace so we don't add to history
         location.replace(fresh);
         return;
       }
@@ -67,22 +69,27 @@
   })();
 </script>
 <script>
-  // === AGGRESSIVE CACHE BUSTING ===
-  // 1. Unregister ALL service workers immediately (before app.js loads).
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function (regs) {
-      regs.forEach(function (r) { r.unregister(); });
-    }).catch(function () {});
-  }
-  // 2. Clear all Cache API storage.
-  if ('caches' in window) {
-    caches.keys().then(function (keys) {
-      keys.forEach(function (k) { caches.delete(k); });
-    }).catch(function () {});
-  }
+  // === AGGRESSIVE CACHE BUSTING (web only — skip in Android WebView) ===
+  // Android WebView uses asset loader, no Service Worker. Skip to avoid errors.
+  (function () {
+    var isWebView = location.hostname === 'appassets.androidplatform.net' || location.protocol === 'file:';
+    if (isWebView) return;
+    // 1. Unregister ALL service workers immediately (before app.js loads).
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      }).catch(function () {});
+    }
+    // 2. Clear all Cache API storage.
+    if ('caches' in window) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    }
+  })();
 </script>
-<script src="config.js?v=20251021"></script>
-<script src="vendor/client.js?v=20251021"></script>
-<script type="module" src="js/app.js?v=20251021"></script>
+<script src="config.js?v=20251022"></script>
+<script src="vendor/client.js?v=20251022"></script>
+<script type="module" src="js/app.js?v=20251022"></script>
 </body>
 </html>
