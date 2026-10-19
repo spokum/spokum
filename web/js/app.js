@@ -334,9 +334,12 @@ async function boot() {
     setInterval(() => module.applyNight?.(), 300000);
   }).catch(() => {});
   await waitForBackend();
+  // If remote server is unreachable, fall back to local mode silently instead
+  // of showing "База не отвечает" — the app works fully offline.
+  // Only show the error screen if we're truly stuck (no local mode either).
   if (remoteConfigured() && navigator.onLine && api.mode === 'local') {
-    showNoBase();
-    return;
+    // Server unreachable but local mode is active — continue to auth/feed.
+    // Don't block the user with an error screen.
   }
   let fromCache = false;
   try {
