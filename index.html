@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="calm" data-accent="mint">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="theme-color" content="#101318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="СпокУм">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<meta name="description" content="СпокУм - соцсеть про спокойствие и настроение: лента, чаты, игры и личное пространство">
+<title>СпокУм</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="logo.jpg" type="image/jpeg">
+<link rel="apple-touch-icon" href="logo.jpg">
+<link rel="preload" href="fonts/inter-cyrillic-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/inter-cyrillic-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/skin.css">
+<link rel="stylesheet" href="css/ui-v2.css">
+</head>
+<body>
+<div id="app"></div>
+<!-- Version indicator: if you see "v15" in the corner, you have the latest version.
+     If you don't see it, your browser is serving a stale cached version. -->
+<div id="version-stamp" style="position:fixed;bottom:2px;left:2px;font-size:9px;color:rgba(255,255,255,.15);pointer-events:none;z-index:9999;font-family:monospace">v20-nocache</div>
+<script>
+  // === VERSION CHECK ===
+  // This runs IMMEDIATELY. If the page is stale (served by old Service Worker),
+  // this version stamp won't be present and the page will look wrong.
+  window.__SPOKUM_VERSION__ = 'v20-nocache';
+</script>
+<script>
+  (function () {
+    var root = document.documentElement;
+    try {
+      root.dataset.theme = localStorage.getItem('spokum.theme') || 'calm';
+      root.dataset.accent = localStorage.getItem('spokum.accent') || 'mint';
+      root.dataset.ui = localStorage.getItem('spokum.ui') || 'v1';
+    } catch (error) {
+      root.dataset.theme = 'calm';
+    }
+  })();
+</script>
+<script>
+  // === NUCLEAR CACHE BUSTER (web only — disabled in Android WebView) ===
+  // If the user's browser has a stale version (from old Service Worker), force a reload
+  // with a unique URL query so the SW cache misses and fresh files are loaded.
+  // Skip in Android APK: WebView uses asset loader, no SW cache, and location.replace
+  // with query would break asset resolution.
+  (function () {
+    // Detect Android WebView: host is appassets.androidplatform.net or file://
+    var isWebView = location.hostname === 'appassets.androidplatform.net' || location.protocol === 'file:';
+    if (isWebView) return;
+    var REQUIRED = '20251018-final';
+    try {
+      var current = localStorage.getItem('spokum.build');
+      if (current !== REQUIRED || !/[?&]fresh=/.test(location.search)) {
+        localStorage.setItem('spokum.build', REQUIRED);
+        var fresh = '/?fresh=' + Date.now();
+        location.replace(fresh);
+        return;
+      }
+    } catch (e) {}
+  })();
+</script>
+<script>
+  // === AGGRESSIVE CACHE BUSTING (web only — skip in Android WebView) ===
+  // Android WebView uses asset loader, no Service Worker. Skip to avoid errors.
+  (function () {
+    var isWebView = location.hostname === 'appassets.androidplatform.net' || location.protocol === 'file:';
+    if (isWebView) return;
+    // 1. Unregister ALL service workers immediately (before app.js loads).
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      }).catch(function () {});
+    }
+    // 2. Clear all Cache API storage.
+    if ('caches' in window) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    }
+  })();
+</script>
+<script src="config.js?v=20251023"></script>
+<script src="vendor/client.js?v=20251023"></script>
+<script type="module" src="js/app.js?v=20251023"></script>
+</body>
+</html>
