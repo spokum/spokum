@@ -273,7 +273,7 @@ export async function render(root) {
 
   const pushState = root.querySelector('[data-push-state]');
   const paintPush = async () => {
-    const { systemAllowed } = await import('./notifications.js?v=20251018');
+    const { systemAllowed } = await import('./notifications.js?v=20251028');
     const inApp = !!window.SpokumHost;
     if (systemAllowed()) {
       pushState.textContent = inApp ? 'Включены' : 'Включены в этом браузере';
@@ -288,7 +288,7 @@ export async function render(root) {
   paintPush();
 
   root.querySelector('[data-push]').onclick = async () => {
-    const { askSystemPermission, systemAllowed, canAskAgain } = await import('./notifications.js?v=20251018');
+    const { askSystemPermission, systemAllowed, canAskAgain } = await import('./notifications.js?v=20251028');
     if (systemAllowed()) {
       toast('Уведомления уже включены');
       return;
@@ -309,7 +309,7 @@ export async function render(root) {
 
   const quietState = root.querySelector('[data-quiet-state]');
   const paintQuiet = () => {
-    import('./quiet-hours.js?v=20251018').then(({ isQuietHour }) => {
+    import('./quiet-hours.js?v=20251028').then(({ isQuietHour }) => {
       if (!quietState) return;
       const now = new Date();
       const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -319,7 +319,7 @@ export async function render(root) {
   };
   paintQuiet();
   root.querySelector('[data-quiet-hours]').onclick = async () => {
-    const { openQuietHours } = await import('./quiet-hours.js?v=20251018');
+    const { openQuietHours } = await import('./quiet-hours.js?v=20251028');
     openQuietHours();
     paintQuiet();
   };
@@ -334,7 +334,7 @@ export async function render(root) {
     }).catch(() => {});
   }
   const muteCount = root.querySelector('[data-mute-count]');
-  import('./feed.js?v=20251018').then(({ muteWords }) => {
+  import('./feed.js?v=20251028').then(({ muteWords }) => {
     const list = muteWords();
     if (muteCount && list.length) muteCount.textContent = `Слов в списке: ${list.length}`;
   }).catch(() => {});
@@ -342,7 +342,7 @@ export async function render(root) {
   root.querySelector('[data-mine]')?.addEventListener('click', () => openMyTheme(() => render(root)));
   root.querySelector('[data-codes]')?.addEventListener('click', () => openCodes(() => render(root)));
   if (root.querySelector('[data-pin]')) {
-    import('../pin.js?v=20251018').then(({ pinOn }) => {
+    import('../pin.js?v=20251028').then(({ pinOn }) => {
       const slot = root.querySelector('[data-pin-state]');
       if (slot) slot.textContent = pinOn() ? 'Код включён' : 'Спрашивать код при запуске';
     }).catch(() => {});
@@ -350,12 +350,12 @@ export async function render(root) {
   }
 
   root.querySelector('[data-rules]').onclick = async () => {
-    const { openRules } = await import('./rules.js?v=20251018');
+    const { openRules } = await import('./rules.js?v=20251028');
     openRules();
   };
 
   root.querySelector('[data-sounds]')?.addEventListener('click', async () => {
-    const { openSounds } = await import('./sounds.js?v=20251018');
+    const { openSounds } = await import('./sounds.js?v=20251028');
     openSounds();
   });
 
@@ -471,7 +471,7 @@ export async function render(root) {
   });
 
   root.querySelector('[data-ping]').onclick = async () => {
-    const { runDiagnostics } = await import('./auth.js?v=20251018');
+    const { runDiagnostics } = await import('./auth.js?v=20251028');
     runDiagnostics();
   };
 
@@ -487,7 +487,7 @@ export async function render(root) {
   });
   root.querySelector('[data-reset]')?.addEventListener('click', async () => {
     if (!(await confirmSheet({ title: 'Стереть данные', text: 'Все локальные аккаунты, посты и чаты будут удалены', confirm: 'Стереть', danger: true }))) return;
-    const { local } = await import('../backend/local.js?v=20251018');
+    const { local } = await import('../backend/local.js?v=20251028');
     local.reset();
     location.reload();
   });
@@ -496,7 +496,7 @@ export async function render(root) {
 const MY_ACCENTS = ['#87b7a3', '#9c93c2', '#c79486', '#8badca', '#c6b083', '#d98fae', '#7fd7e8', '#d8b45c', '#9bb37f', '#e08f6a'];
 
 async function openMuteWords(done) {
-  const { muteWords, saveMuteWords } = await import('./feed.js?v=20251018');
+  const { muteWords, saveMuteWords } = await import('./feed.js?v=20251028');
   let list = muteWords();
   const body = el(`<div class="col">
     <p class="small" style="margin:0;line-height:1.55">Записи с этими словами будут свёрнуты под серую плашку. Открыть их всё равно можно, но они не появятся неожиданно.</p>
@@ -627,7 +627,7 @@ function openMyTheme(done) {
 }
 
 async function openPin(done) {
-  const { pinOn, pinSet, pinOff, pinCheck } = await import('../pin.js?v=20251018');
+  const { pinOn, pinSet, pinOff, pinCheck } = await import('../pin.js?v=20251028');
   const on = pinOn();
   const body = el(`<div class="col">
     <p class="small" style="margin:0;line-height:1.55">Код спрашивается при запуске приложения. Он живёт на этом устройстве и не связан с паролем от аккаунта.</p>
@@ -931,7 +931,7 @@ async function openPromo(done) {
       try {
         const { user } = await api.me();
         if (user) {
-          const { setUser } = await import('../store.js?v=20251018');
+          const { setUser } = await import('../store.js?v=20251028');
           setUser(user);
         }
       } catch {}

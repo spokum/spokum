@@ -79,7 +79,7 @@ async function openDaySheet(dayKey, dayPosts) {
   const sorted = [...dayPosts].sort((a, b) => b.createdAt - a.createdAt);
   let postCard = null;
   try {
-    ({ postCard } = await import('./feed.js?v=20251018'));
+    ({ postCard } = await import('./feed.js?v=20251028'));
   } catch (error) {
     body.innerHTML = emptyState('warn', 'Не загрузилось', 'Лента постов недоступна');
     return sheet;

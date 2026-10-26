@@ -42,7 +42,7 @@ export function setStatus(text) {
   try { localStorage.setItem(KEY, t); } catch {}
   // Best-effort server-side persistence (no-op on current backends).
   try {
-    import('../store.js?v=20251018').then(({ api }) => {
+    import('../store.js?v=20251028').then(({ api }) => {
       if (api && typeof api.updateMe === 'function') {
         api.updateMe({ status: t }).catch(() => {});
       }

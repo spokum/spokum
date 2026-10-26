@@ -41,7 +41,7 @@ export async function initBackend() {
           console.warn('[СпокУм] Сервер недоступен — работаем в локальном режиме');
           return backend.mode; // stays 'local'
         }
-        const { createBackend } = await import('./backend/remote-db.js?v=20251018');
+        const { createBackend } = await import('./backend/remote-db.js?v=20251028');
         const made = await createBackend(supabaseUrl, supabaseKey);
         if (backend.mode !== 'supabase') backend = made;
         return backend.mode;

@@ -193,11 +193,11 @@ export async function openChat(chatId) {
   };
   view.querySelector('[data-menu]').onclick = () => openChatMenu(chat, view);
   view.querySelector('[data-call]')?.addEventListener('click', async () => {
-    const { startCall } = await import('../call.js?v=20251018');
+    const { startCall } = await import('../call.js?v=20251028');
     startCall(chat);
   });
   view.querySelector('[data-video-call]')?.addEventListener('click', async () => {
-    const { startCall } = await import('../call.js?v=20251018');
+    const { startCall } = await import('../call.js?v=20251028');
     startCall(chat, { video: true });
   });
 
@@ -683,7 +683,7 @@ function openChatMenu(chat, view) {
   });
   body.querySelector('[data-report]')?.addEventListener('click', async () => {
     sheet.close();
-    const { openReport } = await import('./feed.js?v=20251018');
+    const { openReport } = await import('./feed.js?v=20251028');
     openReport('user', chat.peer.id);
   });
   body.querySelector('[data-close]').onclick = () => {

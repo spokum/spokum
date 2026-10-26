@@ -196,7 +196,7 @@ export function pickImage(maxSide = 1400) {
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return done(null);
-      const { readFileAsDataUrl } = await import('./util.js?v=20251018');
+      const { readFileAsDataUrl } = await import('./util.js?v=20251028');
       try {
         done(await readFileAsDataUrl(file, maxSide));
       } catch (error) {
@@ -334,7 +334,7 @@ export function pickVideo(maxSeconds = 60) {
         toast('Видео тяжелее 24 МБ, снимите короче', 'err');
         return done(null);
       }
-      const { readRawFile, videoMeta } = await import('./util.js?v=20251018');
+      const { readRawFile, videoMeta } = await import('./util.js?v=20251028');
       try {
         const data = await readRawFile(file);
         const meta = await videoMeta(data);

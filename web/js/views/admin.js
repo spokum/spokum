@@ -301,7 +301,7 @@ async function drawHealth(body) {
 
   body.querySelector('[data-praise]').onclick = () => openPraise(body);
   body.querySelector('[data-quiet]').onclick = async () => {
-    const { promptSheet } = await import('../ui.js?v=20251018');
+    const { promptSheet } = await import('../ui.js?v=20251028');
     const text = await promptSheet({
       title: 'Пять минут тишины',
       label: 'Что написать, можно оставить пустым',
@@ -725,7 +725,7 @@ function openUserActions(user, refresh) {
 
   body.querySelector('[data-info]').onclick = async () => {
     sheet.close();
-    const { openUserInfo } = await import('./userinfo.js?v=20251018');
+    const { openUserInfo } = await import('./userinfo.js?v=20251028');
     openUserInfo(user.id);
   };
 
@@ -811,7 +811,7 @@ function openUserActions(user, refresh) {
     sheet.close();
     try {
       const { chat } = await api.createChat({ kind: 'dm', members: [user.id] });
-      const { openChat } = await import('./chats.js?v=20251018');
+      const { openChat } = await import('./chats.js?v=20251028');
       openChat(chat.id);
     } catch (error) {
       toast(error.message, 'err');

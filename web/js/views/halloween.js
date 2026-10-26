@@ -61,7 +61,7 @@ function applyHalloweenPending() {
       // Defer toast so the UI is ready
       setTimeout(() => {
         try {
-          import('../ui.js?v=20251020').then(({ toast }) =>
+          import('../ui.js?v=20251028').then(({ toast }) =>
             toast('🎁 Админ выдал: ' + granted.join(', '), 'ok')
           );
         } catch {}

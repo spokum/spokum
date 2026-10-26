@@ -27,7 +27,7 @@ export async function openGroups() {
       }
       host.innerHTML = html;
       host.querySelector('[data-create]')?.addEventListener('click', async () => {
-        const name = await import('../ui.js?v=20251018').then(m => m.promptSheet({ title: 'Новая группа', label: 'Название', placeholder: 'Например: Любители кофе', confirm: 'Создать' }));
+        const name = await import('../ui.js?v=20251028').then(m => m.promptSheet({ title: 'Новая группа', label: 'Название', placeholder: 'Например: Любители кофе', confirm: 'Создать' }));
         if (!name) return;
         try { await api.createGroup(name); toast('Группа создана'); draw(); }
         catch (e) { toast(e.message, 'err'); }
