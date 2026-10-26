@@ -625,6 +625,8 @@ async function drawUsers(body) {
             <div class="pill-row" style="margin-top:6px">
               ${u.isAdmin ? '<span class="pill good">админ</span>' : ''}
               ${u.isModerator ? `<span class="pill">модератор${u.strikes ? ` · ${u.strikes}/3` : ''}</span>` : ''}
+              ${u.isTester ? '<span class="pill" style="background:rgba(160,140,220,.18);color:#b0a0e0">тестер</span>' : ''}
+              ${u.isProbation ? '<span class="pill warn">испытательный</span>' : ''}
               ${u.bannedUntil > Date.now() ? '<span class="pill bad">бан</span>' : ''}
               ${u.mutedUntil > Date.now() ? '<span class="pill warn">мут</span>' : ''}
               <span class="pill">${plural(u.posts, 'пост', 'поста', 'постов')}</span>
@@ -663,6 +665,8 @@ function openUserActions(user, refresh) {
       <button class="list-item" data-flag="isModerator">${icon('shield', 18)}<span>${user.isModerator ? 'Снять щит модератора' : 'Выдать щит модератора'}</span></button>
       <button class="list-item" data-flag="isDeveloper">${icon('hammer', 18)}<span>${user.isDeveloper ? 'Снять молоток' : 'Выдать молоток разработчика'}</span></button>
       <button class="list-item" data-flag="isAdmin">${icon('star', 18)}<span>${user.isAdmin ? 'Снять админку' : 'Выдать админку'}</span></button>
+      <button class="list-item" data-flag="isTester">${icon('star', 18)}<span>${user.isTester ? 'Снять значок тестера' : 'Выдать значок тестера'}</span></button>
+      <button class="list-item" data-flag="isProbation">${icon('warn', 18)}<span>${user.isProbation ? 'Снять испытательный срок' : 'Поставить на испытательный срок'}</span></button>
       <button class="list-item" data-clear>${icon('close', 18)}<span>Снять все статусы</span></button>
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-beta>${icon('spark', 18)}<span>${user.isBeta ? 'Убрать из беты' : 'Пустить в бету'}</span></button>

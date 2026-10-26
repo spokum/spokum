@@ -63,6 +63,8 @@ export function badges(user) {
   if (user.isVerified) items.push(badgeButton('badge-verified', icon('verified', 12, 2.4), 'Пользователь верифицирован'));
   if (user.isModerator) items.push(badgeButton('badge-mod', solidIcon('shield', 12), rankName(user) + ' СпокУма'));
   if (user.isDeveloper) items.push(badgeButton('badge-dev', solidIcon('hammer', 12), 'Разработчик СпокУма'));
+  if (user.isTester) items.push(badgeButton('badge-tester', solidIcon('star', 12), 'Тестер СпокУма'));
+  if (user.isProbation) items.push(badgeButton('badge-probation', icon('warn', 12, 2.2), 'Испытательный срок'));
   return items.length ? `<span class="badges">${items.join('')}</span>` : '';
 }
 

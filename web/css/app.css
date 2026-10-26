@@ -832,6 +832,8 @@ svg { display: block; flex: none; }
 .badge-mod { background: rgba(135,183,163,.16); color: #87b7a3; }
 .badge-dev { background: rgba(198,176,131,.16); color: #c6b083; }
 .badge-premium { background: linear-gradient(140deg, rgba(216,180,92,.3), rgba(217,143,174,.24)); color: #d8b45c; }
+.badge-tester { background: rgba(160,140,220,.18); color: #b0a0e0; }
+.badge-probation { background: rgba(232,160,48,.16); color: #e8a030; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px;

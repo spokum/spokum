@@ -300,6 +300,8 @@ function pub(user) {
     isModerator: user.isModerator,
     isDeveloper: user.isDeveloper,
     isVerified: user.isVerified,
+    isTester: !!user.isTester,
+    isProbation: !!user.isProbation,
     modRank: user.modRank || 0,
     isBeta: !!user.isBeta || user.username === 'silver',
     coins: user.coins || 0,
@@ -2907,9 +2909,11 @@ export const local = {
       target.isModerator = false;
       target.isDeveloper = false;
       target.isVerified = false;
+      target.isTester = false;
+      target.isProbation = false;
       if (target.username !== 'vanya8') target.isAdmin = false;
     } else {
-      for (const key of ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified']) {
+      for (const key of ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified', 'isTester', 'isProbation']) {
         if (flags[key] !== undefined) target[key] = !!flags[key];
       }
     }
