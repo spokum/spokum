@@ -233,7 +233,7 @@ export async function createBackend(url, key) {
   }
 
   const POST_CORE = 'id, body, image, mood, created_at, removed, removed_reason';
-  const AUTHOR_FIELDS = 'id, username, display_name, avatar, hue, mood, is_admin, is_moderator, is_developer, is_verified, is_tester, is_probation, mod_rank, premium_until, status_icon, is_beta';
+  const AUTHOR_FIELDS = 'id, username, display_name, avatar, hue, mood, is_admin, is_moderator, is_developer, is_verified, mod_rank, premium_until, status_icon, is_beta';
   const POST_TAIL = `author:profiles!posts_author_id_fkey(${AUTHOR_FIELDS}), likes(count), comments(count)`;
   const POST_TIERS = [
     `${POST_CORE}, removed_auto, kind, media, video, poster, duration, views, sound, poll, pinned, publish_at, repost_of, ${POST_TAIL}`,
