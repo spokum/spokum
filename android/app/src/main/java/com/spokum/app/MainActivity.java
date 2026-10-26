@@ -25,14 +25,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.Executors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import androidx.webkit.ServiceWorkerClientCompat;
 import androidx.webkit.ServiceWorkerControllerCompat;
@@ -40,8 +32,6 @@ import androidx.webkit.WebViewAssetLoader;
 import androidx.webkit.WebViewFeature;
 
 public class MainActivity extends AppCompatActivity {
-
-  private static final String UPDATE_BASE = "https://spokum.ru/";
 
   private WebView webView;
   private ValueCallback<Uri[]> filePicker;
@@ -98,11 +88,13 @@ public class MainActivity extends AppCompatActivity {
     webView.setBackgroundColor(0xFF101318);
     webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
-    final File updates = new File(getFilesDir(), "web");
-    final WebViewAssetLoader.Builder builder = new WebViewAssetLoader.Builder();
-    if (new File(updates, "www/index.html").exists()) {
-      builder.addPathHandler("/", new WebViewAssetLoader.InternalStoragePathHandler(this, updates));
+    // Load exclusively from bundled assets. No in-app updates (RuStore policy 8.5).
+    // Clear any previously-downloaded update folder so it never overrides assets.
+    File legacyUpdates = new File(getFilesDir(), "web");
+    if (legacyUpdates.exists()) {
+      deleteTree(legacyUpdates);
     }
+    final WebViewAssetLoader.Builder builder = new WebViewAssetLoader.Builder();
     builder.addPathHandler("/", new WebViewAssetLoader.AssetsPathHandler(this));
     final WebViewAssetLoader loader = builder.build();
 
@@ -217,113 +209,9 @@ public class MainActivity extends AppCompatActivity {
       webView.loadUrl("https://appassets.androidplatform.net/www/index.html");
     }
 
-    checkForUpdate();
-  }
-
-  private void checkForUpdate() {
-    Executors.newSingleThreadExecutor().execute(() -> {
-      HttpURLConnection connection = null;
-      try {
-        connection = (HttpURLConnection) new URL(UPDATE_BASE + "version.txt").openConnection();
-        connection.setConnectTimeout(8000);
-        connection.setReadTimeout(8000);
-        if (connection.getResponseCode() != 200) {
-          return;
-        }
-
-        StringBuilder builder = new StringBuilder();
-        try (InputStream stream = connection.getInputStream()) {
-          byte[] chunk = new byte[256];
-          int read;
-          while ((read = stream.read(chunk)) > 0) {
-            builder.append(new String(chunk, 0, read, "UTF-8"));
-          }
-        }
-
-        String remote = builder.toString().trim();
-        if (remote.isEmpty()) {
-          return;
-        }
-
-        String local = getSharedPreferences("spokum", MODE_PRIVATE).getString("web_version", "");
-        if (remote.equals(local)) {
-          return;
-        }
-
-        if (downloadBundle()) {
-          getSharedPreferences("spokum", MODE_PRIVATE).edit().putString("web_version", remote).apply();
-          runOnUiThread(() -> {
-            if (webView != null) {
-              webView.evaluateJavascript("window.__spokumUpdateReady && window.__spokumUpdateReady()", null);
-            }
-          });
-        }
-      } catch (Exception ignored) {
-      } finally {
-        if (connection != null) {
-          connection.disconnect();
-        }
-      }
-    });
-  }
-
-  private boolean downloadBundle() {
-    HttpURLConnection connection = null;
-    try {
-      connection = (HttpURLConnection) new URL(UPDATE_BASE + "web-bundle.zip").openConnection();
-      connection.setConnectTimeout(15000);
-      connection.setReadTimeout(30000);
-      if (connection.getResponseCode() != 200) {
-        return false;
-      }
-
-      File staging = new File(getFilesDir(), "web-next");
-      deleteTree(staging);
-      File target = new File(staging, "www");
-      if (!target.mkdirs()) {
-        return false;
-      }
-
-      try (ZipInputStream zip = new ZipInputStream(connection.getInputStream())) {
-        ZipEntry entry;
-        byte[] buffer = new byte[8192];
-        while ((entry = zip.getNextEntry()) != null) {
-          File out = new File(target, entry.getName());
-          if (!out.getCanonicalPath().startsWith(target.getCanonicalPath())) {
-            return false;
-          }
-          if (entry.isDirectory()) {
-            out.mkdirs();
-            continue;
-          }
-          File parent = out.getParentFile();
-          if (parent != null) {
-            parent.mkdirs();
-          }
-          try (OutputStream stream = new FileOutputStream(out)) {
-            int read;
-            while ((read = zip.read(buffer)) > 0) {
-              stream.write(buffer, 0, read);
-            }
-          }
-        }
-      }
-
-      if (!new File(target, "index.html").exists()) {
-        deleteTree(staging);
-        return false;
-      }
-
-      File live = new File(getFilesDir(), "web");
-      deleteTree(live);
-      return staging.renameTo(live);
-    } catch (Exception error) {
-      return false;
-    } finally {
-      if (connection != null) {
-        connection.disconnect();
-      }
-    }
+    // No auto-update mechanism. The app loads exclusively from bundled assets.
+    // Updates are delivered through RuStore (new APK versions), not in-app.
+    // This complies with RuStore moderation policy 8.5.
   }
 
   private void deleteTree(File file) {

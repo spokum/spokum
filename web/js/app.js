@@ -599,15 +599,8 @@ function connectSocket() {
   };
 }
 
-window.__spokumUpdateReady = () => {
-  if (document.querySelector('.update-bar')) return;
-  const bar = el(`<div class="update-bar">${icon('refresh', 15)}<span>Доступна новая версия</span><button data-apply>Обновить</button></div>`);
-  document.body.appendChild(bar);
-  bar.querySelector('[data-apply]').onclick = () => {
-    if (window.SpokumHost?.apply) window.SpokumHost.apply();
-    else location.reload();
-  };
-};
+// In-app update bar removed for RuStore compliance (policy 8.5).
+// Updates are delivered through the store, not in-app.
 
 document.addEventListener('click', (event) => {
   const badge = event.target.closest?.('[data-badge]');

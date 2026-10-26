@@ -201,7 +201,7 @@ export async function render(root) {
 
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('download', 18)}<span class="strong small">Приложение</span></div>
-      <button class="list-item" data-update>${icon('refresh', 18)}<div class="grow"><div class="small strong">Проверить обновление</div><div class="tiny muted">Приложение обновляется само, но можно вручную</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-update style="display:none"></button>
       <div class="tiny muted" style="margin-top:8px;line-height:1.5">Сборка ${esc(window.SpokumHost?.version?.() || 'веб-версия')}</div>
     </div>
 
