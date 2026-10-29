@@ -1,4 +1,4 @@
-import { api, state, isPremium } from '../store.js';
+import { api, state, isPremium, isBeta } from '../store.js';
 import { GAMES } from '../games/index.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
@@ -25,10 +25,13 @@ export async function render(root) {
 
   const grid = root.querySelector('[data-grid]');
   const paid = isPremium(state.user);
+  const beta = isBeta(state.user);
   const shown = [...GAMES].sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
   shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
-    const locked = !!game.premium && !paid;
+    // Premium games are gated to beta testers (@silver, @ulquiorra_cifer,
+    // admin-flagged isBeta) OR active premium subscribers.
+    const locked = !!game.premium && !paid && !beta;
     const card = el(`
       <button class="game-card appear${locked ? ' locked' : ''}">
         <div class="art" style="background:linear-gradient(150deg,${game.tint[0]},${game.tint[1]})"></div>
@@ -36,7 +39,7 @@ export async function render(root) {
         <div class="row" style="position:relative;margin-bottom:auto;color:#eef2fb;opacity:.9">
           ${icon(locked ? 'lock' : 'play', 22)}
           <div class="spacer"></div>
-          ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>Премиум</span></span>` : ''}
+          ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>${beta && !paid ? 'Бета' : 'Премиум'}</span></span>` : ''}
         </div>
         <div class="label" style="color:#eef2fb">${esc(game.title)}</div>
         <div class="desc">${esc(game.desc)}</div>
@@ -44,7 +47,9 @@ export async function render(root) {
       </button>`);
     card.onclick = async () => {
       if (!locked) return launch(game, () => render(root));
-      toast('Игра открыта по подписке СпокУм Премиум', 'err');
+      toast(beta && !paid
+        ? 'Игра открыта бета-тестерам — скоро будет у всех'
+        : 'Игра открыта по подписке СпокУм Премиум или для бета-тестеров', 'err');
       const { openBilling } = await import('./settings.js?v=20251028');
       openBilling?.();
     };
@@ -90,10 +95,24 @@ function launch(game, done) {
         <div class="grow"><div class="strong small">${esc(game.title)}</div><div class="tiny" style="opacity:.6">${esc(game.desc)}</div></div>
         <div class="pill" data-best></div>
       </header>
+      <div class="game-hint" data-hint>${hintFor(game.id)}</div>
       <canvas></canvas>
     </div>`);
   document.body.appendChild(stage);
   const canvas = stage.querySelector('canvas');
+  const hint = stage.querySelector('[data-hint]');
+  // Auto-hide the how-to-play hint after 6s or on first interaction.
+  let hintHidden = false;
+  const hideHint = () => {
+    if (hintHidden) return;
+    hintHidden = true;
+    hint.style.transition = 'opacity .25s ease';
+    hint.style.opacity = '0';
+    setTimeout(() => { hint.remove(); }, 300);
+  };
+  setTimeout(hideHint, 6000);
+  canvas.addEventListener('pointerdown', hideHint, { once: true });
+  canvas.addEventListener('keydown', hideHint, { once: true });
   const bestBox = stage.querySelector('[data-best]');
   let best = Number(localStorage.getItem(bestKey(game.id)) || 0);
   bestBox.textContent = `Рекорд ${best}`;
@@ -152,4 +171,20 @@ function launch(game, done) {
     if (current > 0) await report(current);
     done?.();
   };
+}
+
+/* Per-game "how to play" hints shown above the canvas for the first few
+   seconds of a session. Covers the six premium games and a generic
+   fallback for the rest. */
+const HINTS = {
+  sky: 'Веди палец по экрану, чтобы поворачивать. Лети сквозь кольца, уворачивайся от скал. Чем дольше летишь — тем быстрее.',
+  roll: 'Веди палец, чтобы наклонять поле. Докати шар до светящегося кольца наверху. Не падай в дыры — у тебя 5 жизней.',
+  space: 'Води влево-вправо, чтобы двигать корабль. Тап — выстрел. Сбивай астероиды, не дай им коснуться корабля.',
+  racer: 'Води влево-вправо, чтобы уворачиваться от машин. Чем дольше едешь — тем быстрее.',
+  doom: 'Веди палец, чтобы осмотреться. Верх экрана — вперёд, низ — стреляй. Найди и убей всех монстров на уровне.',
+  survivor: 'Веди палец, чтобы двигаться. Тап — выстрел в сторону касания. Отстреливайся от волн врагов, не дай себя окружить.'
+};
+
+function hintFor(id) {
+  return esc(HINTS[id] || 'Управление зависит от игры. Тап — действие, свайп — движение.');
 }

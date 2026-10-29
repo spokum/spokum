@@ -1,4 +1,4 @@
-import { api, state, setUser, applyAppearance, subscribe, initBackend, emit } from './store.js';
+import { api, state, setUser, applyAppearance, subscribe, initBackend, emit, isBeta } from './store.js';
 import { el, esc, plural } from './util.js';
 import { icon, logoMark, setLogoSource, solidIcon } from './icons.js';
 import { toast, openSheet } from './ui.js';
@@ -389,7 +389,9 @@ async function boot() {
 }
 
 function checkPixelBattle() {
-  if (state.user?.username !== 'silver') return;
+  // Pixel battle is a beta feature — only show the banner to beta testers
+  // (@silver, @ulquiorra_cifer, admin-flagged isBeta users).
+  if (!isBeta(state.user)) return;
   if (!api.activePixelBattle) return;
   api.activePixelBattle().then((battle) => {
     if (!battle?.active) return;

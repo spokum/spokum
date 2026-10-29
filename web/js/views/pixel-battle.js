@@ -122,29 +122,37 @@ export async function openPixelBattle() {
   }
 
   host.innerHTML = `
-    <div style="background:#fff;padding:6px 8px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e0e0e0;flex-shrink:0">
-      <button data-close style="background:#eee;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:18px;font-weight:600">x</button>
-      <div style="display:flex;gap:3px;flex-wrap:wrap;flex:1;max-height:30px;overflow:hidden" data-palette></div>
-      <button data-zoom-out style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-size:16px">-</button>
-      <span data-zoom-val style="font-size:11px;color:#888;min-width:30px;text-align:center">100%</span>
-      <button data-zoom-in style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-size:16px">+</button>
-      <button data-reset style="padding:4px 10px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-size:11px">Центр</button>
+    <div style="background:#fff;padding:8px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e0e0e0;flex-shrink:0;flex-wrap:wrap">
+      <button data-close style="background:#eee;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:18px;font-weight:600;min-width:44px;min-height:36px" aria-label="Закрыть">✕</button>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0;max-height:80px;overflow:auto;padding:2px" data-palette></div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        <button data-zoom-out style="padding:8px 14px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:18px;min-width:36px;min-height:36px" aria-label="Уменьшить">−</button>
+        <span data-zoom-val style="font-size:11px;color:#888;min-width:36px;text-align:center">100%</span>
+        <button data-zoom-in style="padding:8px 14px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:18px;min-width:36px;min-height:36px" aria-label="Увеличить">+</button>
+        <button data-reset style="padding:8px 10px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:12px;min-height:36px">Центр</button>
+      </div>
     </div>
-    <div data-status class="tiny muted" style="padding:4px 8px;background:#fafafa;font-size:11px"></div>
-    <canvas data-canvas style="flex:1;width:100%;background:#fff;touch-action:none;cursor:crosshair"></canvas>
-    <div class="tiny muted" style="padding:4px 8px;background:#fafafa;text-align:center;font-size:10px">Тап - поставить пиксель. Долгий тап - кто нарисовал. ПК: колесо мыши - зум, перетаскивание - двигать холст.</div>
+    <div data-status class="tiny muted" style="padding:6px 10px;background:#fafafa;font-size:11px"></div>
+    <canvas data-canvas style="flex:1;width:100%;background:#fff;touch-action:none;cursor:crosshair;display:block"></canvas>
+    <div class="tiny muted" style="padding:6px 10px;background:#fafafa;text-align:center;font-size:10px">Тап — поставить пиксель. Долгий тап — кто нарисовал. ПК: колесо мыши — зум, перетаскивание — двигать холст.</div>
   `;
 
   const palette = host.querySelector('[data-palette]');
   canvas = host.querySelector('[data-canvas]');
   ctx = canvas.getContext('2d');
 
+  const isMobile = matchMedia('(max-width: 720px), (pointer: coarse)').matches;
+  const swatchSize = isMobile ? 36 : 28;
   COLORS.forEach((c, i) => {
-    const btn = el(`<button data-color="${c}" style="width:24px;height:24px;border-radius:5px;background:${c};border:${i===0?'2px solid #87b7a3':'1px solid #ccc'};cursor:pointer;flex-shrink:0"></button>`);
+    const btn = el(`<button data-color="${c}" style="width:${swatchSize}px;height:${swatchSize}px;border-radius:6px;background:${c};border:${i===0?'3px solid #87b7a3':'1px solid #ccc'};cursor:pointer;flex-shrink:0;padding:0;touch-action:manipulation" aria-label="Цвет ${i+1}" aria-pressed="${i===0?'true':'false'}"></button>`);
     btn.onclick = () => {
       selectedColor = c;
-      palette.querySelectorAll('[data-color]').forEach((b) => b.style.border = '1px solid #ccc');
-      btn.style.border = '2px solid #87b7a3';
+      palette.querySelectorAll('[data-color]').forEach((b) => {
+        b.style.border = '1px solid #ccc';
+        b.setAttribute('aria-pressed', 'false');
+      });
+      btn.style.border = '3px solid #87b7a3';
+      btn.setAttribute('aria-pressed', 'true');
     };
     palette.appendChild(btn);
   });
@@ -159,12 +167,22 @@ export async function openPixelBattle() {
 
   setTimeout(() => {
     resizeCanvas();
-    const fitZoom = Math.min(canvas.width / (battle.width * 8), canvas.height / (battle.height * 8));
-    zoom = Math.max(1, fitZoom);
-    panX = (canvas.width - battle.width * (canvas.width / battle.width) * zoom) / 2;
-    panY = (canvas.height - battle.height * (canvas.height / battle.height) * zoom) / 2;
-    panX = Math.max(0, (canvas.width - battle.width * (canvas.width / battle.width) * zoom) / 2);
-    panY = Math.max(0, (canvas.height - battle.height * (canvas.width / battle.width) * zoom) / 2);
+    // Choose an initial zoom that gives at least 24px touch targets per cell.
+    // At zoom=1, cs = canvas.width / battle.width (whole battle fits across).
+    // We want cs >= 24, so zoom >= 24 / cs_at_zoom_1.
+    const csAtZoom1 = canvas.width / battle.width;
+    const minCellPx = isMobile ? 28 : 20; // touch target on mobile, smaller on desktop
+    const fitZoomX = minCellPx / csAtZoom1;
+    // Also fit vertically so the whole battle is visible if possible.
+    const fitZoomY = (canvas.height / battle.height);
+    // On mobile prefer larger cells (pan around); on desktop try to fit all.
+    zoom = isMobile ? fitZoomX : Math.max(1, Math.min(fitZoomX, fitZoomY));
+    zoom = Math.max(0.5, Math.min(8, zoom));
+    const totalW = battle.width * csAtZoom1 * zoom;
+    const totalH = battle.height * (canvas.height / battle.height) * zoom;
+    panX = Math.max(0, (canvas.width - totalW) / 2);
+    panY = Math.max(0, (canvas.height - totalH) / 2);
+    updateZoomLabel();
     draw();
   }, 100);
 
@@ -174,7 +192,17 @@ export async function openPixelBattle() {
 
   host.querySelector('[data-zoom-in]').onclick = () => { zoom = Math.min(10, zoom * 1.5); updateZoomLabel(); draw(); };
   host.querySelector('[data-zoom-out]').onclick = () => { zoom = Math.max(0.5, zoom / 1.5); updateZoomLabel(); draw(); };
-  host.querySelector('[data-reset]').onclick = () => { zoom = 1; panX = 0; panY = 0; updateZoomLabel(); draw(); };
+  host.querySelector('[data-reset]').onclick = () => {
+    zoom = 1; panX = 0; panY = 0;
+    const csAtZoom1 = canvas.width / battle.width;
+    const minCellPx = isMobile ? 28 : 20;
+    zoom = Math.max(0.5, Math.min(8, minCellPx / csAtZoom1));
+    const totalW = battle.width * csAtZoom1 * zoom;
+    const totalH = battle.height * (canvas.height / battle.height) * zoom;
+    panX = Math.max(0, (canvas.width - totalW) / 2);
+    panY = Math.max(0, (canvas.height - totalH) / 2);
+    updateZoomLabel(); draw();
+  };
 
   let pointerDown = false;
   let downX = 0, downY = 0;

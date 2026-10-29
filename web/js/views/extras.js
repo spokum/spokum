@@ -43,7 +43,7 @@ export async function reactionsReady() {
 export function reactionRow(post, refresh) {
   const look = () => REACTIONS.find(([id]) => id === post.myReaction) || REACTIONS[0];
   const wrap = el(`<span class="react-wrap">
-    <button class="icon-btn ${post.myReaction ? 'on' : ''}" data-react-main>${icon(look()[1], 17)}<span>${post.likes || 0}</span></button>
+    <button class="icon-btn ${post.myReaction ? 'on' : ''}" data-react-main aria-pressed="${post.myReaction ? 'true' : 'false'}">${icon(look()[1], 17)}<span>${post.likes || 0}</span></button>
   </span>`);
   const main = wrap.querySelector('[data-react-main]');
 
@@ -51,6 +51,7 @@ export function reactionRow(post, refresh) {
     post.myReaction = result.mine;
     post.likes = result.total;
     main.classList.toggle('on', !!result.mine);
+    main.setAttribute('aria-pressed', String(!!result.mine));
     main.innerHTML = `${icon(look()[1], 17)}<span>${result.total}</span>`;
   };
 

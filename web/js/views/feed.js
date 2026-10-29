@@ -1,10 +1,11 @@
 import { api, state, MOODS, moodStyle, cacheFeed, readFeedCache, isOffline, isPremium, cached, forget } from '../store.js';
-import { el, esc, timeAgo, plural } from '../util.js';
+import { el, esc, timeAgo, plural, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, confirmSheet, pickImage, emptyState, hasStory } from '../ui.js';
 import { openProfile } from './profile.js';
 import { openStories, publishStory } from './stories.js';
 import { isSaved, toggleSaved, savedList, dropSaved, folders, addFolder, dropFolder, setFolder } from '../saved.js';
+import { isBookmarked, toggleBookmark } from './bookmarks.js';
 
 const DAY_THEMES = [
   ['Воскресный итог', 'Что было хорошего за неделю?'],
@@ -226,7 +227,10 @@ function renderComposer(root) {
       <div class="day-theme">${icon('spark', 13)}<span>${esc(dayTheme()[0])}</span></div>
       <div class="row" style="align-items:flex-start">
         ${avatar(state.user, 40)}
-        <textarea class="textarea grow" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="${esc(dayTheme()[1])}"></textarea>
+        <div class="grow" style="position:relative;min-width:0">
+          <textarea class="textarea" maxlength="${isPremium(state.user) ? 5000 : 2000}" placeholder="${esc(dayTheme()[1])}"></textarea>
+          <div class="mention-list" data-mention-list hidden></div>
+        </div>
       </div>
       <div data-preview></div>
       <div data-care></div>
@@ -242,6 +246,7 @@ function renderComposer(root) {
           <button class="icon-btn" data-later>${icon('clock', 18)}<span>Позже</span></button>
           ${state.user?.username  ? `<button class="icon-btn" data-draft-save>${icon('edit', 18)}<span>Черновик</span></button>` : ''}
           ${isPremium(state.user) ? `<button class="icon-btn" data-story>${icon('play', 18)}<span>История</span></button>` : ''}
+          <button class="icon-btn" data-mention-btn title="Упомянуть пользователя">${icon('add_user', 18)}<span>Упомянуть</span></button>
         </div>
         <button class="btn btn-primary btn-sm composer-send" data-send>${icon('send', 16)}<span>Опубликовать</span></button>
       </div>
@@ -308,6 +313,7 @@ function renderComposer(root) {
 
   const area = card.querySelector('textarea');
   const care = card.querySelector('[data-care]');
+  const mentionList = card.querySelector('[data-mention-list]');
   area.value = draft.text;
   area.addEventListener('input', () => {
     draft.text = area.value;
@@ -315,6 +321,87 @@ function renderComposer(root) {
     area.style.height = 'auto';
     area.style.height = `${Math.min(220, area.scrollHeight)}px`;
     care.innerHTML = needsCare(area.value) ? careCard() : '';
+    probeMention();
+  });
+
+  // --- @mentions dropdown: when the cursor follows "@word", show a list of
+  // matching users; clicking one inserts "@username " at the cursor. ---
+  function currentMentionQuery() {
+    const before = area.value.slice(0, area.selectionStart || area.value.length);
+    const match = before.match(/@([a-z0-9_]{0,20})$/i);
+    if (!match) return null;
+    // Don't trigger on emails — require the @ to be at start or after whitespace.
+    const pre = before.slice(0, before.length - match[0].length);
+    if (pre.length && !/\s/.test(pre[pre.length - 1])) return null;
+    return match[1];
+  }
+
+  const searchUsers = debounce(async (q) => {
+    if (!api.searchUsers) { mentionList.hidden = true; return; }
+    try {
+      const { users = [] } = await api.searchUsers(q);
+      const others = users.filter((u) => u.id !== state.user?.id).slice(0, 6);
+      if (!others.length) { mentionList.hidden = true; return; }
+      mentionList.innerHTML = others.map((u) => `
+        <button type="button" class="mention-item" data-username="${esc(u.username)}">
+          ${avatar(u, 24)}
+          <span class="grow" style="min-width:0;text-align:left">
+            <span class="strong small truncate" style="display:block">${esc(u.displayName)}</span>
+            <span class="tiny muted truncate" style="display:block">@${esc(u.username)}</span>
+          </span>
+        </button>`).join('');
+      mentionList.hidden = false;
+      mentionList.querySelectorAll('[data-username]').forEach((b) => {
+        b.onclick = () => insertMention(b.dataset.username);
+      });
+    } catch {
+      mentionList.hidden = true;
+    }
+  }, 220);
+
+  function probeMention() {
+    const q = currentMentionQuery();
+    if (q === null) { mentionList.hidden = true; return; }
+    if (q.length === 0) {
+      // Show a hint to start typing
+      mentionList.innerHTML = `<div class="mention-hint">${icon('add_user', 14)}<span>Начните вводить имя пользователя после @</span></div>`;
+      mentionList.hidden = false;
+      return;
+    }
+    searchUsers(q);
+  }
+
+  function insertMention(username) {
+    const before = area.value.slice(0, area.selectionStart || area.value.length);
+    const after = area.value.slice(area.selectionStart || area.value.length);
+    const replaced = before.replace(/@([a-z0-9_]{0,20})$/i, `@${username} `);
+    area.value = replaced + after;
+    draft.text = area.value;
+    saveDraft();
+    const pos = replaced.length;
+    area.focus();
+    area.setSelectionRange(pos, pos);
+    mentionList.hidden = true;
+    area.dispatchEvent(new Event('input'));
+  }
+
+  area.addEventListener('keydown', (event) => {
+    if (!mentionList.hidden && (event.key === 'Escape')) {
+      mentionList.hidden = true;
+      event.preventDefault();
+    }
+  });
+  area.addEventListener('blur', () => { setTimeout(() => { mentionList.hidden = true; }, 180); });
+  card.querySelector('[data-mention-btn]')?.addEventListener('click', () => {
+    const end = area.selectionStart ?? area.value.length;
+    const before = area.value.slice(0, end);
+    const after = area.value.slice(end);
+    const needsSpace = before.length && !/\s$/.test(before);
+    area.value = `${before}${needsSpace ? ' ' : ''}@${after}`;
+    area.focus();
+    const pos = (before + (needsSpace ? ' ' : '') + '@').length;
+    area.setSelectionRange(pos, pos);
+    area.dispatchEvent(new Event('input'));
   });
 
   const moods = card.querySelector('[data-moods]');
@@ -809,7 +896,9 @@ async function wirePoll(card, post) {
 }
 
 function tagged(text) {
-  return esc(text).replace(/(^|\s)#([\wа-яё]{2,24})/gi, (all, space, tag) => `${space}<span class="hashtag" data-tag="${tag.toLowerCase()}">#${tag}</span>`);
+  return esc(text)
+    .replace(/(^|\s)#([\wа-яё]{2,24})/gi, (all, space, tag) => `${space}<span class="hashtag" data-tag="${tag.toLowerCase()}">#${tag}</span>`)
+    .replace(/@([a-z0-9_]{3,20})/gi, (all, name) => `<span class="mention" data-mention="${name.toLowerCase()}">@${name}</span>`);
 }
 
 function voiceBlock(post) {
@@ -876,21 +965,51 @@ export function postCard(post, refresh, options = {}) {
       ${post.pinned ? `<div class="post-repost">${icon('star', 13)}<span>Закреплено автором</span></div>` : ''}
       ${post.publishAt && post.publishAt > Date.now() ? `<div class="post-repost">${icon('clock', 13)}<span>Выйдет ${esc(timeAgo(post.publishAt).replace('назад', ''))} спустя, пока видно только вам</span></div>` : ''}
       ${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
+      ${post.repostOf ? `<div class="repost-box" data-origin><div class="tiny muted">${icon('refresh', 13)} Загружаем оригинал…</div></div>` : ''}
       ${post.sound && !post.media?.length && !post.video ? voiceBlock(post) : ''}
       ${postMedia(post)}
       ${pollBlock(post)}
       ${post.removed ? `<div class="pill bad" style="margin-top:10px">Скрыт модератором: ${esc(post.removedReason || 'без причины')}</div>` : ''}
       <div class="post-actions">
         <span data-reacts></span>
-        <button class="icon-btn ${post.liked ? 'on' : ''}" data-like hidden>${icon('heart', 17)}<span>${post.likes}</span></button>
+        <button class="icon-btn ${post.liked ? 'on' : ''}" data-like aria-pressed="${post.liked ? 'true' : 'false'}" hidden>${icon('heart', 17)}<span>${post.likes}</span></button>
         <button class="icon-btn" data-comments>${icon('comment', 17)}<span>${post.comments}</span></button>
         <button class="icon-btn ${isSaved(post.id) ? 'on' : ''}" data-save title="Сохранить">${icon('star', 17)}</button>
+        <button class="icon-btn ${isBookmarked(post.id) ? 'on' : ''}" data-bookmark title="В закладки"><span class="emoji-glyph">🔖</span></button>
+        ${state.user ? `<button class="icon-btn" data-repost title="Репостнуть">${icon('refresh', 17)}</button>` : ''}
         ${post.views ? `<span class="icon-btn" style="pointer-events:none">${icon('eye', 17)}<span>${post.views}</span></span>` : ''}
         <div class="grow"></div>
         <button class="icon-btn" data-share>${icon('share', 17)}</button>
         <button class="icon-btn" data-report>${icon('flag', 17)}</button>
       </div>
     </article>`);
+
+  // For reposts: lazily fetch the original post and render it inside the bordered box.
+  if (post.repostOf && api.getPost) {
+    const slot = card.querySelector('[data-origin]');
+    if (slot) {
+      api.getPost(post.repostOf)
+        .then(({ post: src }) => {
+          if (!src || !slot.isConnected) return;
+          const head = `<div class="row" style="gap:8px;align-items:center">
+            <button data-origin-author style="display:contents">${avatar(src.author, 28)}</button>
+            <div class="grow" style="min-width:0">
+              <div class="strong small truncate">${esc(src.author.displayName)}</div>
+              <div class="tiny muted truncate">@${esc(src.author.username)} · ${esc(timeAgo(src.createdAt))}</div>
+            </div>
+          </div>`;
+          const body = `${src.text ? `<p class="small" style="margin:8px 0 0;line-height:1.45;opacity:.92">${tagged(src.text)}</p>` : ''}${src.image ? `<div class="post-image" style="margin-top:8px"><img src="${esc(src.image)}" alt=""></div>` : ''}`;
+          slot.innerHTML = head + body;
+          slot.querySelector('[data-origin-author]')?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openProfile(src.author.username);
+          });
+        })
+        .catch(() => {
+          if (slot.isConnected) slot.innerHTML = `<div class="tiny muted">${icon('warn', 13)} Оригинал недоступен</div>`;
+        });
+    }
+  }
 
   card.querySelector('[data-author]').onclick = () => {
     if (hasStory(post.author)) openStories(post.author.id);
@@ -901,6 +1020,12 @@ export function postCard(post, refresh, options = {}) {
     const on = toggleSaved(post);
     event.currentTarget.classList.toggle('on', on);
     toast(on ? 'Сохранено' : 'Убрано из сохранённых');
+  };
+
+  card.querySelector('[data-bookmark]').onclick = (event) => {
+    const on = toggleBookmark(post);
+    event.currentTarget.classList.toggle('on', on);
+    toast(on ? 'Сохранено' : 'Убрано');
   };
 
   card.querySelector('[data-share]').onclick = async () => {
@@ -958,6 +1083,7 @@ export function postCard(post, refresh, options = {}) {
     try {
       const { post: updated } = await api.toggleLike(post.id);
       button.classList.toggle('on', updated.liked);
+      button.setAttribute('aria-pressed', String(updated.liked));
       button.querySelector('span').textContent = updated.likes;
       post.liked = updated.liked;
       post.likes = updated.likes;
@@ -987,6 +1113,17 @@ export function postCard(post, refresh, options = {}) {
     };
   });
 
+  // @mentions inside post text → open that user's profile
+  card.querySelectorAll('.mention').forEach((node) => {
+    node.onclick = (event) => {
+      event.stopPropagation();
+      const name = node.dataset.mention;
+      if (name) openProfile(name);
+    };
+  });
+
+  card.querySelector('[data-repost]')?.addEventListener('click', () => openRepostSheet(post, refresh));
+
   card.querySelector('[data-comments]').onclick = () =>
     openComments(post, () => {
       const counter = card.querySelector('[data-comments] span');
@@ -995,6 +1132,52 @@ export function postCard(post, refresh, options = {}) {
   card.querySelector('[data-report]').onclick = () => openReport('post', post.id);
   card.querySelector('[data-menu]').onclick = () => openPostMenu(post, refresh, options);
   return card;
+}
+
+// Repost sheet: original post preview (greyed out) + a comment textarea +
+// "Репост" button. Calls api.repostPost (alias of api.repost in both backends).
+export function openRepostSheet(post, refresh) {
+  if (!state.user) return toast('Войдите, чтобы делать репосты', 'err');
+  if (state.user.id === post.author.id) return toast('Свои посты репостить не нужно', 'err');
+  if (post.repostOf) return toast('Это уже репост — репостните исходную запись', 'err');
+  const preview = el(`
+    <div class="repost-source">
+      <div class="row" style="gap:8px;align-items:center">
+        ${avatar(post.author, 32)}
+        <div class="grow" style="min-width:0">
+          <div class="strong small truncate">${esc(post.author.displayName)}</div>
+          <div class="tiny muted truncate">@${esc(post.author.username)} · ${esc(timeAgo(post.createdAt))}</div>
+        </div>
+      </div>
+      ${post.text ? `<p class="small" style="margin:8px 0 0;line-height:1.5;opacity:.85">${tagged(post.text)}</p>` : ''}
+      ${post.image ? `<div class="post-image" style="margin-top:8px"><img src="${esc(post.image)}" alt=""></div>` : ''}
+    </div>`);
+  const body = el(`
+    <div class="col" style="gap:10px">
+      <textarea class="textarea" data-note placeholder="Свой комментарий (необязательно)" maxlength="500"></textarea>
+      <div data-source></div>
+      <button class="btn btn-primary" data-go>${icon('refresh', 16)}<span>Репост</span></button>
+      <p class="tiny muted" style="margin:0">Запись появится в вашей ленте с вашим комментарием и ссылкой на оригинал</p>
+    </div>`);
+  body.querySelector('[data-source]').appendChild(preview);
+  const sheet = openSheet('Репост', body);
+  const note = body.querySelector('[data-note]');
+  const button = body.querySelector('[data-go]');
+  button.onclick = async () => {
+    const comment = note.value.trim();
+    button.disabled = true;
+    try {
+      await api.repostPost(post.id, comment);
+      sheet.close();
+      toast('Репост опубликован');
+      refresh?.();
+    } catch (error) {
+      toast(error.message, 'err');
+    } finally {
+      button.disabled = false;
+    }
+  };
+  return sheet;
 }
 
 function openPostMenu(post, refresh, options) {

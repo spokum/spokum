@@ -1,21 +1,19 @@
 [data-ui='v2'] {
-  --bg: #08090d;
-  --bg-1: #0e1015;
-  --bg-2: #161922;
-  --bg-3: #1f242f;
-  --bg-4: #2a3140;
-  --ink: #f0f2f7;
-  --ink-soft: #c8cdd8;
-  --muted: #6b7280;
-  --line: rgba(255,255,255,.05);
-  --line-strong: rgba(255,255,255,.1);
-  --accent: #b8e6c9;
-  --accent-2: #7dd3a8;
-  --accent-ink: #08110e;
+  /* v2-specific extra shades. We do NOT redefine --bg / --bg-2 / --muted /
+     --line / --line-strong / --accent / --accent-ink here — those come from
+     [data-theme='...'] and [data-accent='...'] in app.css so the theme
+     switcher still works in UI 2.0. We only derive a few v2-only shades
+     from those theme variables. */
+  --bg-1: color-mix(in srgb, var(--bg), var(--bg-2));
+  --bg-3: color-mix(in srgb, var(--bg-2), var(--surface-2));
+  --bg-4: color-mix(in srgb, var(--bg-2), var(--line-strong));
+  --ink: var(--text);
+  --ink-soft: color-mix(in srgb, var(--text), var(--muted));
+  --accent-2: color-mix(in srgb, var(--accent), black 12%);
   --warm: #f0c674;
   --shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.2);
   --shadow-2: 0 4px 16px rgba(0,0,0,.3), 0 8px 32px rgba(0,0,0,.2);
-  --shadow-glow: 0 0 24px rgba(184,230,201,.15);
+  --shadow-glow: 0 0 24px var(--accent-soft);
   --radius: 20px;
   --radius-md: 14px;
   --radius-sm: 10px;
@@ -31,7 +29,7 @@
 }
 
 [data-ui='v2'] #app {
-  background: radial-gradient(ellipse at top, rgba(184,230,201,.03), transparent 60%), var(--bg);
+  background: radial-gradient(ellipse at top, var(--accent-soft), transparent 60%), var(--bg);
   min-height: 100vh;
 }
 
@@ -126,7 +124,7 @@
 [data-ui='v2'] .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(184,230,201,.12);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 [data-ui='v2'] .input::placeholder {
@@ -206,7 +204,7 @@
 }
 
 [data-ui='v2'] .pill.ok {
-  background: rgba(184,230,201,.15);
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
@@ -477,12 +475,12 @@
 }
 
 [data-ui='v2'] .auth-wrap {
-  background: radial-gradient(ellipse at center, rgba(184,230,201,.08), transparent 70%);
+  background: radial-gradient(ellipse at center, var(--accent-soft), transparent 70%);
   min-height: 100vh;
 }
 
 [data-ui='v2'] .auth-logo {
-  filter: drop-shadow(0 0 24px rgba(184,230,201,.3));
+  filter: drop-shadow(0 0 24px var(--accent));
 }
 
 [data-ui='v2'] .tabs {
@@ -525,7 +523,7 @@
 
 [data-ui='v2'] .swatch.active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(184,230,201,.2);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 [data-ui='v2'] .accent-row {

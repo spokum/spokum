@@ -89,6 +89,64 @@ function saveGroups(list) {
   } catch {}
 }
 
+// Friends + per-message emoji reactions live in their own localStorage keys
+// (per spec) so they persist independently of the main spokum.db.v3 blob.
+// Friends store shape:
+//   {
+//     byUser: { [userId]: { friends: [userId], requests: [userId], outgoing: [userId] } },
+//     inbox:  { [toUserId]: [fromUserId, ...] }  // cross-user delivery in same browser
+//   }
+// The per-user shape (`{ friends, requests }`) follows the spec; the outer
+// byUser/inbox wrapping lets multiple local-mode accounts share one browser.
+const FRIENDS_KEY = 'spokum.friends';
+const MSG_REACT_KEY = 'spokum.messageReactions';
+
+function loadFriendsStore() {
+  try {
+    const raw = localStorage.getItem(FRIENDS_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      return {
+        byUser: data.byUser && typeof data.byUser === 'object' ? data.byUser : {},
+        inbox: data.inbox && typeof data.inbox === 'object' ? data.inbox : {}
+      };
+    }
+  } catch {}
+  return { byUser: {}, inbox: {} };
+}
+
+function saveFriendsStore(data) {
+  try { localStorage.setItem(FRIENDS_KEY, JSON.stringify(data)); } catch {}
+}
+
+function userFriendsEntry(data, userId) {
+  const key = String(userId);
+  if (!data.byUser[key]) {
+    data.byUser[key] = { friends: [], requests: [], outgoing: [] };
+  }
+  return data.byUser[key];
+}
+
+function syncFriendInbox(data, userId) {
+  // Pull pending incoming requests from the inbox into `requests` (deduped).
+  const entry = userFriendsEntry(data, userId);
+  const incoming = data.inbox[String(userId)] || [];
+  const merged = Array.from(new Set([...entry.requests, ...incoming].map(String)));
+  entry.requests = merged.map(Number);
+}
+
+function loadMsgReactions() {
+  try {
+    const raw = localStorage.getItem(MSG_REACT_KEY);
+    if (raw) return JSON.parse(raw) || {};
+  } catch {}
+  return {};
+}
+
+function saveMsgReactions(data) {
+  try { localStorage.setItem(MSG_REACT_KEY, JSON.stringify(data || {})); } catch {}
+}
+
 function hueFromName(name) {
   const text = String(name || '');
   let h = 0;
@@ -176,6 +234,21 @@ function normalizePins(value) {
     })
     .filter(Boolean)
     .slice(0, 4);
+}
+
+// Social links on a profile: Telegram, TikTok, VK. Stored as a small map
+// of platform -> handle/URL. We keep the value as the user typed it (a
+// bare @handle, a URL, or a phone number for Telegram) and let the UI
+// decide how to render the link.
+function normalizeSocialLinks(value) {
+  if (!value || typeof value !== 'object') return null;
+  const out = {};
+  const allowed = ['telegram', 'tiktok', 'vk'];
+  for (const key of allowed) {
+    const raw = String(value[key] || '').trim();
+    if (raw) out[key] = raw.slice(0, 120);
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function aliasesOf(user) {
@@ -303,7 +376,7 @@ function pub(user) {
     isTester: !!user.isTester,
     isProbation: !!user.isProbation,
     modRank: user.modRank || 0,
-    isBeta: !!user.isBeta || user.username === 'silver',
+    isBeta: !!user.isBeta || user.username === 'silver' || user.username === 'ulquiorra_cifer',
     coins: user.coins || 0,
     streakDays: user.streakDays || 0,
     bestStreak: user.bestStreak || 0,
@@ -318,6 +391,7 @@ function pub(user) {
     dayWordAt: user.dayWordAt || 0,
     shareWord: !!user.shareWord,
     statusIcon: user.statusIcon || null,
+    socialLinks: normalizeSocialLinks(user.socialLinks),
     premiumUntil: user.premiumUntil || 0,
     premiumReason: user.premiumReason || '',
     premiumGrantedAt: user.premiumGrantedAt || 0,
@@ -749,6 +823,7 @@ export const local = {
     }
     if (patch.shareWord !== undefined) user.shareWord = !!patch.shareWord;
     if (patch.statusIcon !== undefined) user.statusIcon = patch.statusIcon;
+    if (patch.socialLinks !== undefined) user.socialLinks = normalizeSocialLinks(patch.socialLinks);
     save();
     return { user: priv(user) };
   },
@@ -885,6 +960,87 @@ export const local = {
         .slice(0, 40)
         .map(pub)
     };
+  },
+
+  // Channels are chats with kind='channel'. We search by title (case-
+  // insensitive substring). Returns up to 30 matches with member counts
+  // and a `joined` flag for the current viewer so the UI can render the
+  // right follow button.
+  async searchChannels(query) {
+    const q = String(query || '').toLowerCase().trim();
+    const viewer = me();
+    const viewerId = viewer?.id || null;
+    const channels = state.chats
+      .filter((c) => c.kind === 'channel')
+      .filter((c) => !q || String(c.title || '').toLowerCase().includes(q))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, 30)
+      .map((c) => {
+        const memberIds = state.members
+          .filter((m) => m.chatId === c.id)
+          .map((m) => m.userId);
+        const owner = state.users.find((u) => u.id === c.ownerId);
+        return {
+          id: c.id,
+          title: c.title,
+          hue: c.hue,
+          members: memberIds.length,
+          joined: viewerId ? memberIds.includes(viewerId) : false,
+          isOwner: viewerId ? c.ownerId === viewerId : false,
+          owner: owner ? pub(owner) : null,
+          createdAt: c.createdAt
+        };
+      });
+    return { channels };
+  },
+
+  // Recommended channels for the Chats view "Каналы" section. Returns the
+  // top 10 channels by member count (so the user sees the busiest rooms
+  // first). The viewer's joined channels come first.
+  async recommendedChannels() {
+    const viewer = me();
+    const viewerId = viewer?.id || null;
+    const channels = state.chats
+      .filter((c) => c.kind === 'channel')
+      .map((c) => {
+        const memberIds = state.members
+          .filter((m) => m.chatId === c.id)
+          .map((m) => m.userId);
+        const owner = state.users.find((u) => u.id === c.ownerId);
+        return {
+          id: c.id,
+          title: c.title,
+          hue: c.hue,
+          members: memberIds.length,
+          joined: viewerId ? memberIds.includes(viewerId) : false,
+          isOwner: viewerId ? c.ownerId === viewerId : false,
+          owner: owner ? pub(owner) : null,
+          createdAt: c.createdAt
+        };
+      })
+      .sort((a, b) => Number(b.joined) - Number(a.joined) || b.members - a.members)
+      .slice(0, 10);
+    return { channels };
+  },
+
+  // Subscribe / unsubscribe to a channel. In local mode this is the same
+  // as joining/leaving the underlying chat.
+  async followChannel(id) {
+    const user = need();
+    const chat = state.chats.find((c) => c.id === id && c.kind === 'channel');
+    if (!chat) fail('Канал не найден');
+    if (!state.members.some((m) => m.chatId === id && m.userId === user.id)) {
+      state.members.push({ chatId: id, userId: user.id, role: 'member', readAt: 0 });
+      save();
+    }
+    return { ok: true };
+  },
+
+  async unfollowChannel(id) {
+    const user = need();
+    state.members = state.members.filter((m) => !(m.chatId === id && m.userId === user.id && m.role !== 'owner'));
+    save();
+    return { ok: true };
   },
 
   async getUser(name) {
@@ -1549,7 +1705,7 @@ export const local = {
   async grantCoins(amount, reason) {
     ensureNewTables();
     const user = need();
-    const give = Math.min(Math.max(Number(amount) || 0, 0), 40);
+    const give = Math.min(Math.max(Number(amount) || 0, 0), 100);
     if (!give) return { added: 0, coins: user.coins || 0 };
     const day = Date.now() - 86400000;
     const today = state.coinLog
@@ -2564,7 +2720,145 @@ export const local = {
       out[row.messageId] = out[row.messageId] || [];
       out[row.messageId].push({ glyph: row.glyph, user: row.userId });
     });
+    // Merge new emoji-based reactions stored in `spokum.messageReactions` (per spec).
+    const emojiMap = loadMsgReactions();
+    Object.entries(emojiMap).forEach(([mid, users]) => {
+      const numId = Number(mid);
+      if (!ids.has(numId) && !ids.has(mid)) return;
+      out[mid] = out[mid] || [];
+      Object.entries(users || {}).forEach(([uid, emoji]) => {
+        if (!out[mid].some((r) => String(r.user) === String(uid))) {
+          out[mid].push({ glyph: emoji, user: Number(uid) });
+        }
+      });
+    });
     return { reactions: out };
+  },
+
+  async reactMessage(messageId, emoji) {
+    const user = need();
+    const data = loadMsgReactions();
+    const key = String(messageId);
+    data[key] = data[key] || {};
+    if (emoji && String(emoji).trim()) {
+      data[key][String(user.id)] = String(emoji).trim();
+    } else {
+      delete data[key][String(user.id)];
+      if (!Object.keys(data[key]).length) delete data[key];
+    }
+    saveMsgReactions(data);
+    return { ok: true, emoji: emoji || null };
+  },
+
+  async messageReactions(messageId) {
+    const user = me();
+    const data = loadMsgReactions();
+    const map = data[String(messageId)] || {};
+    const reactions = {};
+    let mine = null;
+    Object.entries(map).forEach(([uid, emoji]) => {
+      reactions[emoji] = (reactions[emoji] || 0) + 1;
+      if (user && String(uid) === String(user.id)) mine = emoji;
+    });
+    return { reactions, mine };
+  },
+
+  async repostPost(postId, comment) {
+    return this.repost(postId, comment);
+  },
+
+  async getPost(postId) {
+    need();
+    const id = Number(postId);
+    const post = state.posts.find((p) => p.id === id && !p.removed);
+    if (!post) fail('Запись не найдена');
+    const viewer = me();
+    return { post: shapePost(post, viewer?.id) };
+  },
+
+  // --- Friends (spec: spokum.friends localStorage) ---
+
+  async friendRequest(userId) {
+    const user = need();
+    const target = state.users.find((u) => String(u.id) === String(userId));
+    if (!target) fail('Пользователь не найден');
+    if (String(user.id) === String(userId)) fail('Нельзя добавить себя в друзья');
+    const data = loadFriendsStore();
+    const entry = userFriendsEntry(data, user.id);
+    syncFriendInbox(data, user.id);
+    if (entry.friends.some((id) => String(id) === String(userId))) fail('Уже в друзьях');
+    if (entry.outgoing.some((id) => String(id) === String(userId))) fail('Заявка уже отправлена');
+    entry.outgoing.push(Number(userId));
+    // Cross-user delivery in the same browser: drop a request in the target's inbox.
+    const tid = String(userId);
+    data.inbox[tid] = data.inbox[tid] || [];
+    if (!data.inbox[tid].some((id) => String(id) === String(user.id))) {
+      data.inbox[tid].push(user.id);
+    }
+    saveFriendsStore(data);
+    return { ok: true };
+  },
+
+  async acceptFriend(userId) {
+    const user = need();
+    const data = loadFriendsStore();
+    const entry = userFriendsEntry(data, user.id);
+    syncFriendInbox(data, user.id);
+    entry.requests = entry.requests.filter((id) => String(id) !== String(userId));
+    if (!entry.friends.some((id) => String(id) === String(userId))) {
+      entry.friends.push(Number(userId));
+    }
+    data.inbox[String(user.id)] = (data.inbox[String(user.id)] || []).filter(
+      (id) => String(id) !== String(userId)
+    );
+    // Mirror on the other side so the requester sees them as a friend too.
+    const other = userFriendsEntry(data, userId);
+    if (!other.friends.some((id) => String(id) === String(user.id))) {
+      other.friends.push(user.id);
+    }
+    other.outgoing = other.outgoing.filter((id) => String(id) !== String(user.id));
+    saveFriendsStore(data);
+    return { ok: true };
+  },
+
+  async declineFriend(userId) {
+    const user = need();
+    const data = loadFriendsStore();
+    const entry = userFriendsEntry(data, user.id);
+    syncFriendInbox(data, user.id);
+    entry.requests = entry.requests.filter((id) => String(id) !== String(userId));
+    data.inbox[String(user.id)] = (data.inbox[String(user.id)] || []).filter(
+      (id) => String(id) !== String(userId)
+    );
+    // Let the requester send a fresh request later if they want to.
+    const other = userFriendsEntry(data, userId);
+    other.outgoing = other.outgoing.filter((id) => String(id) !== String(user.id));
+    saveFriendsStore(data);
+    return { ok: true };
+  },
+
+  async removeFriend(userId) {
+    const user = need();
+    const data = loadFriendsStore();
+    const entry = userFriendsEntry(data, user.id);
+    entry.friends = entry.friends.filter((id) => String(id) !== String(userId));
+    // Mirror on the other side too.
+    const other = userFriendsEntry(data, userId);
+    other.friends = other.friends.filter((id) => String(id) !== String(user.id));
+    saveFriendsStore(data);
+    return { ok: true };
+  },
+
+  async listFriends() {
+    const user = need();
+    const data = loadFriendsStore();
+    syncFriendInbox(data, user.id);
+    saveFriendsStore(data);
+    const entry = userFriendsEntry(data, user.id);
+    const toUser = (id) => state.users.find((u) => String(u.id) === String(id));
+    const friends = entry.friends.map(toUser).filter(Boolean).map(pub);
+    const requests = entry.requests.map(toUser).filter(Boolean).map(pub);
+    return { friends, requests };
   },
 
   async seasonState() {
@@ -2963,15 +3257,21 @@ export const local = {
   },
 
   async grantPremium(id, days, reason) {
-    const admin = needAdmin();
+    // Allow self-grant for daily rewards (day 7 bonus)
+    const user = need();
+    const isAdmin = user.isAdmin;
+    const isSelf = String(id) === String(user.id);
+    if (!isAdmin && !isSelf) fail('Нет прав');
     const target = state.users.find((u) => u.id === id);
     if (!target) fail('Пользователь не найден');
     if (!days || days < 1 || days > 365) fail('Срок от 1 до 365 дней');
+    // Non-admins can only grant 1 day to themselves (daily reward)
+    if (!isAdmin && (days > 1 || !isSelf)) fail('Нет прав');
     const base = Math.max(target.premiumUntil || 0, Date.now());
     target.premiumUntil = base + days * 86400000;
     target.premiumReason = String(reason || '').trim() || 'Без причины';
     target.premiumGrantedAt = Date.now();
-    log(admin.id, 'admin.premium.grant', { id, days, reason });
+    if (isAdmin) log(user.id, 'admin.premium.grant', { id, days, reason });
     save();
     return { until: target.premiumUntil };
   },

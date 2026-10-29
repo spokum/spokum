@@ -1,8 +1,63 @@
-import { api, state, setUser, MOODS, moodStyle, isPremium, rankName } from '../store.js';
+import { api, state, setUser, MOODS, moodStyle, isPremium, rankName, isBeta } from '../store.js';
 import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
+
+// ── Bio formatting ─────────────────────────────────────────────────
+// Supports **bold**, *italic* and \n line breaks. The text is escaped
+// first, so we operate on the escaped string when inserting tags.
+export function formatBio(text) {
+  if (!text) return '';
+  let out = esc(text);
+  // **bold** -> <strong>
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // *italic* -> <em> (after bold so we don't double-process the same **)
+  out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // \n -> <br>
+  out = out.replace(/\n/g, '<br>');
+  return out;
+}
+
+// Build a URL for a social handle. Accepts full URLs, @handles, and bare
+// usernames. Returns null if the value is empty.
+function socialUrl(platform, value) {
+  if (!value) return null;
+  const v = String(value).trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  const handle = v.replace(/^@/, '');
+  if (platform === 'telegram') {
+    // Telegram accepts usernames with t.me/ or @ — and phone numbers as
+    // plain digits. We treat anything starting with a + or digit as a
+    // phone number, otherwise it's a username.
+    if (/^\+?\d[\d\s-]+$/.test(handle)) return `https://t.me/${handle.replace(/[^\d]/g, '')}`;
+    return `https://t.me/${handle}`;
+  }
+  if (platform === 'tiktok') return `https://www.tiktok.com/@${handle}`;
+  if (platform === 'vk') return `https://vk.com/${handle}`;
+  return v;
+}
+
+const SOCIAL_META = {
+  telegram: { label: 'Telegram', glyph: 'send' },
+  tiktok:   { label: 'TikTok',   glyph: 'play' },
+  vk:       { label: 'VK',       glyph: 'users' }
+};
+
+function socialLinksRow(user) {
+  const links = user?.socialLinks || {};
+  const items = Object.entries(SOCIAL_META)
+    .map(([key, meta]) => {
+      const value = links[key];
+      const url = socialUrl(key, value);
+      if (!url) return '';
+      return `<a href="${esc(url)}" target="_blank" rel="noopener" class="btn btn-sm" style="padding:6px 10px;display:inline-flex;align-items:center;gap:6px" title="${esc(meta.label)}">${icon(meta.glyph, 15)} ${esc(meta.label)}</a>`;
+    })
+    .filter(Boolean)
+    .join('');
+  return items ? `<div class="row" style="justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap">${items}</div>` : '';
+}
 
 function moodCanvas(user, data) {
   const canvas = document.createElement('canvas');
@@ -462,14 +517,14 @@ export async function render(root) {
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    <button class="hw-profile-btn" data-halloween>
+    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-halloween>
       <span class="hw-profile-icon">${icon('pumpkin', 24)}</span>
       <span class="grow" style="text-align:left">
-        <span class="strong small">Хэллоуин ивент</span>
+        <span class="strong small">Хэллоуин ивент <span class="tiny muted">· бета</span></span>
         <span class="tiny muted">Жуткий сезон · до 31 октября</span>
       </span>
       ${icon('forward', 18)}
-    </button>
+    </button>` : ''}
     <div class="card profile-card appear">
       <div class="banner" style="${bannerStyle(fresh)}">
         <div class="banner-inner">${bannerPins(fresh)}</div>
@@ -483,7 +538,8 @@ export async function render(root) {
       <div class="small muted" style="margin-top:2px">@${esc(fresh.username)}</div>
       <div data-pinned-achv style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px;min-height:0"></div>
       <div class="tiny muted" data-status-line style="margin-top:4px;line-height:1.4;min-height:0"></div>
-      ${fresh.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(fresh.bio)}</p>` : ''}
+      ${fresh.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${formatBio(fresh.bio)}</p>` : ''}
+      ${socialLinksRow(fresh)}
       <div style="display:flex;justify-content:center;margin-top:12px">
         <span class="mood-tag" style="${moodStyle(fresh.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span>
       </div>
@@ -519,6 +575,7 @@ export async function render(root) {
       <button class="btn" data-pins-edit style="width:100%;margin-top:8px">${icon('spark', 17)} Разместить пины</button>` : ''}
       </div>
     </div>
+    <div data-music-host></div>
 
     <div class="col" style="margin-top:12px;gap:6px">
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
@@ -527,6 +584,7 @@ export async function render(root) {
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
       ${fresh.username  ? `<button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">За что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-quests>${icon('star', 20)}<div class="grow"><div class="strong small">Задания дня</div><div class="tiny muted">3 задания + челлендж дня за монеты</div></div>${icon('forward', 16)}</button>` : ''}
+      ${fresh.username  ? `<button class="card list-item" data-daily>${icon('gift', 20)}<div class="grow"><div class="strong small">Ежедневные награды</div><div class="tiny muted">7 дней подряд — монеты и премиум</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-tournaments>${icon('trophy', 20)}<div class="grow"><div class="strong small">Турниры</div><div class="tiny muted">Еженедельные соревнования с призами</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-confessions>${icon('eye', 20)}<div class="grow"><div class="strong small">Анонимные признания</div><div class="tiny muted">Лента анонимных откровений</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-wishlist>${icon('gift', 20)}<div class="grow"><div class="strong small">Мой вишлист</div><div class="tiny muted">Что вы хотите получить</div></div>${icon('forward', 16)}</button>` : ''}
@@ -543,6 +601,8 @@ export async function render(root) {
       <button class="card list-item" data-wallet>${icon('coin', 20)}<div class="grow"><div class="strong small">Кошелёк</div><div class="tiny muted">Монет: ${fresh.coins || 0}</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-recap>${icon('chart', 20)}<div class="grow"><div class="strong small">Итоги</div><div class="tiny muted">Что вы прожили за месяц и за лето</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-card>${icon('image', 20)}<div class="grow"><div class="strong small">Открытка настроения</div><div class="tiny muted">Карточка недели, которой можно поделиться</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-cards>${icon('mail', 20)}<div class="grow"><div class="strong small">Открытки</div><div class="tiny muted">Тихие слова для поста, чата или себя</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-bookmarks>${icon('book', 20)}<div class="grow"><div class="strong small">Закладки</div><div class="tiny muted">Сохранённые записи по категориям</div></div><span class="pill" data-bookmark-count style="margin-right:6px">—</span>${icon('forward', 16)}</button>
       <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-invite>${icon('add_user', 20)}<div class="grow"><div class="strong small">Позвать друга</div><div class="tiny muted">Ваш код, монеты вам и другу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-twins>${icon('users', 20)}<div class="grow"><div class="strong small">Похожие по настроению</div><div class="tiny muted">Люди, у которых недели похожи на вашу</div></div>${icon('forward', 16)}</button>
@@ -553,6 +613,12 @@ export async function render(root) {
       <button class="card list-item" data-compliments>${icon('spark', 20)}<div class="grow"><div class="strong small">Комплименты</div><div class="tiny muted">Мягкие слова, когда они нужны</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gratitude-journal>${icon('heart', 20)}<div class="grow"><div class="strong small">Благодарность</div><div class="tiny muted">Три вещи, за что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Как дела у всех сразу</div></div>${icon('forward', 16)}</button>
+      <div class="divider" style="margin:8px 0"></div>
+      <button class="card list-item" data-mood-chats>${icon('chats', 20)}<div class="grow"><div class="strong small">Чаты по настроению</div><div class="tiny muted">10 комнат под ваше состояние</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-voice-rooms>${icon('phone', 20)}<div class="grow"><div class="strong small">Голосовые комнаты</div><div class="tiny muted">Спокойный вечер, чтение, музыка, общение, сон</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-pnotes>${icon('edit', 20)}<div class="grow"><div class="strong small">Заметки</div><div class="tiny muted">Приватные записи только для вас</div></div><span class="pill" data-pnotes-count style="margin-right:6px">0</span>${icon('forward', 16)}</button>
+      <button class="card list-item" data-gallery>${icon('image', 20)}<div class="grow"><div class="strong small">Галерея</div><div class="tiny muted">Все ваши фото и видео из записей</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-profile-music>${icon('volume', 20)}<div class="grow"><div class="strong small">Музыка профиля</div><div class="tiny muted">Бесплатный атмосферный трек в шапку профиля</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
@@ -575,6 +641,60 @@ export async function render(root) {
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
   body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
   body.querySelector('[data-twins]')?.addEventListener('click', () => openTwins());
+
+  // ── New buttons: mood chats, voice rooms, private notes, gallery,
+  //    profile music. These load lazily so the main profile render
+  //    doesn't pay for them up-front.
+  body.querySelector('[data-mood-chats]')?.addEventListener('click', async () => {
+    const { openMoodChats } = await import('./mood-chats.js?v=20251028');
+    openMoodChats();
+  });
+  body.querySelector('[data-voice-rooms]')?.addEventListener('click', async () => {
+    const { openVoiceRooms } = await import('./voice-rooms.js?v=20251028');
+    openVoiceRooms();
+  });
+  body.querySelector('[data-pnotes]')?.addEventListener('click', async () => {
+    const { openNotes } = await import('./notes.js?v=20251028');
+    openNotes();
+    // Refresh the count badge after the sheet closes (best-effort).
+    setTimeout(() => {
+      import('./notes.js?v=20251028').then(({ getNotesCount }) => {
+        const node = body.querySelector('[data-pnotes-count]');
+        if (node) node.textContent = String(getNotesCount());
+      }).catch(() => {});
+    }, 600);
+  });
+  body.querySelector('[data-gallery]')?.addEventListener('click', async () => {
+    const { openGallery } = await import('./gallery.js?v=20251028');
+    openGallery(fresh.username);
+  });
+  body.querySelector('[data-profile-music]')?.addEventListener('click', async () => {
+    const { openMusicPicker } = await import('./profile-music.js?v=20251028');
+    openMusicPicker(() => paintMusicWidget());
+  });
+
+  // Notes count badge.
+  import('./notes.js?v=20251028').then(({ getNotesCount }) => {
+    const node = body.querySelector('[data-pnotes-count]');
+    if (node) node.textContent = String(getNotesCount());
+  }).catch(() => {});
+
+  // Profile music widget — shown above the actions list when the user
+  // has chosen a track. Free for everyone (no premium gate).
+  const musicHost = body.querySelector('[data-music-host]');
+  const paintMusicWidget = () => {
+    if (!musicHost) return;
+    import('./profile-music.js?v=20251028').then(({ profileMusicWidget, bindMusicWidget }) => {
+      musicHost.innerHTML = profileMusicWidget(true);
+      bindMusicWidget(musicHost, () => {
+        // Re-open the picker so the user can change the track.
+        import('./profile-music.js?v=20251028').then(({ openMusicPicker }) => {
+          openMusicPicker(() => paintMusicWidget());
+        });
+      });
+    }).catch(() => {});
+  };
+  paintMusicWidget();
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
@@ -669,6 +789,13 @@ export async function render(root) {
       const node = body.querySelector('[data-achv-count]');
       if (node) node.textContent = `${count}/${list.length}`;
     }).catch(() => {});
+    import('./bookmarks.js?v=20251028').then(() => {
+      try {
+        const list = JSON.parse(localStorage.getItem('spokum.bookmarks') || '[]');
+        const node = body.querySelector('[data-bookmark-count]');
+        if (node) node.textContent = Array.isArray(list) ? list.length : 0;
+      } catch {}
+    }).catch(() => {});
     // Render pinned achievement badges near the user's name.
     pinnedAchievements().then((items) => {
       const host = body.querySelector('[data-pinned-achv]');
@@ -745,6 +872,18 @@ export async function render(root) {
   body.querySelector('[data-quests]')?.addEventListener('click', async () => {
     const { openQuests } = await import('./quests.js?v=20251028');
     openQuests();
+  });
+  body.querySelector('[data-daily]')?.addEventListener('click', async () => {
+    const { openDailyRewards } = await import('./daily-rewards.js?v=20251028');
+    openDailyRewards();
+  });
+  body.querySelector('[data-cards]')?.addEventListener('click', async () => {
+    const { openCards } = await import('./cards.js?v=20251028');
+    openCards();
+  });
+  body.querySelector('[data-bookmarks]')?.addEventListener('click', async () => {
+    const { openBookmarks } = await import('./bookmarks.js?v=20251028');
+    openBookmarks();
   });
   body.querySelector('[data-tournaments]')?.addEventListener('click', async () => {
     const { openTournaments } = await import('./tournaments.js?v=20251028');
@@ -1054,7 +1193,24 @@ function openEditor(done) {
         </div>
       </div>
       <div><div class="tiny muted" style="margin-bottom:6px">Имя</div><input class="input" data-name maxlength="40" value="${esc(user.displayName)}"></div>
-      <div><div class="tiny muted" style="margin-bottom:6px">О себе</div><textarea class="textarea" data-bio maxlength="300">${esc(user.bio || '')}</textarea></div>
+      <div>
+        <div class="tiny muted" style="margin-bottom:6px">О себе</div>
+        <div class="row" style="gap:4px;margin-bottom:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" data-fmt="bold" title="Жирный"><strong>Ж</strong></button>
+          <button class="btn btn-sm" data-fmt="italic" title="Курсив"><em>К</em></button>
+          <button class="btn btn-sm" data-fmt="br" title="С новой строки">↵</button>
+        </div>
+        <textarea class="textarea" data-bio maxlength="300" placeholder="Пара слов о себе. Используйте **ж** для жирного, *к* для курсива." style="min-height:120px">${esc(user.bio || '')}</textarea>
+        <div class="tiny muted" style="margin-top:4px;line-height:1.5">Поддерживаются **жирный**, *курсив* и переносы строк.</div>
+      </div>
+      <div>
+        <div class="tiny muted" style="margin-bottom:6px">Соцсети</div>
+        <div class="col" style="gap:6px">
+          <input class="input" data-social="telegram" placeholder="Telegram (@username, ссылка или телефон)" value="${esc(user.socialLinks?.telegram || '')}" maxlength="120">
+          <input class="input" data-social="tiktok" placeholder="TikTok (@username или ссылка)" value="${esc(user.socialLinks?.tiktok || '')}" maxlength="120">
+          <input class="input" data-social="vk" placeholder="VK (id или ссылка)" value="${esc(user.socialLinks?.vk || '')}" maxlength="120">
+        </div>
+      </div>
       <div><div class="tiny muted" style="margin-bottom:6px">Цвет аватара</div><input type="range" min="0" max="360" value="${Number(user.hue) || 220}" data-hue style="width:100%"></div>
       ${isPremium(user) ? `
       <div class="divider"></div>
@@ -1098,6 +1254,35 @@ function openEditor(done) {
     redraw();
   });
 
+  // Bio formatting toolbar: wraps the selected text in **...**, *...*, or
+  // inserts a newline at the cursor. Pure-text helpers — the formatter
+  // in `formatBio` interprets them when the bio is rendered.
+  const bioField = body.querySelector('[data-bio]');
+  const wrap = (open, close = open) => {
+    const start = bioField.selectionStart;
+    const end = bioField.selectionEnd;
+    const before = bioField.value.slice(0, start);
+    const sel = bioField.value.slice(start, end);
+    const after = bioField.value.slice(end);
+    bioField.value = before + open + sel + close + after;
+    const cursor = before.length + open.length + sel.length + close.length;
+    bioField.focus();
+    bioField.setSelectionRange(cursor, cursor);
+  };
+  body.querySelectorAll('[data-fmt]').forEach((btn) => {
+    btn.onclick = () => {
+      const kind = btn.dataset.fmt;
+      if (kind === 'bold') wrap('**');
+      else if (kind === 'italic') wrap('*');
+      else if (kind === 'br') {
+        const start = bioField.selectionStart;
+        bioField.value = bioField.value.slice(0, start) + '\n' + bioField.value.slice(start);
+        bioField.focus();
+        bioField.setSelectionRange(start + 1, start + 1);
+      }
+    };
+  });
+
   let statusIcon = user.statusIcon || null;
   const statusPreview = body.querySelector('[data-status-preview]');
 
@@ -1119,11 +1304,18 @@ function openEditor(done) {
   drawStatus();
   body.querySelector('[data-save]').onclick = async () => {
     try {
+      const socialLinks = {};
+      body.querySelectorAll('[data-social]').forEach((input) => {
+        const key = input.dataset.social;
+        const value = input.value.trim();
+        if (value) socialLinks[key] = value;
+      });
       const patch = {
         displayName: body.querySelector('[data-name]').value,
         bio: body.querySelector('[data-bio]').value,
         hue,
-        avatar: avatarData
+        avatar: avatarData,
+        socialLinks
       };
       if (isPremium(user)) patch.statusIcon = statusIcon;
       const { user: updated } = await api.updateMe(patch);
@@ -1434,7 +1626,8 @@ export async function openProfile(username) {
         <div data-shelf></div>
         <div data-likes></div>
         ${dayWordChip(user)}
-        ${user.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${esc(user.bio)}</p>` : ''}
+        ${user.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${formatBio(user.bio)}</p>` : ''}
+        ${socialLinksRow(user)}
         <div style="display:flex;justify-content:center;margin-top:12px"><span class="mood-tag" style="${moodStyle(user.mood)}"><i class="mood-dot"></i>${esc(mood.label)}</span></div>
         <div class="stat-grid" style="margin-top:16px">
           <div class="stat"><div class="v">${user.posts}</div><div class="k">постов</div></div>
@@ -1462,7 +1655,7 @@ export async function openProfile(username) {
         <div class="row" style="margin-top:8px;gap:8px">
           <button class="btn grow" data-block style="color:#c98b8b">${icon('ban', 17)} Заблокировать</button>
         </div>
-        ${state.user?.username  && api.sendFriendRequest ? `<div class="row" style="margin-top:8px;gap:8px">
+        ${state.user?.username  && api.friendRequest ? `<div class="row" style="margin-top:8px;gap:8px">
           <button class="btn btn-primary grow" data-add-friend>${icon('plus', 17)} В друзья</button>
         </div>` : ''}
         ${state.user?.isModerator || state.user?.isAdmin ? `<div class="col" style="margin-top:8px;gap:8px">
@@ -1568,10 +1761,16 @@ export async function openProfile(username) {
         toast(error.message, 'err');
       }
     });
-    body.querySelector('[data-add-friend]')?.addEventListener('click', async () => {
+    body.querySelector('[data-add-friend]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
       try {
-        await api.sendFriendRequest(user.id);
+        await api.friendRequest(user.id);
         toast('Заявка отправлена');
+        if (button) {
+          button.disabled = true;
+          button.classList.remove('btn-primary');
+          button.innerHTML = `${icon('check', 17)} Заявка отправлена`;
+        }
       } catch (error) {
         toast(error.message, 'err');
       }

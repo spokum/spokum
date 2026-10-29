@@ -1,4 +1,4 @@
-import { state } from '../store.js';
+import { state, isBeta } from '../store.js';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { toast } from '../ui.js';
@@ -862,8 +862,8 @@ function paintShop(view) {
         </div>
       </div>
       ${has
-        ? `<button class="btn btn-sm hw-owned-btn" disabled>${icon('check', 16)} Куплено</button>`
-        : `<button class="btn btn-sm hw-buy-btn" data-buy="${item.id}" ${can ? '' : 'disabled'}>${can ? 'Купить' : 'Мало конфет'}</button>`}
+        ? `<button class="btn btn-sm hw-owned-btn" disabled aria-disabled="true">${icon('check', 16)} Куплено</button>`
+        : `<button class="btn btn-sm hw-buy-btn" data-buy="${item.id}" ${can ? '' : 'disabled'} aria-disabled="${can ? 'false' : 'true'}">${can ? 'Купить' : 'Мало конфет'}</button>`}
     </div>`;
   }).join('');
 
@@ -872,23 +872,58 @@ function paintShop(view) {
       const id = btn.dataset.buy;
       const item = SHOP.find((x) => x.id === id);
       if (!item) return;
-      const owned = readArr(KEYS.owned);
-      if (owned.includes(id)) return;
-      const candies = readNum(KEYS.candies);
-      if (candies < item.price) {
+      // Re-read owned & candies fresh — they may have changed since render.
+      const ownedNow = readArr(KEYS.owned);
+      if (ownedNow.includes(id)) {
+        toast('Уже куплено', 'err');
+        paintShop(view);
+        return;
+      }
+      const candiesNow = readNum(KEYS.candies);
+      if (candiesNow < item.price) {
         toast('Не хватает конфет', 'err');
         return;
       }
-      writeNum(KEYS.candies, candies - item.price);
-      owned.push(id);
-      writeArr(KEYS.owned, owned);
+      // Deduct candies and grant the item.
+      writeNum(KEYS.candies, candiesNow - item.price);
+      ownedNow.push(id);
+      writeArr(KEYS.owned, ownedNow);
       toast('Куплено: ' + item.name);
       confettiBurst(view);
+      // Re-render shop + stats + owned items list.
       paintShop(view);
       paintStats(view);
       paintReward(view);
+      paintOwned(view);
     };
   });
+  // Also refresh the owned-items list whenever the shop is repainted.
+  paintOwned(view);
+}
+
+/* Render the "Купленные предметы" section so users can see their purchases. */
+function paintOwned(view) {
+  const box = view.querySelector('[data-owned]');
+  if (!box) return;
+  const owned = readArr(KEYS.owned);
+  if (!owned.length) {
+    box.innerHTML = `<div class="tiny muted" style="padding:8px 4px">Пока ничего не куплено. Зарабатывай конфеты в мини-играх и возвращайся в лавку!</div>`;
+    return;
+  }
+  box.innerHTML = owned
+    .map((id) => {
+      const item = SHOP.find((x) => x.id === id);
+      if (!item) return '';
+      return `<div class="hw-owned-item">
+        <span class="hw-shop-icon">${icon(item.icon, 22)}</span>
+        <span class="grow">
+          <div class="strong small">${esc(item.name)}</div>
+          <div class="tiny muted">${esc(item.desc)}</div>
+        </span>
+        <span class="pill ok">${icon('check', 12)} Куплено</span>
+      </div>`;
+    })
+    .join('');
 }
 
 function paintGames(view) {
@@ -1019,6 +1054,9 @@ function openLocked(reason) {
 export function openHalloween() {
   const user = state.user;
   if (!user) return openLocked('Нужен вход для участия. Войдите, чтобы открыть ивент.');
+  // Halloween is currently in beta — only @silver, @ulquiorra_cifer, and admin-flagged
+  // beta users can open it.
+  if (!isBeta(user)) return openLocked('Ивент пока открыт только бета-тестерам. Скоро будет у всех.');
 
   // Apply any pending admin grants before showing the event
   applyHalloweenPending();
@@ -1081,6 +1119,12 @@ export function openHalloween() {
           <div class="hw-shop" data-shop></div>
         </section>
 
+        <!-- 7b. Owned items -->
+        <section class="hw-section">
+          <div class="hw-section-title">${icon('check', 18)} <span>Купленные предметы</span></div>
+          <div class="hw-card" data-owned></div>
+        </section>
+
         <!-- 8. Footer -->
         <footer class="hw-foot">
           <div class="hw-bat-line" aria-hidden="true">
@@ -1110,6 +1154,7 @@ export function openHalloween() {
   paintLeaderboard(view);
   paintMood(view);
   paintShop(view);
+  paintOwned(view);
 
   // Trick-or-Treat claim
   const claimBtn = view.querySelector('[data-claim]');
@@ -1128,6 +1173,7 @@ export function openHalloween() {
     paintStats(view);
     paintReward(view);
     paintShop(view);
+    paintOwned(view);
   };
 
   return { close, view };

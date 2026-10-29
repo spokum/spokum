@@ -46,7 +46,7 @@ function shapeProfile(row, extra = {}) {
     isTester: !!row.is_tester,
     isProbation: !!row.is_probation,
     modRank: row.mod_rank ?? 0,
-    isBeta: !!row.is_beta || row.username === 'silver',
+    isBeta: !!row.is_beta || row.username === 'silver' || row.username === 'ulquiorra_cifer',
     coins: row.coins ?? 0,
     streakDays: row.streak_days ?? 0,
     bestStreak: row.best_streak ?? 0,
@@ -1904,6 +1904,46 @@ export async function createBackend(url, key) {
       return { reactions: data || {} };
     },
 
+    // Spec-named emoji reactions. On the server side the existing
+    // `message_react` RPC accepts any glyph string — we pass the emoji through.
+    async reactMessage(messageId, emoji) {
+      const { data, error } = await sb.rpc('message_react', { target: messageId, glyph: emoji || '' });
+      guard(error);
+      return data || { ok: true, emoji: emoji || null };
+    },
+
+    async messageReactions(messageId) {
+      // No dedicated per-message RPC; chats.js uses chatReactions(chatId) for
+      // display. This method is provided per spec and returns a graceful empty
+      // result so callers don't break when the RPC isn't available yet.
+      try {
+        const { data, error } = await sb.rpc('message_reactions', { target: messageId });
+        if (error) return { reactions: {}, mine: null };
+        if (data && typeof data === 'object') {
+          return { reactions: data.reactions || data || {}, mine: data.mine || null };
+        }
+        return { reactions: {}, mine: null };
+      } catch {
+        return { reactions: {}, mine: null };
+      }
+    },
+
+    async repostPost(postId, comment) {
+      return this.repost(postId, comment);
+    },
+
+    async getPost(postId) {
+      const { data, error } = await sb
+        .from('posts')
+        .select(POST_SELECT())
+        .eq('id', postId)
+        .maybeSingle();
+      guard(error);
+      if (!data) throw new Error('Запись не найдена');
+      const liked = await likedSet([data.id]);
+      return { post: shapePost(data, liked) };
+    },
+
     async seasonState() {
       const { data, error } = await sb.rpc('season_state');
       guard(error);
@@ -2544,6 +2584,38 @@ export async function createBackend(url, key) {
       const { data, error } = await sb.rpc('pending_friend_requests');
       guard(error);
       return { requests: data || [] };
+    },
+    // Spec-named aliases (friends). Wrap the existing RPCs so both the new
+    // friends.js view and the older openFriends code path keep working.
+    async friendRequest(userId) {
+      const { data, error } = await sb.rpc('send_friend_request', { p_target: userId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async acceptFriend(userId) {
+      const { data, error } = await sb.rpc('accept_friend', { p_requester: userId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async declineFriend(userId) {
+      // No dedicated decline RPC — drop the pending request via remove_friend.
+      const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async removeFriend(userId) {
+      const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
+      guard(error);
+      return data || { ok: true };
+    },
+    async listFriends() {
+      const [fr, pend] = await Promise.all([
+        sb.rpc('my_friends'),
+        sb.rpc('pending_friend_requests')
+      ]);
+      guard(fr.error);
+      guard(pend.error);
+      return { friends: fr.data || [], requests: pend.data || [] };
     },
     async spinWheel() {
       const { data, error } = await sb.rpc('spin_wheel');

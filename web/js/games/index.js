@@ -3658,7 +3658,7 @@ function sky(canvas, report) {
     let ahead = 0;
 
     const reset = () => {
-      S = { x: 0, y: 0, z: 0, roll: 0, speed: 24, score: 0, rings: 0, over: false, shake: 0 };
+      S = { x: 0, y: 0, z: 0, roll: 0, speed: 18, score: 0, rings: 0, over: false, shake: 0 };
       pillars = [];
       rings = [];
       sparks = [];
@@ -3670,7 +3670,7 @@ function sky(canvas, report) {
     const grow = () => {
       while (ahead < S.z + 260) {
         const lane = (Math.random() - 0.5) * 30;
-        const count = 2 + Math.floor(Math.random() * 3);
+        const count = 1 + Math.floor(Math.random() * 2);
         for (let i = 0; i < count; i++) {
           const x = lane + (Math.random() - 0.5) * 26;
           const tall = Math.random() < 0.5;
@@ -3683,10 +3683,10 @@ function sky(canvas, report) {
             hue: 190 + Math.random() * 80
           });
         }
-        if (Math.random() < 0.55) {
-          rings.push({ x: (Math.random() - 0.5) * 22, y: (Math.random() - 0.5) * 10, z: ahead + 4, r: 2.4, taken: false });
+        if (Math.random() < 0.7) {
+          rings.push({ x: (Math.random() - 0.5) * 22, y: (Math.random() - 0.5) * 10, z: ahead + 4, r: 2.8, taken: false });
         }
-        ahead += 11 + Math.random() * 6;
+        ahead += 13 + Math.random() * 7;
       }
       pillars = pillars.filter((p) => p.z > S.z - 12);
       rings = rings.filter((r) => r.z > S.z - 6);
@@ -3761,13 +3761,13 @@ function sky(canvas, report) {
       },
       update(dt) {
         if (S.over) return;
-        S.speed = Math.min(52, S.speed + dt * 0.9);
+        S.speed = Math.min(38, S.speed + dt * 0.55);
         S.z += S.speed * dt;
         S.score += S.speed * dt * 0.6;
-        const nx = S.x + (aim.x - S.x) * Math.min(1, dt * 5.5);
+        const nx = S.x + (aim.x - S.x) * Math.min(1, dt * 6.5);
         S.roll = Math.max(-0.5, Math.min(0.5, (nx - S.x) * 3.4));
         S.x = nx;
-        S.y += (aim.y - S.y) * Math.min(1, dt * 5);
+        S.y += (aim.y - S.y) * Math.min(1, dt * 6);
         if (S.shake > 0) S.shake = Math.max(0, S.shake - dt * 2);
         grow();
 
@@ -3924,17 +3924,17 @@ function roll(canvas, report) {
       const rows = Math.min(5, 2 + level);
       for (let i = 0; i < rows; i++) {
         const y = pad + ((i + 1) * (height - pad * 2)) / (rows + 1);
-        const gap = 70 + Math.random() * 40;
+        const gap = 80 + Math.random() * 50;
         const at = pad + Math.random() * (width - pad * 2 - gap);
         walls.push({ x: pad, y: y - 7, w: at - pad, h: 14 });
         walls.push({ x: at + gap, y: y - 7, w: width - pad - at - gap, h: 14 });
       }
-      const count = Math.min(7, 1 + level);
+      const count = Math.min(6, 1 + level);
       for (let i = 0; i < count; i++) {
         holes.push({
           x: pad + 30 + Math.random() * (width - pad * 2 - 60),
           y: height * 0.25 + Math.random() * (height * 0.55),
-          r: 15
+          r: 13
         });
       }
       return { walls, holes };
@@ -3959,7 +3959,7 @@ function roll(canvas, report) {
       };
     };
 
-    start(1, 0, 3);
+    start(1, 0, 5);
 
     const hit = (rect) => S.x + S.r > rect.x && S.x - S.r < rect.x + rect.w && S.y + S.r > rect.y && S.y - S.r < rect.y + rect.h;
 
@@ -3983,7 +3983,7 @@ function roll(canvas, report) {
           event.preventDefault();
           capture(node, event);
           if (S.over) {
-            start(1, 0, 3);
+            start(1, 0, 5);
             return;
           }
           move(event);
@@ -3991,7 +3991,7 @@ function roll(canvas, report) {
         bind('touchstart', (event) => {
           event.preventDefault();
           if (S.over) {
-            start(1, 0, 3);
+            start(1, 0, 5);
             return;
           }
           move(event);
@@ -4004,8 +4004,8 @@ function roll(canvas, report) {
       update(dt) {
         if (S.over) return;
         if (S.flash > 0) S.flash = Math.max(0, S.flash - dt * 2);
-        S.vx += tilt.x * 900 * dt;
-        S.vy += tilt.y * 900 * dt;
+        S.vx += tilt.x * 700 * dt;
+        S.vy += tilt.y * 700 * dt;
         S.vx *= 0.985;
         S.vy *= 0.985;
 
@@ -5881,10 +5881,10 @@ function space(canvas, report) {
         s.dist += dt; s.x += (target - s.x) * Math.min(1, dt * 10);
         s.bullets.forEach(b => b.y += b.v * dt); s.bullets = s.bullets.filter(b => b.y > -0.1);
         s.spawn -= dt;
-        if (s.spawn <= 0) { s.spawn = Math.max(0.3, 0.8 - s.dist * 0.003); s.rocks.push({ x: Math.random(), y: -0.05, v: 0.3 + Math.random() * 0.3 + s.dist * 0.002, r: 0.03 + Math.random() * 0.02 }); }
+        if (s.spawn <= 0) { s.spawn = Math.max(0.5, 0.95 - s.dist * 0.002); s.rocks.push({ x: Math.random(), y: -0.05, v: 0.22 + Math.random() * 0.22 + s.dist * 0.0015, r: 0.035 + Math.random() * 0.02 }); }
         s.rocks.forEach(r => r.y += r.v * dt);
-        s.rocks = s.rocks.filter(r => { if (r.y > 1.1) return false; s.bullets.forEach(b => { const dx=r.x-b.x, dy=r.y-b.y; if (Math.sqrt(dx*dx+dy*dy)<r.r+0.02) { r.dead=true; s.score+=15; } }); return !r.dead; });
-        s.rocks = s.rocks.filter(r => { const dx=r.x-s.x, dy=r.y-s.y; if (Math.sqrt(dx*dx+dy*dy)<r.r+0.03) { s.over=true; report(s.score); return false; } return true; });
+        s.rocks = s.rocks.filter(r => { if (r.y > 1.1) return false; s.bullets.forEach(b => { const dx=r.x-b.x, dy=r.y-b.y; if (Math.sqrt(dx*dx+dy*dy)<r.r+0.025) { r.dead=true; s.score+=15; } }); return !r.dead; });
+        s.rocks = s.rocks.filter(r => { const dx=r.x-s.x, dy=r.y-s.y; if (Math.sqrt(dx*dx+dy*dy)<r.r+0.035) { s.over=true; report(s.score); return false; } return true; });
       },
       draw(ctx, size) {
         const { w, h } = size; backdrop(ctx, w, h, ['#050510', '#0a0a20']);
@@ -5912,12 +5912,12 @@ function racer(canvas, report) {
       },
       update(dt) {
         if (s.over) return;
-        s.dist += dt; s.speed = Math.min(1.5, 0.5 + s.dist * 0.01); s.score += Math.floor(s.speed * dt * 10);
+        s.dist += dt; s.speed = Math.min(1.1, 0.5 + s.dist * 0.007); s.score += Math.floor(s.speed * dt * 10);
         s.x += (target - s.x) * Math.min(1, dt * 8);
         s.spawn -= dt;
-        if (s.spawn <= 0) { s.spawn = Math.max(0.3, 0.8 - s.dist * 0.005); s.obstacles.push({ x: 0.1 + Math.random() * 0.8, y: -0.1, w: 0.12 + Math.random() * 0.08 }); }
+        if (s.spawn <= 0) { s.spawn = Math.max(0.5, 0.95 - s.dist * 0.003); s.obstacles.push({ x: 0.1 + Math.random() * 0.8, y: -0.1, w: 0.12 + Math.random() * 0.08 }); }
         s.obstacles.forEach(o => o.y += s.speed * dt);
-        s.obstacles = s.obstacles.filter(o => { if (o.y > 1.1) return false; if (o.y > 0.75 && o.y < 0.9 && Math.abs(o.x - s.x) < o.w / 2 + 0.04) { s.over = true; report(s.score); return false; } return true; });
+        s.obstacles = s.obstacles.filter(o => { if (o.y > 1.1) return false; if (o.y > 0.75 && o.y < 0.9 && Math.abs(o.x - s.x) < o.w / 2 + 0.05) { s.over = true; report(s.score); return false; } return true; });
       },
       draw(ctx, size) {
         const { w, h } = size; backdrop(ctx, w, h, ['#0d0d10', '#1a1a20']);
@@ -6728,8 +6728,403 @@ export const GAMES = [
     desc: 'Прыгай по орбитам мимо астероидов',
     tint: ['#080a18', '#1a1838'],
     mount: orbit2
+  },
+  {
+    id: 'color_match',
+    title: 'Цветовой матч',
+    desc: 'Повтори последовательность цветов',
+    tint: ['#0d0f1a', '#1d2340'],
+    mount: colorMatch
+  },
+  {
+    id: 'number_puzzle',
+    title: 'Пятнашки',
+    desc: 'Собери числа по порядку',
+    tint: ['#0e1524', '#1d2c44'],
+    mount: numberPuzzle
+  },
+  {
+    id: 'bubble_pop',
+    title: 'Пузырьки',
+    desc: 'Лопай пузырьки, не пропускай больше трёх',
+    tint: ['#0a1420', '#163040'],
+    mount: bubblePop
   }
 ];
+
+// ── color_match — Simon-says style color matching game ─────────────
+// Four colored panels light up in a growing sequence; the player must
+// tap them back in the same order. Each round adds one more step.
+function colorMatch(canvas, report) {
+  return runner(canvas, () => {
+    const COLORS = [
+      { fill: '#3aa0ff', glow: 'rgba(58,160,255,.5)' },   // blue (top-left)
+      { fill: '#ff5a5a', glow: 'rgba(255,90,90,.5)' },    // red (top-right)
+      { fill: '#5acb7a', glow: 'rgba(90,203,122,.5)' },   // green (bottom-left)
+      { fill: '#ffcb3a', glow: 'rgba(255,203,58,.5)' }    // yellow (bottom-right)
+    ];
+    let seq = [];
+    let input = [];
+    let phase = 'show';        // 'show' | 'input' | 'over'
+    let showIdx = -1;          // index currently lit during 'show'
+    let showTimer = 0;
+    let flashIdx = -1;         // panel currently lit by the player or AI
+    let flashTimer = 0;
+    let round = 0;
+    let over = false;
+
+    const reset = () => {
+      seq = [Math.floor(Math.random() * 4)];
+      input = [];
+      phase = 'show';
+      showIdx = -1;
+      showTimer = 0.6;
+      flashIdx = -1;
+      round = 1;
+      over = false;
+    };
+    reset();
+
+    const nextRound = () => {
+      seq.push(Math.floor(Math.random() * 4));
+      input = [];
+      phase = 'show';
+      showIdx = -1;
+      showTimer = 0.6;
+      round = seq.length;
+    };
+
+    return {
+      score: () => round - 1,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (over) { reset(); return; }
+          if (phase !== 'input') return;
+          const rect = node.getBoundingClientRect();
+          const x = (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
+          const y = (event.touches?.[0]?.clientY ?? event.clientY) - rect.top;
+          const col = x < rect.width / 2 ? 0 : 1;
+          const row = y < rect.height / 2 ? 0 : 1;
+          const idx = row * 2 + col;
+          flashIdx = idx;
+          flashTimer = 0.25;
+          input.push(idx);
+          const i = input.length - 1;
+          if (input[i] !== seq[i]) {
+            over = true;
+            phase = 'over';
+            report(round - 1);
+            return;
+          }
+          if (input.length === seq.length) {
+            phase = 'wait';
+            showTimer = 0.6;
+          }
+        });
+      },
+      update(dt) {
+        if (flashTimer > 0) flashTimer -= dt;
+        if (flashTimer <= 0) flashIdx = -1;
+        if (over) return;
+        if (phase === 'show') {
+          showTimer -= dt;
+          if (showTimer <= 0) {
+            showIdx += 1;
+            if (showIdx >= seq.length) {
+              phase = 'input';
+              showIdx = -1;
+            } else {
+              flashIdx = seq[showIdx];
+              flashTimer = 0.42;
+              showTimer = 0.6;
+            }
+          }
+        } else if (phase === 'wait') {
+          showTimer -= dt;
+          if (showTimer <= 0) nextRound();
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0d0f1a', '#1d2340']);
+        const pad = 12;
+        const cw = (w - pad * 3) / 2;
+        const ch = (h - pad * 3) / 2;
+        for (let i = 0; i < 4; i++) {
+          const col = i % 2;
+          const row = Math.floor(i / 2);
+          const x = pad + col * (cw + pad);
+          const y = pad + row * (ch + pad);
+          const lit = flashIdx === i;
+          const c = COLORS[i];
+          ctx.fillStyle = lit ? c.fill : c.fill + '33';
+          ctx.beginPath();
+          const r = 14;
+          ctx.roundRect(x, y, cw, ch, r);
+          ctx.fill();
+          if (lit) {
+            const grd = ctx.createRadialGradient(x + cw / 2, y + ch / 2, 0, x + cw / 2, y + ch / 2, cw);
+            grd.addColorStop(0, c.glow);
+            grd.addColorStop(1, 'transparent');
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.roundRect(x - 6, y - 6, cw + 12, ch + 12, r + 6);
+            ctx.fill();
+          }
+        }
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(238,242,251,.9)';
+        ctx.font = '700 16px Inter, system-ui, sans-serif';
+        ctx.fillText(phase === 'show' ? 'Смотрите...' : phase === 'input' ? 'Повторите' : 'Готово', w / 2, h - 6);
+        ctx.textAlign = 'start';
+        hud(ctx, w, [`Раунд ${round}`, `Длина ${seq.length}`, `Очки ${round - 1}`]);
+        if (over) overText(ctx, w, h, `Итог ${round - 1}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
+// ── number_puzzle — classic 15-puzzle ──────────────────────────────
+// 4x4 grid with numbers 1..15 and one empty slot. Tap a tile adjacent
+// to the empty slot to slide it. Score = moves (lower is better, but
+// we report moves so the leaderboard rewards fewer moves with higher
+// score via `score = 1000 - moves`). The game ends when the tiles are
+// in order. Tracks elapsed time + moves.
+function numberPuzzle(canvas, report) {
+  return runner(canvas, () => {
+    const N = 4;
+    let tiles = [];   // 16 cells, 0 = empty
+    let empty = 15;
+    let moves = 0;
+    let t = 0;
+    let over = false;
+    let won = false;
+    let pulse = 0;    // animation timer for the last moved tile
+
+    const shuffle = () => {
+      tiles = Array.from({ length: 16 }, (_, i) => (i + 1) % 16);
+      empty = 15;
+      // Random-walk shuffle so the puzzle is always solvable.
+      let prev = -1;
+      for (let i = 0; i < 200; i++) {
+        const neigh = neighbors(empty).filter((n) => n !== prev);
+        const pick = neigh[Math.floor(Math.random() * neigh.length)];
+        [tiles[empty], tiles[pick]] = [tiles[pick], tiles[empty]];
+        prev = empty;
+        empty = pick;
+      }
+      moves = 0;
+      t = 0;
+      over = false;
+      won = false;
+      pulse = 0;
+    };
+    function neighbors(idx) {
+      const out = [];
+      const r = Math.floor(idx / N);
+      const c = idx % N;
+      if (r > 0) out.push(idx - N);
+      if (r < N - 1) out.push(idx + N);
+      if (c > 0) out.push(idx - 1);
+      if (c < N - 1) out.push(idx + 1);
+      return out;
+    }
+    shuffle();
+
+    const isSolved = () => {
+      for (let i = 0; i < 15; i++) if (tiles[i] !== i + 1) return false;
+      return tiles[15] === 0;
+    };
+
+    return {
+      score: () => Math.max(0, 1000 - moves),
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (over) { shuffle(); return; }
+          const rect = node.getBoundingClientRect();
+          const x = (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
+          const y = (event.touches?.[0]?.clientY ?? event.clientY) - rect.top;
+          const pad = 12;
+          const cell = Math.min((rect.width - pad * 2) / N, (rect.height - pad * 2 - 30) / N);
+          const ox = (rect.width - cell * N) / 2;
+          const oy = (rect.height - cell * N - 30) / 2 + 30;
+          const col = Math.floor((x - ox) / cell);
+          const row = Math.floor((y - oy) / cell);
+          if (col < 0 || row < 0 || col >= N || row >= N) return;
+          const idx = row * N + col;
+          if (!neighbors(empty).includes(idx)) return;
+          [tiles[empty], tiles[idx]] = [tiles[idx], tiles[empty]];
+          empty = idx;
+          moves += 1;
+          pulse = 0.25;
+          if (isSolved()) {
+            over = true;
+            won = true;
+            report(Math.max(0, 1000 - moves));
+          }
+        });
+      },
+      update(dt) {
+        if (!over) t += dt;
+        if (pulse > 0) pulse -= dt;
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0e1524', '#1d2c44']);
+        const pad = 12;
+        const cell = Math.min((w - pad * 2) / N, (h - pad * 2 - 30) / N);
+        const ox = (w - cell * N) / 2;
+        const oy = (h - cell * N - 30) / 2 + 30;
+        // Board background
+        ctx.fillStyle = 'rgba(255,255,255,.04)';
+        ctx.beginPath();
+        ctx.roundRect(ox - 6, oy - 6, cell * N + 12, cell * N + 12, 14);
+        ctx.fill();
+        for (let i = 0; i < 16; i++) {
+          const r = Math.floor(i / N);
+          const c = i % N;
+          const x = ox + c * cell;
+          const y = oy + r * cell;
+          const v = tiles[i];
+          if (v === 0) continue;
+          const correct = v === i + 1;
+          ctx.fillStyle = correct ? 'rgba(120,200,150,.9)' : 'rgba(150,180,220,.85)';
+          ctx.beginPath();
+          ctx.roundRect(x + 3, y + 3, cell - 6, cell - 6, 10);
+          ctx.fill();
+          if (i === empty || pulse > 0) {
+            ctx.strokeStyle = pulse > 0 ? '#ffd86a' : 'transparent';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(x + 3, y + 3, cell - 6, cell - 6, 10);
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#0e1524';
+          ctx.font = '700 ' + Math.floor(cell * 0.42) + 'px Inter, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(v), x + cell / 2, y + cell / 2);
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+        }
+        const mins = Math.floor(t / 60);
+        const secs = Math.floor(t % 60);
+        hud(ctx, w, [`Ходы ${moves}`, `Время ${mins}:${String(secs).padStart(2, '0')}`, `Очки ${Math.max(0, 1000 - moves)}`]);
+        if (over && won) overText(ctx, w, h, `Собрано за ${moves} ходов`, 'Тап, чтобы перемешать');
+        else if (over) overText(ctx, w, h, 'Итог', 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
+
+// ── bubble_pop — pop floating bubbles, miss no more than 3 ─────────
+// Bubbles rise from the bottom at increasing speed. Tap to pop them.
+// Miss 3 and the game ends. Each popped bubble = +1 point.
+function bubblePop(canvas, report) {
+  return runner(canvas, () => {
+    let bubbles = [];
+    let score = 0;
+    let missed = 0;
+    let t = 0;
+    let spawn = 0;
+    let over = false;
+    const palette = ['#5bcffa', '#f5a3d8', '#ffd86a', '#9be0c8', '#c8a8ff'];
+
+    const reset = () => {
+      bubbles = [];
+      score = 0;
+      missed = 0;
+      t = 0;
+      spawn = 0.4;
+      over = false;
+    };
+    reset();
+
+    return {
+      score: () => score,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (over) { reset(); return; }
+          const rect = node.getBoundingClientRect();
+          const x = (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
+          const y = (event.touches?.[0]?.clientY ?? event.clientY) - rect.top;
+          for (let i = bubbles.length - 1; i >= 0; i--) {
+            const b = bubbles[i];
+            const bx = b.x * rect.width;
+            const by = b.y * rect.height;
+            const r = b.r * rect.width;
+            if (Math.hypot(bx - x, by - y) < r) {
+              b.popped = true;
+              score += 1;
+              return;
+            }
+          }
+        });
+      },
+      update(dt) {
+        if (over) return;
+        t += dt;
+        const speed = 0.18 + Math.min(0.45, t * 0.012);
+        const interval = Math.max(0.22, 0.85 - t * 0.015);
+        spawn -= dt;
+        if (spawn <= 0) {
+          spawn = interval;
+          bubbles.push({
+            x: 0.1 + Math.random() * 0.8,
+            y: 1.05,
+            r: 0.05 + Math.random() * 0.04,
+            color: palette[Math.floor(Math.random() * palette.length)],
+            wobble: Math.random() * Math.PI * 2,
+            popped: false
+          });
+        }
+        for (const b of bubbles) {
+          b.y -= speed * dt;
+          b.wobble += dt * 2;
+          b.x += Math.sin(b.wobble) * 0.005;
+        }
+        // Count missed bubbles (slipped off the top untouched) and drop
+        // any popped/missed bubble from the field.
+        for (const b of bubbles) {
+          if (b.y < -0.1 && !b.popped) {
+            b.popped = true;
+            missed += 1;
+          }
+        }
+        bubbles = bubbles.filter((b) => !b.popped);
+        if (missed >= 3) {
+          over = true;
+          report(score);
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a1420', '#163040']);
+        for (const b of bubbles) {
+          const bx = b.x * w;
+          const by = b.y * h;
+          const r = b.r * w;
+          const grd = ctx.createRadialGradient(bx - r * 0.3, by - r * 0.3, 0, bx, by, r);
+          grd.addColorStop(0, 'rgba(255,255,255,.7)');
+          grd.addColorStop(0.5, b.color);
+          grd.addColorStop(1, b.color + '55');
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          ctx.arc(bx, by, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,.4)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+        hud(ctx, w, [`Очки ${score}`, `Пропущено ${missed}/3`]);
+        if (over) overText(ctx, w, h, `Итог ${score}`, 'Тап, чтобы повторить');
+      }
+    };
+  });
+}
 
 function doom(canvas, report) {
   return runner(canvas, ({ w, h }) => {
@@ -6772,14 +7167,14 @@ function doom(canvas, report) {
     };
     let S = {};
     const ENEMY_TYPES = [
-      { name: 'тень', hp: 15, dmg: 8, speed: 0.6, color: '#3a3a4a', size: 0.35, score: 30, eyes: '#ff4444' },
-      { name: 'скелет', hp: 25, dmg: 12, speed: 0.9, color: '#c8c4b8', size: 0.3, score: 50, eyes: '#ff8800' },
-      { name: 'демон', hp: 40, dmg: 20, speed: 1.2, color: '#6a1a1a', size: 0.4, score: 80, eyes: '#ff0000' },
-      { name: 'призрак', hp: 10, dmg: 6, speed: 1.5, color: 'rgba(180,180,220,0.4)', size: 0.25, score: 40, eyes: '#aaaaff' }
+      { name: 'тень', hp: 15, dmg: 6, speed: 0.45, color: '#3a3a4a', size: 0.35, score: 30, eyes: '#ff4444' },
+      { name: 'скелет', hp: 25, dmg: 9, speed: 0.65, color: '#c8c4b8', size: 0.3, score: 50, eyes: '#ff8800' },
+      { name: 'демон', hp: 40, dmg: 14, speed: 0.9, color: '#6a1a1a', size: 0.4, score: 80, eyes: '#ff0000' },
+      { name: 'призрак', hp: 10, dmg: 4, speed: 1.1, color: 'rgba(180,180,220,0.4)', size: 0.25, score: 40, eyes: '#aaaaff' }
     ];
     const start = (level) => {
       const prevScore = S.score || 0;
-      S = { px: 3.5, py: 3.5, angle: 0, score: prevScore, hp: 100, ammo: 30, enemies: [], bullets: [], over: false, won: false, kills: 0, level, fireRate: 0, muzzle: 0, hitFlash: 0, bob: 0, moveBob: 0 };
+      S = { px: 3.5, py: 3.5, angle: 0, score: prevScore, hp: 150, ammo: 50, enemies: [], bullets: [], over: false, won: false, kills: 0, level, fireRate: 0, muzzle: 0, hitFlash: 0, bob: 0, moveBob: 0 };
       const count = 4 + level * 2;
       for (let i = 0; i < count; i++) {
         let ex, ey, tries = 0;
@@ -6853,7 +7248,7 @@ function doom(canvas, report) {
         S.fireRate -= dt;
         S.muzzle = Math.max(0, S.muzzle - dt * 6);
         if (firing && S.fireRate <= 0 && S.ammo > 0) {
-          S.fireRate = 0.18; S.ammo--; S.muzzle = 1;
+          S.fireRate = 0.14; S.ammo--; S.muzzle = 1;
           S.bullets.push({ x: S.px, y: S.py, angle: S.angle, dist: 0, life: 0.4 });
         }
         S.bullets.forEach(b => { b.dist += dt * 25; b.life -= dt; });
@@ -6870,8 +7265,8 @@ function doom(canvas, report) {
             const bx = b.x + Math.cos(b.angle) * b.dist;
             const by = b.y + Math.sin(b.angle) * b.dist;
             if (Math.abs(bx - e.x) < e.type.size && Math.abs(by - e.y) < e.type.size) {
-              e.hp -= 12; e.hitFlash = 1; b.life = 0;
-              if (e.hp <= 0) { e.alive = false; S.kills++; S.score += e.type.score; S.ammo = Math.min(99, S.ammo + 2); }
+              e.hp -= 15; e.hitFlash = 1; b.life = 0;
+              if (e.hp <= 0) { e.alive = false; S.kills++; S.score += e.type.score; S.ammo = Math.min(99, S.ammo + 3); }
             }
           });
         });
@@ -6988,14 +7383,14 @@ function doom(canvas, report) {
         ctx.fillStyle = '#444'; ctx.fillRect(w * 0.42, h * 0.72, w * 0.16, h * 0.02);
         ctx.fillStyle = '#ff4444';
         ctx.fillRect(w / 2 - 1, h * 0.55, 2, 2);
-        const hpPct = S.hp / 100;
+        const hpPct = Math.max(0, Math.min(1, S.hp / 150));
         ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(10, h - 30, 120, 20);
         ctx.fillStyle = hpPct > 0.3 ? '#cc3030' : '#cc9030';
         ctx.fillRect(12, h - 28, 116 * hpPct, 16);
         ctx.fillStyle = '#ddd'; ctx.font = '600 10px Inter, sans-serif'; ctx.textAlign = 'left';
         ctx.fillText(`HP ${Math.round(S.hp)}`, 14, h - 16);
         ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(w - 130, h - 30, 120, 20);
-        ctx.fillStyle = '#cccc44'; ctx.fillRect(w - 128, h - 28, 116 * (S.ammo / 30), 16);
+        ctx.fillStyle = '#cccc44'; ctx.fillRect(w - 128, h - 28, 116 * Math.min(1, S.ammo / 50), 16);
         ctx.fillStyle = '#ddd';
         ctx.fillText(`Патроны ${S.ammo}`, w - 126, h - 16);
         ctx.fillStyle = '#ddd'; ctx.font = '600 12px Inter, sans-serif'; ctx.textAlign = 'center';
@@ -7017,8 +7412,8 @@ function doom(canvas, report) {
 
 function survivor(canvas, report) {
   return runner(canvas, () => {
-    let s = { x: 0.5, y: 0.5, hp: 100, enemies: [], bullets: [], score: 0, spawn: 0, dist: 0, over: false, fireRate: 0, level: 1 };
-    const reset = () => { s = { x: 0.5, y: 0.5, hp: 100, enemies: [], bullets: [], score: 0, spawn: 1, dist: 0, over: false, fireRate: 0, level: 1 }; };
+    let s = { x: 0.5, y: 0.5, hp: 150, enemies: [], bullets: [], score: 0, spawn: 0, dist: 0, over: false, fireRate: 0, level: 1 };
+    const reset = () => { s = { x: 0.5, y: 0.5, hp: 150, enemies: [], bullets: [], score: 0, spawn: 1.2, dist: 0, over: false, fireRate: 0, level: 1 }; };
     reset();
     let target = { x: 0.5, y: 0.5 };
     return {
@@ -7033,11 +7428,11 @@ function survivor(canvas, report) {
         s.x += (target.x - s.x) * Math.min(1, dt * 5);
         s.y += (target.y - s.y) * Math.min(1, dt * 5);
         s.fireRate -= dt;
-        if (s.fireRate <= 0) { s.fireRate = 0.3; const a = Math.random() * Math.PI * 2; const d = 0.8; s.enemies.push({ x: 0.5 + Math.cos(a) * d, y: 0.5 + Math.sin(a) * d, hp: 10, speed: 0.15 + s.dist * 0.005 }); }
-        s.enemies.forEach(e => { const dx = s.x - e.x, dy = s.y - e.y; const d = Math.sqrt(dx * dx + dy * dy); if (d > 0.02) { e.x += (dx / d) * e.speed * dt; e.y += (dy / d) * e.speed * dt; } else { s.hp -= 10 * dt; if (s.hp <= 0) { s.hp = 0; s.over = true; report(s.score); } } });
+        if (s.fireRate <= 0) { s.fireRate = 0.5; const a = Math.random() * Math.PI * 2; const d = 0.8; s.enemies.push({ x: 0.5 + Math.cos(a) * d, y: 0.5 + Math.sin(a) * d, hp: 8, speed: 0.10 + s.dist * 0.003 }); }
+        s.enemies.forEach(e => { const dx = s.x - e.x, dy = s.y - e.y; const d = Math.sqrt(dx * dx + dy * dy); if (d > 0.02) { e.x += (dx / d) * e.speed * dt; e.y += (dy / d) * e.speed * dt; } else { s.hp -= 7 * dt; if (s.hp <= 0) { s.hp = 0; s.over = true; report(s.score); } } });
         s.bullets.forEach(b => { b.x += b.dx * dt; b.y += b.dy * dt; b.life -= dt; });
         s.bullets = s.bullets.filter(b => b.life > 0 && b.x > -0.1 && b.x < 1.1 && b.y > -0.1 && b.y < 1.1);
-        s.enemies = s.enemies.filter(e => { s.bullets.forEach(b => { if (Math.abs(b.x - e.x) < 0.04 && Math.abs(b.y - e.y) < 0.04) { e.hp -= 10; b.life = 0; } }); if (e.hp <= 0) { s.score += 10; return false; } return true; });
+        s.enemies = s.enemies.filter(e => { s.bullets.forEach(b => { if (Math.abs(b.x - e.x) < 0.05 && Math.abs(b.y - e.y) < 0.05) { e.hp -= 10; b.life = 0; } }); if (e.hp <= 0) { s.score += 10; return false; } return true; });
       },
       draw(ctx, size) {
         const { w, h } = size; backdrop(ctx, w, h, ['#080510', '#100818']);

@@ -908,6 +908,16 @@ svg { display: block; flex: none; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn.on { color: #d4768c; background: rgba(212,118,140,.12); }
 
+/* Like / reaction button — heart fills red when liked.
+   Targets both the legacy [data-like] button and the reaction picker's
+   [data-react-main] button (extras.js). aria-pressed is set in feed.js. */
+.icon-btn[data-like].on,
+.icon-btn[data-react-main].on { color: #e8588a; background: rgba(232,88,138,.14); }
+.icon-btn[data-like].on svg,
+.icon-btn[data-react-main].on svg,
+.icon-btn[aria-pressed='true'][data-like] svg,
+.icon-btn[aria-pressed='true'][data-react-main] svg { fill: currentColor; }
+
 .mood-tag {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px 4px 8px; border-radius: 999px;
@@ -1082,6 +1092,15 @@ svg { display: block; flex: none; }
   touch-action: none; display: block;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
+}
+.game-hint {
+  padding: 8px 14px;
+  background: rgba(8,12,20,.85);
+  color: #eef2fb;
+  font-size: 12.5px;
+  line-height: 1.45;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  backdrop-filter: blur(8px);
 }
 
 .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -1548,6 +1567,7 @@ svg { display: block; flex: none; }
 }
 .react-pick small { font-size: 9.5px; font-weight: 600; white-space: nowrap; }
 .react-pick:hover, .react-pick.on { color: var(--accent); background: var(--accent-soft); }
+.react-pick.on svg { fill: currentColor; }
 
 .post-actions { flex-wrap: wrap; row-gap: 6px; }
 
@@ -1579,6 +1599,61 @@ svg { display: block; flex: none; }
   font-size: 12px; font-weight: 700;
 }
 .hashtag { color: var(--accent); font-weight: 600; }
+.mention {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent-soft);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.mention:hover { text-decoration: underline; }
+.mention-list {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  margin-top: 4px;
+  z-index: 8;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: 0 12px 28px rgba(0,0,0,.18);
+  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.mention-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 10px;
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--text);
+}
+.mention-item + .mention-item { border-top: 1px solid var(--line); }
+.mention-item:hover, .mention-item:active { background: var(--surface-2); }
+.mention-hint {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px; color: var(--muted);
+}
+.repost-source {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  opacity: .85;
+}
+.repost-source .post-image img { border-radius: 8px; max-width: 100%; }
+.repost-box {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  cursor: pointer;
+}
+.repost-box:hover { background: var(--surface-2); }
+.repost-box .post-image img { border-radius: 8px; max-width: 100%; }
 .share-card-wrap { display: grid; place-items: center; }
 .share-card-wrap img { width: 100%; border-radius: 14px; }
 .post-repost {
@@ -2152,6 +2227,25 @@ body.still *::after {
   color: var(--accent);
   background: var(--accent-soft);
 }
+.react-pick.on svg { fill: currentColor; }
+.react-pick.emoji {
+  font-size: 24px;
+  line-height: 1;
+  padding: 10px 0;
+}
+.react-pick.emoji:hover { transform: scale(1.08); }
+.react-chip.emoji {
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.react-chip.emoji i {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 2px;
+}
 
 .pin-box {
   width: min(320px, 100%);
@@ -2422,6 +2516,100 @@ body.still *::after {
   --glow-1: rgba(255,154,176,.07); --glow-2: rgba(220,120,150,.07); --glow: .55;
 }
 
+/* ── New light themes ──────────────────────────────────────────────── */
+
+[data-theme='cloud'] {
+  --bg: #f5f7fa; --bg-2: #ffffff; --bg-3: #eaeef3;
+  --surface: rgba(30,40,55,.04); --surface-2: rgba(30,40,55,.07);
+  --line: rgba(30,40,55,.1); --line-strong: rgba(30,40,55,.17);
+  --text: #1f2a3a; --muted: #6a7787;
+  --shadow: 0 14px 34px rgba(40,55,80,.1);
+  --glow-1: rgba(140,170,200,.18); --glow-2: rgba(180,200,220,.18); --glow: .7;
+}
+
+[data-theme='lavender_light'] {
+  --bg: #f7f3ff; --bg-2: #ffffff; --bg-3: #ece2f7;
+  --surface: rgba(58,42,82,.04); --surface-2: rgba(58,42,82,.07);
+  --line: rgba(58,42,82,.1); --line-strong: rgba(58,42,82,.17);
+  --text: #3a2a52; --muted: #7a6b92;
+  --shadow: 0 14px 34px rgba(60,40,90,.12);
+  --glow-1: rgba(160,130,210,.2); --glow-2: rgba(190,170,230,.18); --glow: .7;
+}
+
+[data-theme='mint_light'] {
+  --bg: #f1fbf4; --bg-2: #ffffff; --bg-3: #dfeee4;
+  --surface: rgba(28,53,40,.04); --surface-2: rgba(28,53,40,.07);
+  --line: rgba(28,53,40,.1); --line-strong: rgba(28,53,40,.17);
+  --text: #1c3528; --muted: #5e7a66;
+  --shadow: 0 14px 34px rgba(30,70,50,.1);
+  --glow-1: rgba(130,190,150,.2); --glow-2: rgba(170,210,180,.18); --glow: .7;
+}
+
+[data-theme='peach'] {
+  --bg: #fff5ec; --bg-2: #ffffff; --bg-3: #f7e4cd;
+  --surface: rgba(92,58,30,.04); --surface-2: rgba(92,58,30,.07);
+  --line: rgba(92,58,30,.1); --line-strong: rgba(92,58,30,.17);
+  --text: #5c3a1e; --muted: #8a6a4c;
+  --shadow: 0 14px 34px rgba(110,70,30,.12);
+  --glow-1: rgba(220,160,90,.22); --glow-2: rgba(240,200,150,.2); --glow: .7;
+}
+
+[data-theme='sky'] {
+  --bg: #f2f9ff; --bg-2: #ffffff; --bg-3: #dbeaf5;
+  --surface: rgba(31,53,80,.04); --surface-2: rgba(31,53,80,.07);
+  --line: rgba(31,53,80,.1); --line-strong: rgba(31,53,80,.17);
+  --text: #1f3550; --muted: #5a7388;
+  --shadow: 0 14px 34px rgba(40,80,120,.12);
+  --glow-1: rgba(120,170,220,.22); --glow-2: rgba(170,200,230,.2); --glow: .7;
+}
+
+/* ── New dark themes ───────────────────────────────────────────────── */
+
+[data-theme='deep_space'] {
+  --bg: #03051a; --bg-2: #070b25; --bg-3: #0d1230;
+  --surface: rgba(180,200,255,.04); --surface-2: rgba(180,200,255,.07);
+  --line: rgba(180,200,255,.08); --line-strong: rgba(180,200,255,.15);
+  --text: #c8d4ff; --muted: #6a7398;
+  --shadow: 0 18px 44px rgba(0,2,15,.6);
+  --glow-1: rgba(120,150,255,.1); --glow-2: rgba(160,120,220,.1); --glow: .85;
+}
+
+[data-theme='volcano'] {
+  --bg: #1a0606; --bg-2: #260808; --bg-3: #3a0d0d;
+  --surface: rgba(240,184,154,.04); --surface-2: rgba(240,184,154,.07);
+  --line: rgba(240,184,154,.08); --line-strong: rgba(240,184,154,.15);
+  --text: #f0b89a; --muted: #9c6a55;
+  --shadow: 0 18px 44px rgba(20,2,2,.6);
+  --glow-1: rgba(230,90,40,.12); --glow-2: rgba(200,60,30,.1); --glow: .8;
+}
+
+[data-theme='aurora_borealis'] {
+  --bg: #02110c; --bg-2: #06180f; --bg-3: #0a2a35;
+  --surface: rgba(155,224,200,.04); --surface-2: rgba(155,224,200,.07);
+  --line: rgba(155,224,200,.08); --line-strong: rgba(155,224,200,.15);
+  --text: #9be0c8; --muted: #5a8a78;
+  --shadow: 0 18px 44px rgba(2,15,10,.55);
+  --glow-1: rgba(120,230,180,.12); --glow-2: rgba(160,120,220,.1); --glow: .9;
+}
+
+[data-theme='midnight_blue'] {
+  --bg: #050d1f; --bg-2: #08152e; --bg-3: #0c1e3d;
+  --surface: rgba(155,190,240,.04); --surface-2: rgba(155,190,240,.07);
+  --line: rgba(155,190,240,.08); --line-strong: rgba(155,190,240,.15);
+  --text: #9bbef0; --muted: #5a708e;
+  --shadow: 0 18px 44px rgba(2,8,25,.55);
+  --glow-1: rgba(120,170,240,.1); --glow-2: rgba(150,180,230,.1); --glow: .75;
+}
+
+[data-theme='chocolate'] {
+  --bg: #0f0805; --bg-2: #1a0e08; --bg-3: #2a160c;
+  --surface: rgba(224,196,168,.04); --surface-2: rgba(224,196,168,.07);
+  --line: rgba(224,196,168,.08); --line-strong: rgba(224,196,168,.15);
+  --text: #e0c4a8; --muted: #8a6c52;
+  --shadow: 0 16px 40px rgba(15,6,2,.55);
+  --glow-1: rgba(200,150,90,.08); --glow-2: rgba(220,180,130,.07); --glow: .65;
+}
+
 /* ── Halloween Event — exclusive for @silver ─────────────────────────── */
 
 .hw-bg {
@@ -2681,6 +2869,15 @@ body.still *::after {
 .hw-buy-btn:disabled { background: rgba(255,255,255,.08) !important; color: rgba(244,232,216,.4) !important; }
 .hw-owned-btn { color: #50d878 !important; border-color: rgba(80,216,120,.4) !important; }
 
+/* owned-items list */
+.hw-owned-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.hw-owned-item:last-child { border-bottom: none; }
+.hw-owned-item .hw-shop-icon { width: 36px; height: 36px; }
+
 /* footer / bat */
 .hw-foot { margin-top: 26px; padding: 14px 0 4px; position: relative; overflow: hidden; }
 .hw-bat-line {
@@ -2773,3 +2970,172 @@ body.still *::after {
 }
 .hw-profile-btn .grow { display: flex; flex-direction: column; }
 .hw-profile-btn .tiny.muted { color: rgba(26,10,0,.7) !important; }
+
+/* ---------- Daily Rewards strip ---------- */
+.rewards-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+@media (max-width: 480px) {
+  .rewards-strip { grid-template-columns: repeat(4, 1fr); }
+}
+.reward-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: center;
+  transition: transform .18s var(--ease), border-color .18s, box-shadow .18s;
+}
+.reward-card .reward-day {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.reward-card .reward-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted);
+  margin: 2px 0;
+}
+.reward-card .reward-coins {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  line-height: 1;
+}
+.reward-card .reward-premium {
+  font-size: 9.5px; font-weight: 700; color: #d8b15a;
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-top: 2px; line-height: 1;
+}
+.reward-card.is-claimed {
+  background: rgba(135,183,163,.14);
+  border-color: rgba(135,183,163,.45);
+  color: #87b7a3;
+}
+.reward-card.is-claimed .reward-glyph { background: #87b7a3; color: #071c16; }
+.reward-card.is-claimed .reward-coins,
+.reward-card.is-claimed .reward-day { color: #87b7a3; }
+.reward-card.is-current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 22px var(--accent-soft);
+  animation: reward-pulse 2.2s ease-in-out infinite;
+}
+.reward-card.is-current .reward-glyph { background: var(--accent); color: var(--accent-ink); }
+.reward-card.is-current .reward-coins { color: var(--accent); }
+.reward-card.is-future { opacity: .55; }
+@keyframes reward-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 12px var(--accent-soft); }
+  50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 26px var(--accent); }
+}
+
+/* ---------- Sticker pack grid (default emoji pack) ---------- */
+.sticker-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 2px;
+}
+.sticker-pack-item {
+  aspect-ratio: 1;
+  display: grid; place-items: center;
+  font-size: 30px; line-height: 1;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  transition: transform .14s var(--ease), background .14s;
+  cursor: pointer;
+}
+.sticker-pack-item:hover { background: var(--surface-2); transform: scale(1.06); }
+.sticker-pack-item:active { transform: scale(.94); }
+
+/* Emoji stickers in chat bubbles */
+.bubble .sticker-emoji {
+  display: block;
+  font-size: 48px;
+  line-height: 1;
+  text-align: center;
+  padding: 4px 2px;
+}
+
+/* ---------- Greeting cards ---------- */
+.greet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.greet-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255,255,255,.12);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  min-height: 130px;
+  justify-content: flex-end;
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  transition: transform .18s var(--ease), box-shadow .18s;
+}
+.greet-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.32); }
+.greet-card:active { transform: translateY(0); }
+.greet-card .greet-card-emoji { font-size: 26px; line-height: 1; align-self: flex-start; }
+.greet-card .greet-card-title { font-size: 13px; font-weight: 700; opacity: .85; }
+.greet-card .greet-card-quote { font-size: 15px; font-weight: 600; line-height: 1.35; }
+
+/* ---------- Bookmark / emoji glyph inside icon-btn ---------- */
+.icon-btn .emoji-glyph {
+  font-size: 16px; line-height: 1;
+  display: inline-flex; align-items: center;
+}
+.icon-btn[data-bookmark].on .emoji-glyph { filter: none; }
+.icon-btn[data-bookmark].on { color: #87b7a3; background: rgba(135,183,163,.14); }
+
+/* Keep the chat-foot usable when the emoji-sticker button joins the row */
+@media (max-width: 420px) {
+  .chat-foot { gap: 4px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
+  .chat-foot .btn-icon { width: 34px; height: 34px; border-radius: 11px; }
+  .chat-foot .btn-icon svg { width: 17px; height: 17px; }
+  .chat-foot .input { padding: 9px 11px; }
+}
+
+/* ── Gallery grid (profile → gallery sheet) ───────────────────────── */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.gallery-tile {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+.gallery-tile img,
+.gallery-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Channels list (chats view → Каналы section) ──────────────────── */
+.channel-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--r-md, 14px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.channel-card .channel-mark {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: #fff; flex-shrink: 0;
+}

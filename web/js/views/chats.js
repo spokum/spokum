@@ -1,5 +1,5 @@
 import { api, state, isOffline, isPremium } from '../store.js';
-import { el, esc, timeAgo, clockTime, durationText, debounce } from '../util.js';
+import { el, esc, timeAgo, clockTime, durationText, debounce, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, emptyState, pickImage, promptSheet, confirmSheet } from '../ui.js';
 import { openProfile } from './profile.js';
@@ -23,6 +23,7 @@ export async function render(root) {
       </div>
     </div>
     <div data-results></div>
+    <div data-channels style="margin-bottom:12px"></div>
     <div class="col" data-list style="gap:2px"></div>`;
 
   root.querySelector('[data-new]').onclick = openCreate;
@@ -61,6 +62,66 @@ export async function render(root) {
   }, 260));
 
   await load(root);
+  loadRecommendedChannels(root);
+}
+
+// Fetches the recommended channels list and renders it above the user's
+// DMs. Channels come from the existing "Новый канал" entry in openCreate
+// (kind='channel' chats). Anyone can subscribe / unsubscribe here, the
+// owner sees a "ваш канал" pill and can post by opening the chat.
+async function loadRecommendedChannels(root) {
+  const host = root.querySelector('[data-channels]');
+  if (!host) return;
+  if (!api.recommendedChannels) { host.innerHTML = ''; return; }
+  let channels = [];
+  try {
+    ({ channels } = await api.recommendedChannels());
+  } catch {
+    host.innerHTML = '';
+    return;
+  }
+  if (!channels.length) { host.innerHTML = ''; return; }
+  host.innerHTML = `
+    <div class="row between" style="margin:0 2px 8px">
+      <div class="strong small">${icon('channel', 16)} Каналы</div>
+      <button class="btn btn-sm btn-ghost" data-all-channels>${icon('search', 14)} Все</button>
+    </div>
+    <div class="col" data-channel-list style="gap:6px"></div>`;
+  const list = host.querySelector('[data-channel-list]');
+  channels.forEach((c) => {
+    const row = el(`<div class="channel-card" data-channel="${c.id}">
+      <div class="channel-mark" style="background:hsl(${Number(c.hue) || 200} 38% 22%)">${esc((c.title || '?')[0].toUpperCase())}</div>
+      <div class="grow" style="min-width:0">
+        <div class="small strong truncate">${esc(c.title)}</div>
+        <div class="tiny muted">${plural(c.members || 0, 'подписчик', 'подписчика', 'подписчиков')}${c.owner ? ` · @${esc(c.owner.username)}` : ''}</div>
+      </div>
+      ${c.isOwner
+        ? '<span class="pill good tiny">ваш</span>'
+        : c.joined
+          ? `<button class="btn btn-sm" data-unfollow="${c.id}">Отписаться</button>`
+          : `<button class="btn btn-sm btn-primary" data-follow="${c.id}">Подписаться</button>`}
+    </div>`);
+    row.onclick = async (event) => {
+      if (event.target.closest('[data-follow]') || event.target.closest('[data-unfollow]')) return;
+      try { openChat(Number(c.id)); } catch (e) { toast(e.message, 'err'); }
+    };
+    const follow = row.querySelector('[data-follow]');
+    if (follow) follow.onclick = async (event) => {
+      event.stopPropagation();
+      try { await api.followChannel(Number(follow.dataset.follow)); toast('Вы подписаны'); loadRecommendedChannels(root); }
+      catch (e) { toast(e.message, 'err'); }
+    };
+    const unfollow = row.querySelector('[data-unfollow]');
+    if (unfollow) unfollow.onclick = async (event) => {
+      event.stopPropagation();
+      try { await api.unfollowChannel(Number(unfollow.dataset.unfollow)); toast('Вы отписались'); loadRecommendedChannels(root); }
+      catch (e) { toast(e.message, 'err'); }
+    };
+    list.appendChild(row);
+  });
+  host.querySelector('[data-all-channels]').onclick = () => {
+    import('./search.js?v=20251028').then(({ openSearch }) => openSearch());
+  };
 }
 
 async function load(root) {
@@ -89,7 +150,7 @@ async function load(root) {
     const last = chat.lastMessage;
     const preview = last
       ? last.kind === 'sticker'
-        ? 'Стикер'
+        ? (last.body && !last.media ? `Стикер ${last.body}` : 'Стикер')
         : last.kind === 'image'
         ? 'Фотография'
         : last.kind === 'voice'
@@ -167,7 +228,8 @@ export async function openChat(chatId) {
       <div class="chat-body" data-body></div>
       <div class="chat-foot">
         <button class="btn btn-icon btn-ghost" data-emoji>${icon('smile', 19)}</button>
-        <button class="btn btn-icon btn-ghost" data-stickers>${icon('star', 19)}</button>
+        <button class="btn btn-icon btn-ghost" data-emoji-sticker title="Стикеры">${icon('spark', 19)}</button>
+        <button class="btn btn-icon btn-ghost" data-stickers title="Свои стикеры">${icon('star', 19)}</button>
         <button class="btn btn-icon btn-ghost" data-image>${icon('image', 19)}</button>
         <textarea class="input grow" data-input rows="1" placeholder="Сообщение" style="min-height:44px;max-height:120px;resize:none;padding:11px 14px"></textarea>
         <button class="btn btn-icon btn-ghost" data-voice>${icon('mic', 19)}</button>
@@ -295,31 +357,39 @@ export async function openChat(chatId) {
 
   view.querySelector('[data-stickers]')?.addEventListener('click', () => openStickers(send));
 
+  view.querySelector('[data-emoji-sticker]')?.addEventListener('click', async () => {
+    const { openStickerPicker } = await import('./stickers.js?v=20251028');
+    openStickerPicker((emoji) => send({ kind: 'sticker', body: emoji }));
+  });
+
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
-const REACTS = [
-  ['heart', 'heart'],
-  ['smile', 'smile'],
-  ['sad', 'moon'],
-  ['fire', 'flame'],
-  ['ok', 'check'],
-  ['wave', 'wave']
-];
+const REACTS = ['👍', '❤️', '😂', '😢', '🔥'];
 
 function wireReact(node, message, rows, done) {
-  if (!api.messageReact || message.kind === 'system' || message.kind === 'call') return;
+  if (!api.reactMessage || message.kind === 'system' || message.kind === 'call') return;
   if (rows.length) {
     const seen = {};
     rows.forEach((row) => {
       seen[row.glyph] = (seen[row.glyph] || 0) + 1;
     });
     const strip = el(`<div class="react-strip">${Object.entries(seen)
-      .map(([glyph, count]) => {
-        const art = REACTS.find((item) => item[0] === glyph);
-        return `<span class="react-chip">${icon(art ? art[1] : 'heart', 13)}${count > 1 ? count : ''}</span>`;
-      })
+      .map(([glyph, count]) => `<span class="react-chip emoji">${glyph}${count > 1 ? `<i>${count}</i>` : ''}</span>`)
       .join('')}</div>`);
+    // Tapping a pill toggles your own reaction of that emoji off.
+    strip.querySelectorAll('.react-chip').forEach((chip) => {
+      const emoji = chip.firstChild.textContent;
+      chip.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const mine = rows.find((row) => String(row.user) === String(state.user?.id));
+        if (mine?.glyph !== emoji) return; // only allow removing your own
+        try {
+          await api.reactMessage(message.id, '');
+          done?.();
+        } catch (e) { toast(e.message, 'err'); }
+      });
+    });
     node.appendChild(strip);
   }
 
@@ -327,14 +397,15 @@ function wireReact(node, message, rows, done) {
   const open = () => {
     const mine = rows.find((row) => String(row.user) === String(state.user?.id));
     const menu = el(`<div class="react-row">
-      ${REACTS.map(([glyph, art]) => `<button class="react-pick ${mine?.glyph === glyph ? 'on' : ''}" data-react="${glyph}">${icon(art, 20)}</button>`).join('')}
+      ${REACTS.map((emoji) => `<button class="react-pick emoji ${mine?.glyph === emoji ? 'on' : ''}" data-react="${emoji}">${emoji}</button>`).join('')}
     </div>`);
     const sheet = openSheet('', menu);
     menu.querySelectorAll('[data-react]').forEach((button) => {
       button.onclick = async () => {
         sheet.close();
         try {
-          await api.messageReact(message.id, mine?.glyph === button.dataset.react ? '' : button.dataset.react);
+          const next = mine?.glyph === button.dataset.react ? '' : button.dataset.react;
+          await api.reactMessage(message.id, next);
           done?.();
         } catch (error) {
           toast(error.message, 'err');
@@ -380,8 +451,11 @@ function bubble(message, chat, lastAuthor) {
   }
   const showAuthor = chat.kind !== 'dm' && !mine && message.author?.id !== lastAuthor;
   let inner = '';
-  if (message.kind === 'sticker') inner = `<img class="sticker" src="${esc(message.media)}" alt="стикер" loading="lazy">`;
-  else if (message.kind === 'image') inner = `<img src="${esc(message.media)}" alt="" loading="lazy">${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
+  if (message.kind === 'sticker') {
+    inner = message.media
+      ? `<img class="sticker" src="${esc(message.media)}" alt="стикер" loading="lazy">`
+      : `<span class="sticker-emoji">${esc(message.body || '')}</span>`;
+  } else if (message.kind === 'image') inner = `<img src="${esc(message.media)}" alt="" loading="lazy">${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
   else if (message.kind === 'voice') {
     const bars = Array.from({ length: 22 }, (_, i) => `<i style="height:${20 + Math.round(Math.sin(i * 1.7 + message.id) * 55 + 55) * 0.6}%"></i>`).join('');
     inner = `<div class="voice"><button class="btn btn-icon btn-ghost" data-play style="width:32px;height:32px">${icon('play', 15)}</button><div class="voice-bars">${bars}</div><span class="tiny">${durationText(message.duration)}</span></div>`;

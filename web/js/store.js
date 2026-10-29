@@ -77,7 +77,23 @@ export function forget(key) {
 
 export function isBeta(user) {
   const who = user || state.user;
-  return !!(who && (who.isBeta || who.username === 'silver' || localStorage.getItem('spokum.debugBeta') === '1'));
+  if (!who) return false;
+  // Beta is granted to:
+  //  • the two named testers (silver + ulquiorra_cifer)
+  //  • anyone an admin has flagged with `isBeta: true`
+  //  • a localStorage bypass for local development only (commented out for production)
+  if (who.isBeta) return true;
+  if (who.username === 'silver' || who.username === 'ulquiorra_cifer') return true;
+  // To test beta features locally, run in the console:
+  //   localStorage.setItem('spokum.debugBeta', '1')
+  // and uncomment the next line:
+  // if (localStorage.getItem('spokum.debugBeta') === '1') return true;
+  return false;
+}
+
+const BETA_USERNAMES = new Set(['silver', 'ulquiorra_cifer']);
+export function isBetaUsername(username) {
+  return !!username && BETA_USERNAMES.has(username);
 }
 
 export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
