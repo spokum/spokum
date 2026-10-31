@@ -6777,7 +6777,12 @@ export const GAMES = [
     desc: 'Тапай по целям за 30 секунд',
     tint: ['#1a0a0a', '#3a2020'],
     mount: speedTap
-  }
+  },
+  { id: 'orbit_duel', title: 'Орбитальная дуэль', desc: 'Две планеты, одна орбита, уклоняйся', tint: ['#0a1a2a', '#1a3a5a'], mount: orbitDuel },
+  { id: 'gravity_well', title: 'Гравитация', desc: 'Управляй гравитацией, веди корабль', tint: ['#0a0a1a', '#1a1a3a'], mount: gravityWell },
+  { id: 'rhythm_grid', title: 'Ритм-сетка', desc: 'Запомни и повтори узор', tint: ['#1a0a1a', '#3a1a3a'], mount: rhythmGrid },
+  { id: 'paint_fill', title: 'Заливка', desc: 'Залей всё одним цветом', tint: ['#0a1a0a', '#1a3a1a'], mount: paintFill },
+  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror }
 ];
 
 // ── color_match — Simon-says style color matching game ─────────────
@@ -8486,6 +8491,594 @@ function speedTap(canvas, report) {
           `Попаданий ${state.hits} · Мимо ${state.misses}`
         ]);
         if (state.over) overText(ctx, w, h, `Итог ${state.score}`, `Лучшее комбо ${state.best} · тап для повтора`);
+      }
+    };
+  });
+}
+
+// ── orbit_duel — two planets orbit a sun on different paths ─────────
+// Player controls one planet (tap to switch between inner/outer orbit).
+// A companion planet orbits the opposite path. Avoid asteroids that
+// spawn on random orbits, collect energy orbs for points. Speed grows.
+function orbitDuel(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w, height = h;
+    const stars = Array.from({ length: 60 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.4 + 0.3 }));
+    let state = null;
+    const reset = () => {
+      state = {
+        cx: width / 2, cy: height / 2,
+        rIn: Math.min(width, height) * 0.22,
+        rOut: Math.min(width, height) * 0.36,
+        angle: 0, speed: 0.7, onInner: true,
+        px: 0, py: 0, qx: 0, qy: 0,
+        asteroids: [], orbs: [], spawnT: 1.5, orbT: 1.2,
+        score: 0, lives: 3, over: false, invuln: 0, sparks: []
+      };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      resize(s) {
+        width = s.w; height = s.h;
+        state.cx = width / 2; state.cy = height / 2;
+        state.rIn = Math.min(width, height) * 0.22;
+        state.rOut = Math.min(width, height) * 0.36;
+      },
+      bind(bind, node) {
+        bind('pointerdown', (e) => {
+          e.preventDefault();
+          if (state.over) { reset(); return; }
+          state.onInner = !state.onInner;
+        });
+      },
+      update(dt) {
+        const s = state; if (s.over) return;
+        s.speed += dt * 0.012;
+        s.angle += s.speed * dt;
+        s.invuln = Math.max(0, s.invuln - dt);
+        const r = s.onInner ? s.rIn : s.rOut;
+        s.px = s.cx + Math.cos(s.angle) * r;
+        s.py = s.cy + Math.sin(s.angle) * r;
+        const r2 = s.onInner ? s.rOut : s.rIn;
+        const a2 = s.angle + Math.PI;
+        s.qx = s.cx + Math.cos(a2) * r2;
+        s.qy = s.cy + Math.sin(a2) * r2;
+        s.spawnT -= dt;
+        if (s.spawnT <= 0) {
+          s.spawnT = Math.max(0.6, 1.6 - s.score * 0.01);
+          const useInner = Math.random() < 0.5;
+          s.asteroids.push({ a: Math.random() * Math.PI * 2, r: useInner ? s.rIn : s.rOut, dir: Math.random() < 0.5 ? 1 : -1, sp: 0.4 + Math.random() * 0.6 });
+        }
+        s.orbT -= dt;
+        if (s.orbT <= 0) {
+          s.orbT = 1.4 + Math.random() * 0.8;
+          const useInner = Math.random() < 0.5;
+          s.orbs.push({ a: Math.random() * Math.PI * 2, r: useInner ? s.rIn : s.rOut, life: 6 });
+        }
+        s.asteroids.forEach((a) => { a.a += a.dir * a.sp * dt; });
+        if (s.invuln <= 0) {
+          for (const a of s.asteroids) {
+            const ax = s.cx + Math.cos(a.a) * a.r;
+            const ay = s.cy + Math.sin(a.a) * a.r;
+            if (Math.hypot(ax - s.px, ay - s.py) < 16) {
+              s.lives -= 1; s.invuln = 1.2;
+              for (let i = 0; i < 12; i++) s.sparks.push({ x: s.px, y: s.py, vx: (Math.random() - 0.5) * 220, vy: (Math.random() - 0.5) * 220, life: 0.5 });
+              if (s.lives <= 0) { s.over = true; report(s.score); }
+              break;
+            }
+          }
+        }
+        s.orbs = s.orbs.filter((o) => {
+          const ox = s.cx + Math.cos(o.a) * o.r;
+          const oy = s.cy + Math.sin(o.a) * o.r;
+          o.life -= dt;
+          if (Math.hypot(ox - s.px, oy - s.py) < 18 || Math.hypot(ox - s.qx, oy - s.qy) < 18) {
+            s.score += 1;
+            for (let i = 0; i < 8; i++) s.sparks.push({ x: ox, y: oy, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, life: 0.4, color: '#7fffd0' });
+            return false;
+          }
+          return o.life > 0;
+        });
+        s.sparks.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+        s.sparks = s.sparks.filter((p) => p.life > 0);
+        if (s.asteroids.length > 30) s.asteroids.splice(0, s.asteroids.length - 30);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a1a2a', '#1a3a5a']);
+        const s = state;
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        stars.forEach((st) => { ctx.globalAlpha = 0.3 + Math.sin(performance.now() * 0.001 + st.x * 10) * 0.3; ctx.fillRect(st.x * w, st.y * h, st.s, st.s); });
+        ctx.globalAlpha = 1;
+        const sg = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, 30);
+        sg.addColorStop(0, '#ffe89a'); sg.addColorStop(0.5, '#ffb347'); sg.addColorStop(1, 'rgba(255,140,40,0)');
+        ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(s.cx, s.cy, 30, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.arc(s.cx, s.cy, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(238,242,251,.12)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(s.cx, s.cy, s.rIn, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(s.cx, s.cy, s.rOut, 0, Math.PI * 2); ctx.stroke();
+        s.orbs.forEach((o) => {
+          const ox = s.cx + Math.cos(o.a) * o.r, oy = s.cy + Math.sin(o.a) * o.r;
+          ctx.globalAlpha = Math.min(1, o.life);
+          const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, 14);
+          g.addColorStop(0, '#9fffe0'); g.addColorStop(1, 'rgba(120,255,200,0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, 14, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#dffff2'; ctx.beginPath(); ctx.arc(ox, oy, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+        s.asteroids.forEach((a) => {
+          const ax = s.cx + Math.cos(a.a) * a.r, ay = s.cy + Math.sin(a.a) * a.r;
+          ctx.fillStyle = '#9a8a7a'; ctx.beginPath(); ctx.arc(ax, ay, 6, 0, Math.PI * 2); ctx.fill();
+        });
+        if (s.invuln <= 0 || Math.floor(s.invuln * 10) % 2 === 0) {
+          ctx.fillStyle = '#5fb0ff'; ctx.beginPath(); ctx.arc(s.px, s.py, 9, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(s.px - 2, s.py - 2, 3, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = '#ffa0d0'; ctx.beginPath(); ctx.arc(s.qx, s.qy, 9, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(s.qx - 2, s.qy - 2, 3, 0, Math.PI * 2); ctx.fill();
+        s.sparks.forEach((p) => { ctx.globalAlpha = Math.max(0, p.life * 2); ctx.fillStyle = p.color || '#ffb070'; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        hud(ctx, w, [`Очки ${s.score}`, `Жизни ${s.lives}`, s.onInner ? 'Орбита: внутренняя' : 'Орбита: внешняя']);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+// ── gravity_well — guide a drifting ship via gravity wells ─────────
+// Ship has momentum; tap to create a temporary gravity well that pulls
+// the ship toward the tap point. Pass through gates for points, avoid
+// black holes. Walls wrap around.
+function gravityWell(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w, height = h;
+    const stars = Array.from({ length: 50 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.4 + 0.3 }));
+    let state = null;
+    const reset = () => {
+      state = {
+        sx: width * 0.2, sy: height * 0.5, vx: 60, vy: 0,
+        well: null, wellT: 0, gates: [], holes: [], spawnT: 1.5,
+        score: 0, lives: 3, over: false, sparks: [], invuln: 0, trail: []
+      };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      resize(s) { width = s.w; height = s.h; },
+      bind(bind, node) {
+        bind('pointerdown', (e) => {
+          e.preventDefault();
+          if (state.over) { reset(); return; }
+          const p = pointerPos(node, e);
+          state.well = { x: p.x, y: p.y }; state.wellT = 0.6;
+        });
+        bind('pointermove', (e) => {
+          if (state.well && state.wellT > 0) {
+            const p = pointerPos(node, e);
+            state.well.x = p.x; state.well.y = p.y;
+          }
+        });
+      },
+      update(dt) {
+        const s = state; if (s.over) return;
+        s.invuln = Math.max(0, s.invuln - dt);
+        s.wellT = Math.max(0, s.wellT - dt);
+        if (s.wellT <= 0) s.well = null;
+        if (s.well) {
+          const dx = s.well.x - s.sx, dy = s.well.y - s.sy;
+          const d = Math.hypot(dx, dy) + 1;
+          const f = 600 / d;
+          s.vx += (dx / d) * f * dt; s.vy += (dy / d) * f * dt;
+        }
+        s.vx *= 0.995; s.vy *= 0.995;
+        s.sx += s.vx * dt; s.sy += s.vy * dt;
+        if (s.sx < 0) s.sx += width; if (s.sx > width) s.sx -= width;
+        if (s.sy < 0) s.sy += height; if (s.sy > height) s.sy -= height;
+        s.trail.push({ x: s.sx, y: s.sy, life: 0.6 });
+        s.trail.forEach((t) => t.life -= dt);
+        s.trail = s.trail.filter((t) => t.life > 0);
+        if (s.trail.length > 30) s.trail.shift();
+        s.spawnT -= dt;
+        if (s.spawnT <= 0) {
+          s.spawnT = 1.6;
+          if (Math.random() < 0.7) {
+            s.gates.push({ x: width + 30, y: 40 + Math.random() * (height - 80), r: 26 });
+          } else {
+            s.holes.push({ x: width + 30, y: 60 + Math.random() * (height - 120), r: 18 });
+          }
+        }
+        s.gates.forEach((g) => g.x -= 90 * dt);
+        s.holes.forEach((g) => g.x -= 70 * dt);
+        s.gates = s.gates.filter((g) => {
+          if (g.x < -30) return false;
+          if (Math.hypot(g.x - s.sx, g.y - s.sy) < g.r) {
+            s.score += 1;
+            for (let i = 0; i < 10; i++) s.sparks.push({ x: g.x, y: g.y, vx: (Math.random() - 0.5) * 200, vy: (Math.random() - 0.5) * 200, life: 0.5, color: '#7fffd0' });
+            return false;
+          }
+          return true;
+        });
+        if (s.invuln <= 0) {
+          for (const g of s.holes) {
+            if (Math.hypot(g.x - s.sx, g.y - s.sy) < g.r) {
+              s.lives -= 1; s.invuln = 1.5;
+              s.vx = -s.vx * 0.5; s.vy = -s.vy * 0.5;
+              for (let i = 0; i < 14; i++) s.sparks.push({ x: s.sx, y: s.sy, vx: (Math.random() - 0.5) * 260, vy: (Math.random() - 0.5) * 260, life: 0.5 });
+              if (s.lives <= 0) { s.over = true; report(s.score); }
+              break;
+            }
+          }
+        }
+        s.sparks.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+        s.sparks = s.sparks.filter((p) => p.life > 0);
+        s.holes = s.holes.filter((g) => g.x > -30);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a0a1a', '#1a1a3a']);
+        const s = state;
+        ctx.fillStyle = 'rgba(238,242,251,.5)';
+        stars.forEach((st) => { ctx.globalAlpha = 0.3 + Math.sin(performance.now() * 0.001 + st.x * 10) * 0.3; ctx.fillRect(st.x * w, st.y * h, st.s, st.s); });
+        ctx.globalAlpha = 1;
+        s.gates.forEach((g) => {
+          const grd = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.r);
+          grd.addColorStop(0, 'rgba(120,255,200,.4)'); grd.addColorStop(1, 'rgba(120,255,200,0)');
+          ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#7fffd0'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.stroke();
+        });
+        s.holes.forEach((g) => {
+          const grd = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.r * 1.6);
+          grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(0.7, 'rgba(60,0,80,.7)'); grd.addColorStop(1, 'rgba(60,0,80,0)');
+          ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(g.x, g.y, g.r * 1.6, 0, Math.PI * 2); ctx.fill();
+        });
+        if (s.well) {
+          const grd = ctx.createRadialGradient(s.well.x, s.well.y, 0, s.well.x, s.well.y, 40);
+          grd.addColorStop(0, 'rgba(180,140,255,.5)'); grd.addColorStop(1, 'rgba(180,140,255,0)');
+          ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(s.well.x, s.well.y, 40, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#c89cff'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(s.well.x, s.well.y, 8 + s.wellT * 20, 0, Math.PI * 2); ctx.stroke();
+        }
+        s.trail.forEach((t, i) => { ctx.globalAlpha = t.life * 0.5; ctx.fillStyle = '#a8c8ff'; ctx.beginPath(); ctx.arc(t.x, t.y, 3 + i * 0.1, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        if (s.invuln <= 0 || Math.floor(s.invuln * 10) % 2 === 0) {
+          ctx.fillStyle = '#dfe9ff'; ctx.beginPath(); ctx.arc(s.sx, s.sy, 7, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#7aa0ff'; ctx.lineWidth = 2; ctx.stroke();
+        }
+        s.sparks.forEach((p) => { ctx.globalAlpha = Math.max(0, p.life * 2); ctx.fillStyle = p.color || '#ffb070'; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        hud(ctx, w, [`Очки ${s.score}`, `Жизни ${s.lives}`, 'Тап — гравитационная яма']);
+        if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+// ── rhythm_grid — 4x4 spatial memory rhythm game ───────────────────
+// Cells light up in patterns; repeat them by tapping in order. Each
+// round adds one more cell to the sequence. Like Simon but on a grid.
+function rhythmGrid(canvas, report) {
+  return runner(canvas, () => {
+    const N = 4;
+    const palette = ['#5aa0ff', '#ff7a8a', '#5acb7a', '#ffcb3a', '#a98aff', '#5ad0d0', '#ff9a5a', '#c5d0ff', '#9affc5', '#ffa8d0', '#8affd0', '#d0a8ff', '#a8d4ff', '#ffd08a', '#a8ffd0', '#d0a8a8'];
+    let seq = [], input = [], phase = 'show', showIdx = -1, showT = 0.6, flashIdx = -1, flashT = 0, round = 0, over = false;
+    const reset = () => {
+      seq = [Math.floor(Math.random() * N * N)];
+      input = []; phase = 'show'; showIdx = -1; showT = 0.6; flashIdx = -1; flashT = 0; round = 1; over = false;
+    };
+    reset();
+    const next = () => {
+      seq.push(Math.floor(Math.random() * N * N));
+      input = []; phase = 'show'; showIdx = -1; showT = 0.5; round = seq.length;
+    };
+    return {
+      score: () => round - 1,
+      bind(bind, node) {
+        bind('pointerdown', (e) => {
+          e.preventDefault();
+          if (over) { reset(); return; }
+          if (phase !== 'input') return;
+          const rect = node.getBoundingClientRect();
+          const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+          const y = (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
+          const top = 50;
+          const boardSize = Math.min(rect.width, rect.height - top - 30);
+          const ox = (rect.width - boardSize) / 2;
+          const oy = top;
+          const cell = boardSize / N;
+          const col = Math.floor((x - ox) / cell);
+          const row = Math.floor((y - oy) / cell);
+          if (col < 0 || row < 0 || col >= N || row >= N) return;
+          const idx = row * N + col;
+          flashIdx = idx; flashT = 0.25;
+          input.push(idx);
+          const i = input.length - 1;
+          if (input[i] !== seq[i]) { over = true; phase = 'over'; report(round - 1); return; }
+          if (input.length === seq.length) { phase = 'wait'; showT = 0.6; }
+        });
+      },
+      update(dt) {
+        if (flashT > 0) { flashT -= dt; if (flashT <= 0) flashIdx = -1; }
+        if (over) return;
+        if (phase === 'show') {
+          showT -= dt;
+          if (showT <= 0) {
+            showIdx += 1;
+            if (showIdx >= seq.length) { phase = 'input'; showIdx = -1; }
+            else { flashIdx = seq[showIdx]; flashT = 0.42; showT = 0.55; }
+          }
+        } else if (phase === 'wait') {
+          showT -= dt;
+          if (showT <= 0) next();
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#1a0a1a', '#3a1a3a']);
+        const top = 50;
+        const boardSize = Math.min(w, h - top - 30);
+        const ox = (w - boardSize) / 2;
+        const oy = top;
+        const cell = boardSize / N;
+        for (let i = 0; i < N * N; i++) {
+          const c = i % N, r = Math.floor(i / N);
+          const x = ox + c * cell + 4, y = oy + r * cell + 4, cs = cell - 8;
+          const lit = flashIdx === i;
+          ctx.fillStyle = lit ? palette[i] : palette[i] + '22';
+          ctx.beginPath(); ctx.roundRect(x, y, cs, cs, 8); ctx.fill();
+          if (lit) {
+            const g = ctx.createRadialGradient(x + cs / 2, y + cs / 2, 0, x + cs / 2, y + cs / 2, cs);
+            g.addColorStop(0, palette[i] + 'aa'); g.addColorStop(1, 'transparent');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 4, y - 4, cs + 8, cs + 8, 12); ctx.fill();
+          }
+        }
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(238,242,251,.9)';
+        ctx.font = '700 16px Inter, system-ui, sans-serif';
+        ctx.fillText(phase === 'show' ? 'Смотрите...' : phase === 'input' ? 'Повторите' : 'Готово', w / 2, h - 8);
+        ctx.textAlign = 'start';
+        hud(ctx, w, [`Раунд ${round}`, `Длина ${seq.length}`, `Очки ${round - 1}`]);
+        if (over) overText(ctx, w, h, `Итог ${round - 1}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+// ── paint_fill — Flood-It style puzzle with chosen origin ──────────
+// Tap a color, then tap a cell to flood-fill that cell's connected
+// region with the chosen color. Fill the whole grid in one color within
+// the move limit. Each level has a bigger grid.
+function paintFill(canvas, report) {
+  return runner(canvas, () => {
+    const PALETTE = ['#ff6b8a', '#ffb04d', '#ffe14d', '#7ed957', '#5ad0d0', '#5aa0ff', '#a98aff'];
+    let level = 1, grid = [], N = 6, nColors = 4, moves = 0, maxMoves = 0, over = false, won = false, pulse = 0;
+    let selectedColor = null;
+    const build = (lv) => {
+      N = Math.min(6 + (lv - 1), 12);
+      nColors = Math.min(4 + Math.floor((lv - 1) / 2), PALETTE.length);
+      grid = Array.from({ length: N * N }, () => Math.floor(Math.random() * nColors));
+      maxMoves = Math.floor(N * N * 0.6);
+      moves = 0; over = false; won = false; pulse = 0;
+    };
+    build(level);
+    const fill = (start, color) => {
+      const orig = grid[start];
+      if (orig === color) return;
+      const stack = [start];
+      while (stack.length) {
+        const i = stack.pop();
+        if (grid[i] !== orig) continue;
+        grid[i] = color;
+        const r = Math.floor(i / N), c = i % N;
+        if (r > 0) stack.push(i - N);
+        if (r < N - 1) stack.push(i + N);
+        if (c > 0) stack.push(i - 1);
+        if (c < N - 1) stack.push(i + 1);
+      }
+    };
+    const allSame = () => grid.every((c) => c === grid[0]);
+    return {
+      score: () => level - 1,
+      bind(bind, node) {
+        bind('pointerdown', (e) => {
+          e.preventDefault();
+          if (over) { if (won) level += 1; build(level); return; }
+          const rect = node.getBoundingClientRect();
+          const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+          const y = (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
+          const barH = 36;
+          const barY = rect.height - barH - 8;
+          if (y >= barY) {
+            const cellW = (rect.width - 16) / PALETTE.length;
+            const idx = Math.floor((x - 8) / cellW);
+            if (idx >= 0 && idx < PALETTE.length) selectedColor = idx;
+            return;
+          }
+          const top = 38;
+          const boardSize = Math.min(rect.width - 16, rect.height - top - barH - 16);
+          const ox = (rect.width - boardSize) / 2;
+          const oy = top;
+          const cell = boardSize / N;
+          const col = Math.floor((x - ox) / cell);
+          const row = Math.floor((y - oy) / cell);
+          if (col < 0 || row < 0 || col >= N || row >= N) return;
+          if (selectedColor == null) return;
+          fill(row * N + col, selectedColor);
+          moves += 1; pulse = 0.3;
+          if (allSame()) { over = true; won = true; report(level); }
+          else if (moves >= maxMoves) { over = true; won = false; report(level - 1); }
+        });
+      },
+      update(dt) { if (pulse > 0) pulse -= dt; },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a1a0a', '#1a3a1a']);
+        const top = 38;
+        const barH = 36;
+        const barY = h - barH - 8;
+        const boardSize = Math.min(w - 16, h - top - barH - 16);
+        const ox = (w - boardSize) / 2;
+        const oy = top;
+        const cell = boardSize / N;
+        ctx.fillStyle = 'rgba(255,255,255,.04)';
+        ctx.beginPath(); ctx.roundRect(ox - 6, oy - 6, boardSize + 12, boardSize + 12, 10); ctx.fill();
+        for (let i = 0; i < N * N; i++) {
+          const c = i % N, r = Math.floor(i / N);
+          ctx.fillStyle = PALETTE[grid[i]];
+          ctx.beginPath(); ctx.roundRect(ox + c * cell + 1.5, oy + r * cell + 1.5, cell - 3, cell - 3, 4); ctx.fill();
+        }
+        if (pulse > 0) {
+          ctx.strokeStyle = `rgba(255,255,255,${pulse * 2})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.roundRect(ox - 6, oy - 6, boardSize + 12, boardSize + 12, 10); ctx.stroke();
+        }
+        const cellW = (w - 16) / PALETTE.length;
+        PALETTE.forEach((c, i) => {
+          const x = 8 + i * cellW;
+          const sel = selectedColor === i;
+          ctx.fillStyle = c;
+          ctx.beginPath(); ctx.roundRect(x + 4, barY + (sel ? 0 : 4), cellW - 8, barH - (sel ? 0 : 4), 6); ctx.fill();
+          if (sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+        });
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(238,242,251,.85)';
+        ctx.font = '600 13px Inter, system-ui, sans-serif';
+        ctx.fillText(selectedColor == null ? 'Выберите цвет снизу' : 'Тапните клетку для заливки', w / 2, barY - 6);
+        ctx.textAlign = 'start';
+        hud(ctx, w, [`Уровень ${level}`, `Ходы ${moves}/${maxMoves}`, `Размер ${N}×${N}`]);
+        if (over) overText(ctx, w, h, won ? `Уровень ${level} пройден!` : 'Не хватило ходов', won ? 'Тап — следующий уровень' : 'Тап для повтора');
+      }
+    };
+  });
+}
+
+// ── mirror — dual-control via mirror mechanic ──────────────────────
+// Drag your finger on the left half: the player dot follows it, and a
+// mirror dot on the right half moves inversely. Collect orbs (each dot
+// collects on its own half), avoid the red hazards. Manage both sides.
+function mirror(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w, height = h;
+    let px = width * 0.25, py = height * 0.5, pressing = false;
+    let orbs = [], hazards = [], spawnT = 1, score = 0, over = false, lives = 3, invuln = 0, sparks = [];
+    const trailL = [], trailR = [];
+    const reset = () => {
+      px = width * 0.25; py = height * 0.5; pressing = false;
+      orbs = []; hazards = []; spawnT = 1; score = 0; over = false; lives = 3; invuln = 0; sparks = [];
+      trailL.length = 0; trailR.length = 0;
+    };
+    reset();
+    return {
+      score: () => score,
+      resize(s) { width = s.w; height = s.h; },
+      bind(bind, node) {
+        const move = (e) => {
+          e.preventDefault();
+          if (over) return;
+          const p = pointerPos(node, e);
+          px = Math.max(8, Math.min(width / 2 - 8, p.x));
+          py = Math.max(8, Math.min(height - 8, p.y));
+        };
+        bind('pointerdown', (e) => { if (over) { reset(); return; } pressing = true; move(e); });
+        bind('pointermove', (e) => { if (pressing) move(e); });
+        bind('pointerup', () => { pressing = false; });
+        bind('pointerleave', () => { pressing = false; });
+      },
+      update(dt) {
+        if (over) return;
+        invuln = Math.max(0, invuln - dt);
+        const mx = width - px, my = py;
+        trailL.push({ x: px, y: py, life: 0.5 });
+        trailR.push({ x: mx, y: my, life: 0.5 });
+        trailL.forEach((t) => t.life -= dt); trailR.forEach((t) => t.life -= dt);
+        while (trailL.length && trailL[0].life <= 0) trailL.shift();
+        while (trailR.length && trailR[0].life <= 0) trailR.shift();
+        spawnT -= dt;
+        if (spawnT <= 0) {
+          spawnT = 0.7 + Math.random() * 0.6;
+          const side = Math.random() < 0.5 ? 'L' : 'R';
+          const x = side === 'L' ? 20 + Math.random() * (width / 2 - 40) : width / 2 + 20 + Math.random() * (width / 2 - 40);
+          const y = 20 + Math.random() * (height - 40);
+          orbs.push({ x, y, side, life: 4, r: 8 });
+          if (Math.random() < 0.35) {
+            const side2 = Math.random() < 0.5 ? 'L' : 'R';
+            const x2 = side2 === 'L' ? 20 + Math.random() * (width / 2 - 40) : width / 2 + 20 + Math.random() * (width / 2 - 40);
+            const y2 = 20 + Math.random() * (height - 40);
+            hazards.push({ x: x2, y: y2, r: 14, vx: (Math.random() - 0.5) * 40, vy: (Math.random() - 0.5) * 40 });
+          }
+        }
+        hazards.forEach((hz) => {
+          hz.x += hz.vx * dt; hz.y += hz.vy * dt;
+          if (hz.x < 10 || hz.x > width - 10) hz.vx *= -1;
+          if (hz.y < 10 || hz.y > height - 10) hz.vy *= -1;
+          hz.x = Math.max(10, Math.min(width - 10, hz.x));
+          hz.y = Math.max(10, Math.min(height - 10, hz.y));
+        });
+        orbs = orbs.filter((o) => {
+          o.life -= dt;
+          const tx = o.side === 'L' ? px : mx;
+          const ty = o.side === 'L' ? py : my;
+          if (Math.hypot(o.x - tx, o.y - ty) < o.r + 8) {
+            score += 1;
+            for (let i = 0; i < 8; i++) sparks.push({ x: o.x, y: o.y, vx: (Math.random() - 0.5) * 180, vy: (Math.random() - 0.5) * 180, life: 0.4, color: '#a8ffd0' });
+            return false;
+          }
+          return o.life > 0;
+        });
+        if (invuln <= 0) {
+          for (const hz of hazards) {
+            const onLeft = hz.x < width / 2;
+            const tx = onLeft ? px : mx;
+            const ty = onLeft ? py : my;
+            if (Math.hypot(hz.x - tx, hz.y - ty) < hz.r + 8) {
+              lives -= 1; invuln = 1.2;
+              for (let i = 0; i < 12; i++) sparks.push({ x: tx, y: ty, vx: (Math.random() - 0.5) * 240, vy: (Math.random() - 0.5) * 240, life: 0.5 });
+              if (lives <= 0) { over = true; report(score); }
+              break;
+            }
+          }
+        }
+        sparks.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+        sparks = sparks.filter((p) => p.life > 0);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#1a1a0a', '#3a3a1a']);
+        ctx.strokeStyle = 'rgba(255,230,140,.2)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke();
+        ctx.setLineDash([]);
+        trailL.forEach((t) => { ctx.globalAlpha = t.life; ctx.fillStyle = '#9ad0ff'; ctx.beginPath(); ctx.arc(t.x, t.y, 3, 0, Math.PI * 2); ctx.fill(); });
+        trailR.forEach((t) => { ctx.globalAlpha = t.life; ctx.fillStyle = '#ffd09a'; ctx.beginPath(); ctx.arc(t.x, t.y, 3, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        orbs.forEach((o) => {
+          ctx.globalAlpha = Math.min(1, o.life);
+          const col = o.side === 'L' ? '#9affc0' : '#ffd0a0';
+          const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r + 4);
+          g.addColorStop(0, col); g.addColorStop(1, col + '00');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 4, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(o.x, o.y, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+        hazards.forEach((hz) => {
+          const g = ctx.createRadialGradient(hz.x, hz.y, 0, hz.x, hz.y, hz.r);
+          g.addColorStop(0, '#ff7a7a'); g.addColorStop(1, 'rgba(255,80,80,0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#aa3030'; ctx.beginPath(); ctx.arc(hz.x, hz.y, hz.r * 0.5, 0, Math.PI * 2); ctx.fill();
+        });
+        if (invuln <= 0 || Math.floor(invuln * 10) % 2 === 0) {
+          ctx.fillStyle = '#9ad0ff'; ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(px - 2, py - 2, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffd09a'; ctx.beginPath(); ctx.arc(w - px, py, 8, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(w - px - 2, py - 2, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+        sparks.forEach((p) => { ctx.globalAlpha = Math.max(0, p.life * 2); ctx.fillStyle = p.color || '#ffb070'; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        hud(ctx, w, [`Очки ${score}`, `Жизни ${lives}`, pressing ? 'Веди палец' : 'Касайся и веди']);
+        if (over) overText(ctx, w, h, `Итог ${score}`, 'Тап для повтора');
       }
     };
   });

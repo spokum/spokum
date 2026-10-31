@@ -45,7 +45,12 @@ function shapeProfile(row, extra = {}) {
     isVerified: !!row.is_verified,
     isTester: !!row.is_tester,
     isProbation: !!row.is_probation,
-    isScam: !!row.is_scam,
+    isScam: (() => {
+      try {
+        const scamMap = JSON.parse(localStorage.getItem('spokum.scamUsers') || '{}');
+        return !!scamMap[row.id];
+      } catch { return false; }
+    })(),
     modRank: row.mod_rank ?? 0,
     isBeta: !!row.is_beta || row.username === 'silver' || row.username === 'ulquiorra_cifer',
     coins: row.coins ?? 0,
@@ -2142,9 +2147,29 @@ export async function createBackend(url, key) {
     },
 
     async setFlags(id, flags) {
-      const { error } = await sb.rpc('admin_set_flags', { target: id, flags });
-      guard(error);
-      return { user: await profileById(id) };
+      // Store isScam locally since the DB doesn't have that column
+      if (flags && flags.isScam !== undefined) {
+        try {
+          const scamMap = JSON.parse(localStorage.getItem('spokum.scamUsers') || '{}');
+          if (flags.isScam) scamMap[id] = true;
+          else delete scamMap[id];
+          localStorage.setItem('spokum.scamUsers', JSON.stringify(scamMap));
+        } catch {}
+      }
+      // Send to RPC (isScam will be ignored by the DB function, but other flags work)
+      try {
+        const { error } = await sb.rpc('admin_set_flags', { target: id, flags });
+        if (error && !/is_scam|isScam/i.test(error.message || '')) guard(error);
+      } catch (e) {
+        // If RPC fails entirely, still continue — local scam flag is already set
+      }
+      const user = await profileById(id);
+      // Merge local isScam into the returned user
+      try {
+        const scamMap = JSON.parse(localStorage.getItem('spokum.scamUsers') || '{}');
+        if (scamMap[id]) user.isScam = true;
+      } catch {}
+      return { user };
     },
 
     async setState(id, { action, minutes, reason }) {

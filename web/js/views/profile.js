@@ -489,22 +489,43 @@ export async function render(root) {
     <div data-body></div>`;
 
   const body = root.querySelector('[data-body]');
-  if (user?.username  && api.todayQuote) {
-    api.todayQuote().then((q) => {
-      if (!q?.text) return;
-      const host = root.querySelector('[data-quote-host]');
-      if (host) host.innerHTML = `
-        <div class="card appear" style="margin:0 12px 12px;padding:14px;background:linear-gradient(135deg,var(--bg-2),var(--bg-3));border:1px solid var(--line)">
-          <div class="row" style="gap:8px;align-items:flex-start">
-            ${icon('spark', 16)}
-            <div>
-              <div class="strong small" style="margin-bottom:4px">Цитата дня</div>
-              <div class="small" style="line-height:1.5;font-style:italic">${esc(q.text)}</div>
-              ${q.author ? `<div class="tiny muted" style="margin-top:4px">- ${esc(q.author)}</div>` : ''}
+  // Daily quote widget: prefer server quote (api.todayQuote), fall back to
+  // the local 50-quote collection. Either way, the widget is clickable and
+  // opens the full daily-quote sheet (favorites, navigation, share-as-post).
+  if (user?.username) {
+    const renderLocalQuoteWidget = () => {
+      import('./daily-quote.js?v=20251102').then(({ dailyQuoteWidgetHtml, bindDailyQuoteWidget }) => {
+        const host = root.querySelector('[data-quote-host]');
+        if (!host || host.innerHTML.trim()) return;
+        host.innerHTML = dailyQuoteWidgetHtml();
+        bindDailyQuoteWidget(root);
+      }).catch(() => {});
+    };
+    if (api.todayQuote) {
+      api.todayQuote().then((q) => {
+        if (!q?.text) { renderLocalQuoteWidget(); return; }
+        const host = root.querySelector('[data-quote-host]');
+        if (host) host.innerHTML = `
+          <button class="card appear" data-dq-open style="margin:0 12px 12px;padding:14px;width:auto;text-align:left;cursor:pointer;background:linear-gradient(135deg,var(--bg-2),var(--bg-3));border:1px solid var(--line)">
+            <div class="row" style="gap:8px;align-items:flex-start">
+              <span style="color:var(--accent);opacity:.7">${icon('spark', 16)}</span>
+              <div class="grow" style="min-width:0">
+                <div class="strong small" style="margin-bottom:4px">Цитата дня</div>
+                <div class="small" style="line-height:1.5;font-style:italic">${esc(q.text)}</div>
+                ${q.author ? `<div class="tiny muted" style="margin-top:4px">- ${esc(q.author)}</div>` : ''}
+              </div>
+              <span style="color:var(--muted)">${icon('forward', 14)}</span>
             </div>
-          </div>
-        </div>`;
-    }).catch(() => {});
+          </button>`;
+        const btn = root.querySelector('[data-dq-open]');
+        if (btn) btn.onclick = async () => {
+          const { openDailyQuote } = await import('./daily-quote.js?v=20251102');
+          openDailyQuote();
+        };
+      }).catch(() => renderLocalQuoteWidget());
+    } else {
+      renderLocalQuoteWidget();
+    }
   }
   if (!user) {
     body.innerHTML = emptyState('profile', 'Вы не вошли', 'Войдите, чтобы вести свой дневник настроения');
@@ -581,7 +602,8 @@ export async function render(root) {
       ${fresh.isAdmin ? `<button class="card list-item" data-admin>${icon('chart', 20)}<div class="grow"><div class="strong small">Админ-панель</div><div class="tiny muted">Пользователи, аналитика, наказания</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула (через сервер)</div><div class="tiny muted">Письмо себе будущему с уведомлением</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-time-capsule>${icon('lock', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Локально: текст + картинка, до 5 лет</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-future-letter>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо в будущее</div><div class="tiny muted">Запечатать на 30 дней, 90 дней или год</div></div>${icon('forward', 16)}</button>
       ${fresh.username  ? `<button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">За что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-quests>${icon('star', 20)}<div class="grow"><div class="strong small">Задания дня</div><div class="tiny muted">3 задания + челлендж дня за монеты</div></div>${icon('forward', 16)}</button>` : ''}
@@ -614,8 +636,10 @@ export async function render(root) {
       <button class="card list-item" data-sounds>${icon('wave', 20)}<div class="grow"><div class="strong small">Звуки для спокойствия</div><div class="tiny muted">Шесть атмосфер с таймером сна</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-compliments>${icon('spark', 20)}<div class="grow"><div class="strong small">Комплименты</div><div class="tiny muted">Мягкие слова, когда они нужны</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gratitude-journal>${icon('heart', 20)}<div class="grow"><div class="strong small">Благодарность</div><div class="tiny muted">Три вещи, за что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Карта настроений</div><div class="tiny muted">Настроения по странам</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроения по странам</div><div class="tiny muted">Где какое настроение сейчас чаще</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-mood-map>${icon('chart', 20)}<div class="grow"><div class="strong small">Карта настроений</div><div class="tiny muted">Все пользователи на одном полотне</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-network-mood>${icon('chart', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Круговая диаграмма, топ-3, тренд за неделю</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-daily-quote>${icon('spark', 20)}<div class="grow"><div class="strong small">Цитата дня</div><div class="tiny muted">50 цитат о спокойствии и жизни, избранное</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-mood-chats>${icon('chats', 20)}<div class="grow"><div class="strong small">Чаты по настроению</div><div class="tiny muted">10 комнат под ваше состояние</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-voice-rooms>${icon('phone', 20)}<div class="grow"><div class="strong small">Голосовые комнаты</div><div class="tiny muted">Создайте свою комнату или зайдите в чужую</div></div>${icon('forward', 16)}</button>
@@ -872,6 +896,18 @@ export async function render(root) {
   body.querySelector('[data-capsule]')?.addEventListener('click', async () => {
     const { openCapsules } = await import('./capsule.js?v=20251028');
     openCapsules();
+  });
+  body.querySelector('[data-time-capsule]')?.addEventListener('click', async () => {
+    const { openTimeCapsule } = await import('./time-capsule.js?v=20251102');
+    openTimeCapsule();
+  });
+  body.querySelector('[data-mood-map]')?.addEventListener('click', async () => {
+    const { openMoodMap } = await import('./mood-map.js?v=20251102');
+    openMoodMap();
+  });
+  body.querySelector('[data-daily-quote]')?.addEventListener('click', async () => {
+    const { openDailyQuote } = await import('./daily-quote.js?v=20251102');
+    openDailyQuote();
   });
   body.querySelector('[data-gratitude]')?.addEventListener('click', async () => {
     const { openGratitude } = await import('./gratitude.js?v=20251028');
