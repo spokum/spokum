@@ -10,16 +10,16 @@ import { avatar, toast, openSheet, emptyState } from '../ui.js';
 // mood via api.updateMe — backends that don't know the new mood simply
 // ignore the unknown key.
 const ROOMS = [
-  { mood: 'calm',     emoji: '🌿', title: 'Спокойные',     hint: 'Тихий шёпот листвы' },
-  { mood: 'joy',      emoji: '✨', title: 'Радостные',     hint: 'Делимся светлым' },
-  { mood: 'sad',      emoji: '🌧', title: 'Грустящие',     hint: 'Тепло, когда тяжело' },
-  { mood: 'anger',    emoji: '🔥', title: 'Злые',          hint: 'Выпустить пар без вреда' },
-  { mood: 'anxiety',  emoji: '🌫', title: 'Тревожные',     hint: 'Вдох-выдох вместе' },
-  { mood: 'tired',    emoji: '🌙', title: 'Уставшие',      hint: 'Неспешные разговоры' },
-  { mood: 'tender',   emoji: '🍃', title: 'Нежные',        hint: 'Мягко и бережно' },
-  { mood: 'lift',     emoji: '🎈', title: 'В подъёме',     hint: 'Когда силы возвращаются' },
-  { mood: 'love',     emoji: '💗', title: 'Влюблённые',    hint: 'Сердце бьётся чаще' },
-  { mood: 'inspired', emoji: '🎯', title: 'Вдохновлённые', hint: 'Идеи и порывы' }
+  { mood: 'calm',     icon: 'leaf', title: 'Спокойные',     hint: 'Тихий шёпот листвы' },
+  { mood: 'joy',      icon: 'spark', title: 'Радостные',     hint: 'Делимся светлым' },
+  { mood: 'sad',      icon: 'wave', title: 'Грустящие',     hint: 'Тепло, когда тяжело' },
+  { mood: 'anger',    icon: 'flame', title: 'Злые',          hint: 'Выпустить пар без вреда' },
+  { mood: 'anxiety',  icon: 'same', title: 'Тревожные',     hint: 'Вдох-выдох вместе' },
+  { mood: 'tired',    icon: 'moon', title: 'Уставшие',      hint: 'Неспешные разговоры' },
+  { mood: 'tender',   icon: 'heart', title: 'Нежные',        hint: 'Мягко и бережно' },
+  { mood: 'lift',     icon: 'star', title: 'В подъёме',     hint: 'Когда силы возвращаются' },
+  { mood: 'love',     icon: 'heart', title: 'Влюблённые',    hint: 'Сердце бьётся чаще' },
+  { mood: 'inspired', icon: 'trophy', title: 'Вдохновлённые', hint: 'Идеи и порывы' }
 ];
 
 const MOOD_META = {

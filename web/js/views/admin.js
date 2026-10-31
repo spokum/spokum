@@ -16,7 +16,7 @@ const TABS = [
   ['actions', 'Наказания'],
   ['audit', 'Журнал'],
   ['promos', 'Промокоды'],
-  ['halloween', 'Хэллоуин'],
+  ['winter', 'Зима'],
   ['pixel', 'Пиксель-батл']
 ];
 
@@ -69,7 +69,7 @@ export async function openAdmin() {
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
       if (active === 'promos') await drawPromos(body);
-      if (active === 'halloween') await drawHalloween(body);
+      if (active === 'winter') await drawWinter(body);
       if (active === 'pixel') await drawPixelBattle(body);
     } catch (error) {
       body.innerHTML = emptyState('warn', 'Ошибка', error.message);
@@ -1259,24 +1259,24 @@ async function drawPixelBattle(body) {
   await checkStatus();
 }
 
-// ── Halloween: grant pumpkins, candies, ghosts, items ─────────────────────
-const HW_ITEMS = [
-  { id: 'pumpkin_head', title: 'Тыквенная голова', cost: 50 },
-  { id: 'ghost_glow', title: 'Призрачное свечение', cost: 80 },
-  { id: 'cat_eyes', title: 'Кошачьи глаза', cost: 30 },
-  { id: 'witch_broom', title: 'Ведьмина метла', cost: 100 }
+// ── Winter: grant snowflakes, coins, stars, items ───────────────────────────
+const WINTER_ITEMS = [
+  { id: 'snowflakeFrame', title: 'Снежная рамка', cost: 50 },
+  { id: 'iceGlow',        title: 'Ледяное свечение', cost: 80 },
+  { id: 'frostEyes',      title: 'Морозный взгляд', cost: 30 },
+  { id: 'winterGift',     title: 'Зимний подарок', cost: 100 }
 ];
 
-async function drawHalloween(body) {
+async function drawWinter(body) {
   body.innerHTML = `
     <div class="col" style="gap:10px;padding:12px">
-      <div class="card" style="padding:12px;border-color:rgba(232,160,48,.3);background:rgba(232,160,48,.05)">
+      <div class="card" style="padding:12px;border-color:rgba(79,195,247,.3);background:rgba(79,195,247,.05)">
         <div class="row" style="gap:8px;margin-bottom:6px">
-          <span style="color:#e8a030">${icon('pumpkin', 20)}</span>
-          <span class="strong small" style="color:#e8a030">Выдача Halloween-наград</span>
+          <span style="color:#4fc3f7">${icon('star', 20)}</span>
+          <span class="strong small" style="color:#4fc3f7">Выдача зимних наград</span>
         </div>
         <p class="tiny muted" style="margin:0;line-height:1.5">
-          Найдите пользователя по @юзернейму и выдайте ему тыквы, конфеты, призраков или предметы ивента.
+          Найдите пользователя по @юзернейму и выдайте ему снежинки, монеты, звёзды или предметы зимнего ивента.
           Пользователь получит уведомление при следующем входе.
         </p>
       </div>
@@ -1319,7 +1319,7 @@ async function drawHalloween(body) {
       results.querySelectorAll('[data-uid]').forEach((btn) => {
         btn.onclick = () => {
           const user = users.find((u) => String(u.id) === btn.dataset.uid);
-          openHalloweenGrant(user, grantBox);
+          openWinterGrant(user, grantBox);
         };
       });
     } catch (e) {
@@ -1330,11 +1330,11 @@ async function drawHalloween(body) {
   searchInp.addEventListener('input', (e) => doSearch(e.target.value.trim()));
 }
 
-function openHalloweenGrant(user, box) {
-  // Load user's current halloween stats from server (admin endpoint) or show form
+function openWinterGrant(user, box) {
+  // Load user's current winter stats from server (admin endpoint) or show form
   box.style.display = 'block';
   box.innerHTML = `
-    <div class="card" style="padding:12px;border-color:rgba(232,160,48,.25)">
+    <div class="card" style="padding:12px;border-color:rgba(79,195,247,.25)">
       <div class="row" style="gap:10px;margin-bottom:12px">
         ${avatar(user, 44)}
         <div class="grow" style="min-width:0">
@@ -1344,41 +1344,41 @@ function openHalloweenGrant(user, box) {
         <button class="btn btn-sm btn-ghost" data-close>${icon('close', 16)}</button>
       </div>
 
-      <div class="strong small" style="margin-bottom:8px;color:#e8a030">${icon('pumpkin', 15)} Награды</div>
+      <div class="strong small" style="margin-bottom:8px;color:#4fc3f7">${icon('star', 15)} Награды</div>
       <div class="col" style="gap:8px">
         <div class="row" style="gap:8px;align-items:center">
-          <span class="small grow">Тыквы</span>
-          <input class="input" type="number" data-pumpkins value="10" min="0" max="9999" style="width:80px;text-align:center">
-          <button class="btn btn-sm btn-primary" data-grant="pumpkins">${icon('plus', 14)} Выдать</button>
+          <span class="small grow">Снежинки</span>
+          <input class="input" type="number" data-snowflakes value="10" min="0" max="9999" style="width:80px;text-align:center">
+          <button class="btn btn-sm btn-primary" data-grant="snowflakes">${icon('plus', 14)} Выдать</button>
         </div>
         <div class="row" style="gap:8px;align-items:center">
-          <span class="small grow">Конфеты</span>
-          <input class="input" type="number" data-candies value="50" min="0" max="9999" style="width:80px;text-align:center">
-          <button class="btn btn-sm btn-primary" data-grant="candies">${icon('plus', 14)} Выдать</button>
+          <span class="small grow">Монеты</span>
+          <input class="input" type="number" data-coins value="50" min="0" max="9999" style="width:80px;text-align:center">
+          <button class="btn btn-sm btn-primary" data-grant="coins">${icon('plus', 14)} Выдать</button>
         </div>
         <div class="row" style="gap:8px;align-items:center">
-          <span class="small grow">Призраки</span>
-          <input class="input" type="number" data-ghosts value="5" min="0" max="9999" style="width:80px;text-align:center">
-          <button class="btn btn-sm btn-primary" data-grant="ghosts">${icon('plus', 14)} Выдать</button>
+          <span class="small grow">Звёзды</span>
+          <input class="input" type="number" data-stars value="5" min="0" max="9999" style="width:80px;text-align:center">
+          <button class="btn btn-sm btn-primary" data-grant="stars">${icon('plus', 14)} Выдать</button>
         </div>
       </div>
 
-      <div class="strong small" style="margin:14px 0 8px;color:#e8a030">${icon('gift', 15)} Предметы</div>
+      <div class="strong small" style="margin:14px 0 8px;color:#4fc3f7">${icon('gift', 15)} Предметы</div>
       <div class="col" style="gap:6px">
-        ${HW_ITEMS.map((it) => `
+        ${WINTER_ITEMS.map((it) => `
           <button class="list-item" data-item="${it.id}" style="padding:8px">
             ${icon('gift', 18)}
             <div class="grow"><div class="small strong">${esc(it.title)}</div></div>
-            <span class="tiny muted">${it.cost} конфет</span>
+            <span class="tiny muted">${it.cost} снежинок</span>
             ${icon('plus', 16)}
           </button>
         `).join('')}
       </div>
 
-      <div class="strong small" style="margin:14px 0 8px;color:#e8a030">${icon('trophy', 15)} Сбросить</div>
+      <div class="strong small" style="margin:14px 0 8px;color:#4fc3f7">${icon('trophy', 15)} Сбросить</div>
       <button class="list-item" data-reset style="padding:8px;color:#c98b8b">
         ${icon('trash', 18)}
-        <div class="grow"><div class="small strong">Сбросить всю Halloween-статистику</div></div>
+        <div class="grow"><div class="small strong">Сбросить всю зимнюю статистику</div></div>
       </button>
 
       <div class="tiny muted" style="margin-top:10px;line-height:1.5">
@@ -1395,12 +1395,12 @@ function openHalloweenGrant(user, box) {
       const amount = Number(box.querySelector(`[data-${kind}]`).value) || 0;
       if (amount <= 0) return toast('Введите количество больше 0', 'err');
       try {
-        await api.adminGrantHalloween?.(user.id, kind, amount);
-        toast(`Выдано ${amount} ${kind === 'pumpkins' ? 'тыкв' : kind === 'candies' ? 'конфет' : 'призраков'} → @${esc(user.username)}`);
+        await api.adminGrantWinter?.(user.id, kind, amount);
+        toast(`Выдано ${amount} ${kind === 'snowflakes' ? 'снежинок' : kind === 'coins' ? 'монет' : 'звёзд'} → @${esc(user.username)}`);
       } catch (e) {
         // Fallback: local mode — grant to current user only
         if (e.message.includes('not a function') || e.message.includes('undefined')) {
-          const key = `spokum.halloween.${kind}`;
+          const key = `spokum.winter.${kind}`;
           const cur = Number(localStorage.getItem(key) || 0);
           localStorage.setItem(key, String(cur + amount));
           toast(`Локальный режим: выдано ${amount} (только себе)`);
@@ -1415,13 +1415,13 @@ function openHalloweenGrant(user, box) {
     btn.onclick = async () => {
       const itemId = btn.dataset.item;
       try {
-        await api.adminGrantHalloweenItem?.(user.id, itemId);
-        toast(`Предмет «${HW_ITEMS.find((i) => i.id === itemId)?.title}» выдан → @${esc(user.username)}`);
+        await api.adminGrantWinterItem?.(user.id, itemId);
+        toast(`Предмет «${WINTER_ITEMS.find((i) => i.id === itemId)?.title}» выдан → @${esc(user.username)}`);
       } catch (e) {
         if (e.message.includes('not a function') || e.message.includes('undefined')) {
-          const owned = JSON.parse(localStorage.getItem('spokum.halloween.owned') || '[]');
+          const owned = JSON.parse(localStorage.getItem('spokum.winter.owned') || '[]');
           if (!owned.includes(itemId)) owned.push(itemId);
-          localStorage.setItem('spokum.halloween.owned', JSON.stringify(owned));
+          localStorage.setItem('spokum.winter.owned', JSON.stringify(owned));
           toast('Локальный режим: предмет выдан (только себе)');
         } else {
           toast(e.message, 'err');
@@ -1431,13 +1431,13 @@ function openHalloweenGrant(user, box) {
   });
 
   box.querySelector('[data-reset]').onclick = async () => {
-    if (!await confirmSheet({ title: 'Сбросить Halloween?', text: `Все тыквы, конфеты, призраки и предметы @${user.username} будут удалены.`, confirm: 'Сбросить', danger: true })) return;
+    if (!await confirmSheet({ title: 'Сбросить зиму?', text: `Все снежинки, монеты, звёзды и предметы @${user.username} будут удалены.`, confirm: 'Сбросить', danger: true })) return;
     try {
-      await api.adminResetHalloween?.(user.id);
-      toast('Halloween-статистика сброшена');
+      await api.adminResetWinter?.(user.id);
+      toast('Зимняя статистика сброшена');
     } catch (e) {
       if (e.message.includes('not a function') || e.message.includes('undefined')) {
-        ['pumpkins', 'candies', 'ghosts', 'owned', 'lastReward', 'mood'].forEach((k) => localStorage.removeItem(`spokum.halloween.${k}`));
+        ['snowflakes', 'coins', 'stars', 'owned', 'lastReward', 'mood'].forEach((k) => localStorage.removeItem(`spokum.winter.${k}`));
         toast('Локальный режим: сброшено (только у себя)');
       } else {
         toast(e.message, 'err');

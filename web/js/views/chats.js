@@ -365,7 +365,13 @@ export async function openChat(chatId) {
   view.querySelector('[data-voice]')?.addEventListener('click', () => recordVoice(send));
 }
 
-const REACTS = ['👍', '❤️', '😂', '😢', '🔥'];
+const REACTS = [
+  { icon: 'same', label: 'Согласен' },
+  { icon: 'heart', label: 'Любовь' },
+  { icon: 'spark', label: 'Радость' },
+  { icon: 'wave', label: 'Грусть' },
+  { icon: 'flame', label: 'Огонь' }
+];
 
 function wireReact(node, message, rows, done) {
   if (!api.reactMessage || message.kind === 'system' || message.kind === 'call') return;
@@ -375,15 +381,18 @@ function wireReact(node, message, rows, done) {
       seen[row.glyph] = (seen[row.glyph] || 0) + 1;
     });
     const strip = el(`<div class="react-strip">${Object.entries(seen)
-      .map(([glyph, count]) => `<span class="react-chip emoji">${glyph}${count > 1 ? `<i>${count}</i>` : ''}</span>`)
+      .map(([glyph, count]) => {
+        const iconName = ['same','heart','spark','wave','flame'].includes(glyph) ? glyph : 'spark';
+        return `<span class="react-chip" data-glyph="${esc(glyph)}">${icon(iconName, 16)}${count > 1 ? `<i>${count}</i>` : ''}</span>`;
+      })
       .join('')}</div>`);
-    // Tapping a pill toggles your own reaction of that emoji off.
+    // Tapping a pill toggles your own reaction off.
     strip.querySelectorAll('.react-chip').forEach((chip) => {
-      const emoji = chip.firstChild.textContent;
+      const glyph = chip.dataset.glyph;
       chip.addEventListener('click', async (event) => {
         event.stopPropagation();
         const mine = rows.find((row) => String(row.user) === String(state.user?.id));
-        if (mine?.glyph !== emoji) return; // only allow removing your own
+        if (mine?.glyph !== glyph) return; // only allow removing your own
         try {
           await api.reactMessage(message.id, '');
           done?.();
@@ -397,7 +406,7 @@ function wireReact(node, message, rows, done) {
   const open = () => {
     const mine = rows.find((row) => String(row.user) === String(state.user?.id));
     const menu = el(`<div class="react-row">
-      ${REACTS.map((emoji) => `<button class="react-pick emoji ${mine?.glyph === emoji ? 'on' : ''}" data-react="${emoji}">${emoji}</button>`).join('')}
+      ${REACTS.map((r) => `<button class="react-pick ${mine?.glyph === r.icon ? 'on' : ''}" data-react="${r.icon}" title="${r.label}">${icon(r.icon, 20)}</button>`).join('')}
     </div>`);
     const sheet = openSheet('', menu);
     menu.querySelectorAll('[data-react]').forEach((button) => {
@@ -454,7 +463,7 @@ function bubble(message, chat, lastAuthor) {
   if (message.kind === 'sticker') {
     inner = message.media
       ? `<img class="sticker" src="${esc(message.media)}" alt="стикер" loading="lazy">`
-      : `<span class="sticker-emoji">${esc(message.body || '')}</span>`;
+      : (() => { const s = String(message.body || ''); const iconNames = ['leaf','cup','moon','flame','heart','same','spark','rose','star','hold']; return iconNames.includes(s) ? `<span class="sticker-icon">${icon(s, 48)}</span>` : `<span class="sticker-emoji">${esc(s)}</span>`; })();
   } else if (message.kind === 'image') inner = `<img src="${esc(message.media)}" alt="" loading="lazy">${message.body ? `<div style="margin-top:6px">${esc(message.body)}</div>` : ''}`;
   else if (message.kind === 'voice') {
     const bars = Array.from({ length: 22 }, (_, i) => `<i style="height:${20 + Math.round(Math.sin(i * 1.7 + message.id) * 55 + 55) * 0.6}%"></i>`).join('');

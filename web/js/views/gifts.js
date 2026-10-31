@@ -90,11 +90,18 @@ export async function openGiftShop(target, done) {
   const month = new Date().getMonth();
   const season = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'autumn', 'autumn', 'autumn', 'winter'][month];
   const isHalloween = month === 9;
+  const SEASON_BADGE = {
+    halloween: '<span class="gift-season" style="background:#e8a030;color:#1a0a00">halloween</span>',
+    winter:    '<span class="gift-season" style="background:#4fc3f7;color:#06203a">зима</span>',
+    autumn:    '<span class="gift-season" style="background:#d97742;color:#1a0a00">осень</span>',
+    spring:    '<span class="gift-season" style="background:#9ccc65;color:#0a1a00">весна</span>',
+    summer:    '<span class="gift-season" style="background:#ffb74d;color:#1a0a00">лето</span>'
+  };
   types
     .filter((kind) => kind.price > 0 && (!kind.season || kind.season === season || (isHalloween && kind.season === 'halloween') || kind.isLimited))
     .forEach((kind) => {
     const card = el(`<button class="gift-card ${purse < kind.price ? 'poor' : ''}">
-      ${kind.season === 'halloween' ? '<span class="gift-season" style="background:#e8a030;color:#1a0a00">halloween</span>' : kind.season ? '<span class="gift-season">сезон</span>' : ''}
+      ${kind.season ? (SEASON_BADGE[kind.season] || '<span class="gift-season">сезон</span>') : ''}
       ${kind.isLimited ? '<span class="gift-season" style="background:#c93030;color:#fff">LIMITED</span>' : ''}
       ${giftArt(kind, 52)}
       <span class="strong tiny" style="margin-top:7px">${esc(kind.title)}</span>

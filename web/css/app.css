@@ -2610,11 +2610,11 @@ body.still *::after {
   --glow-1: rgba(200,150,90,.08); --glow-2: rgba(220,180,130,.07); --glow: .65;
 }
 
-/* ── Halloween Event — exclusive for @silver ─────────────────────────── */
+/* ── Winter Event (Ранняя зима) — beta only ──────────────────────────── */
 
 .hw-bg {
-  background: radial-gradient(120% 80% at 50% 0%, #2a0e02 0%, transparent 60%),
-              linear-gradient(180deg, #1a0a00 0%, #0d0508 60%, #08040a 100%);
+  background: radial-gradient(120% 80% at 50% 0%, #0d2540 0%, transparent 60%),
+              linear-gradient(180deg, #0a1628 0%, #0d1a30 60%, #080a14 100%);
 }
 
 .hw-view {

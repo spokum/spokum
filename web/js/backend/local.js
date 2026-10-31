@@ -306,7 +306,21 @@ export const GIFT_TYPES = [
   { id: 'key', title: 'Золотой ключ', price: 380, rarity: 'epic', art: 'key', hue: 50 },
   { id: 'cat', title: 'Котик', price: 240, rarity: 'rare', art: 'cat', hue: 30 },
   { id: 'candy', title: 'Конфета', price: 50, rarity: 'common', art: 'candy', hue: 320 },
-  { id: 'heart_hands', title: 'Руки с сердцем', price: 340, rarity: 'rare', art: 'heart_hands', hue: 350, isLimited: true }
+  { id: 'heart_hands', title: 'Руки с сердцем', price: 340, rarity: 'rare', art: 'heart_hands', hue: 350, isLimited: true },
+  // Новые LIMITED зимние подарки
+  { id: 'icicle', title: 'Сосулька', price: 800, rarity: 'legend', art: 'crystal', hue: 190, isLimited: true },
+  { id: 'snow_queen', title: 'Снежная королева', price: 1500, rarity: 'legend', art: 'crown', hue: 200, isLimited: true },
+  { id: 'frost_dragon', title: 'Морозный дракон', price: 2000, rarity: 'legend', art: 'dragon', hue: 180, isLimited: true },
+  { id: 'winter_rose', title: 'Зимняя роза', price: 700, rarity: 'epic', art: 'rose', hue: 340, isLimited: true },
+  // Сезонные зимние подарки (видны только зимой)
+  { id: 'snowball', title: 'Снежок', price: 30, rarity: 'common', art: 'star', hue: 200, season: 'winter' },
+  { id: 'hot_cocoa', title: 'Горячий какао', price: 80, rarity: 'common', art: 'cup', hue: 26, season: 'winter' },
+  { id: 'mitten', title: 'Варежка', price: 120, rarity: 'rare', art: 'heart_hands', hue: 350, season: 'winter' },
+  { id: 'ice_skate', title: 'Коньки', price: 200, rarity: 'rare', art: 'star', hue: 190, season: 'winter' },
+  { id: 'fireplace', title: 'Камин', price: 350, rarity: 'epic', art: 'flame', hue: 20, season: 'winter' },
+  { id: 'christmas_tree', title: 'Ёлка', price: 400, rarity: 'epic', art: 'star', hue: 140, season: 'winter' },
+  { id: 'snowman', title: 'Снеговик', price: 250, rarity: 'rare', art: 'star', hue: 200, season: 'winter' },
+  { id: 'warm_scarf', title: 'Тёплый шарф', price: 180, rarity: 'rare', art: 'heart_hands', hue: 10, season: 'winter' }
 ];
 
 const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];
@@ -392,6 +406,7 @@ function pub(user) {
     shareWord: !!user.shareWord,
     statusIcon: user.statusIcon || null,
     socialLinks: normalizeSocialLinks(user.socialLinks),
+    music: user.music || null,
     premiumUntil: user.premiumUntil || 0,
     premiumReason: user.premiumReason || '',
     premiumGrantedAt: user.premiumGrantedAt || 0,
@@ -824,6 +839,14 @@ export const local = {
     if (patch.shareWord !== undefined) user.shareWord = !!patch.shareWord;
     if (patch.statusIcon !== undefined) user.statusIcon = patch.statusIcon;
     if (patch.socialLinks !== undefined) user.socialLinks = normalizeSocialLinks(patch.socialLinks);
+    if (patch.music !== undefined) {
+      // Profile music: { url, name } | null. Stored on the user so other
+      // people who open the profile can hear it too.
+      if (patch.music == null) user.music = null;
+      else if (typeof patch.music === 'object' && patch.music.url) {
+        user.music = { url: String(patch.music.url).slice(0, 2000), name: String(patch.music.name || 'Без названия').slice(0, 80) };
+      }
+    }
     save();
     return { user: priv(user) };
   },
@@ -2182,6 +2205,39 @@ export const local = {
     const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
     pending[userId] = { reset: true };
     localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+    return { ok: true };
+  },
+
+  // ── Winter admin grants ────────────────────────────────────────────────
+  // Same shape as Halloween grants, but for `spokum.winter.*` keys. The
+  // Winter event view (js/views/winter.js) reads `spokum.winter.pending`
+  // and applies grants to the current user on next load.
+  async adminGrantWinter(userId, kind, amount) {
+    needAdmin();
+    if (!['snowflakes', 'coins', 'stars'].includes(kind)) fail('Неизвестный тип награды');
+    amount = Math.max(0, Math.min(99999, Number(amount) || 0));
+    const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
+    if (!pending[userId]) pending[userId] = {};
+    pending[userId][kind] = (pending[userId][kind] || 0) + amount;
+    localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
+    return { ok: true, kind, amount };
+  },
+
+  async adminGrantWinterItem(userId, itemId) {
+    needAdmin();
+    const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
+    if (!pending[userId]) pending[userId] = {};
+    if (!Array.isArray(pending[userId].items)) pending[userId].items = [];
+    if (!pending[userId].items.includes(itemId)) pending[userId].items.push(itemId);
+    localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
+    return { ok: true, itemId };
+  },
+
+  async adminResetWinter(userId) {
+    needAdmin();
+    const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
+    pending[userId] = { reset: true };
+    localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
     return { ok: true };
   },
 

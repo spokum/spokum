@@ -62,6 +62,7 @@ function shapeProfile(row, extra = {}) {
     shareWord: !!row.share_word,
     notifyPosts: row.notify_posts !== false,
     statusIcon: row.status_icon || null,
+    music: row.music || null,
     premiumUntil: ms(row.premium_until),
     premiumReason: row.premium_reason || '',
     premiumGrantedAt: ms(row.premium_granted_at),
@@ -1674,6 +1675,33 @@ export async function createBackend(url, key) {
       const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
       pending[userId] = { reset: true };
       localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
+      return { ok: true };
+    },
+
+    // Winter admin grants — stored in localStorage pending queue (same as local mode).
+    // The Winter event view (js/views/winter.js) applies them on next load.
+    async adminGrantWinter(userId, kind, amount) {
+      if (!['snowflakes', 'coins', 'stars'].includes(kind)) throw new Error('Неизвестный тип награды');
+      const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
+      if (!pending[userId]) pending[userId] = {};
+      pending[userId][kind] = (pending[userId][kind] || 0) + Number(amount);
+      localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
+      return { ok: true, kind, amount };
+    },
+
+    async adminGrantWinterItem(userId, itemId) {
+      const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
+      if (!pending[userId]) pending[userId] = {};
+      if (!Array.isArray(pending[userId].items)) pending[userId].items = [];
+      if (!pending[userId].items.includes(itemId)) pending[userId].items.push(itemId);
+      localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
+      return { ok: true, itemId };
+    },
+
+    async adminResetWinter(userId) {
+      const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
+      pending[userId] = { reset: true };
+      localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
       return { ok: true };
     },
 

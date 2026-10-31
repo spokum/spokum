@@ -517,11 +517,11 @@ export async function render(root) {
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-halloween>
-      <span class="hw-profile-icon">${icon('pumpkin', 24)}</span>
+    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-halloween style="background:linear-gradient(135deg,#1a2a4a,#2a4a7a)">
+      <span class="hw-profile-icon">${icon('star', 24)}</span>
       <span class="grow" style="text-align:left">
-        <span class="strong small">Хэллоуин ивент <span class="tiny muted">· бета</span></span>
-        <span class="tiny muted">Жуткий сезон · до 31 октября</span>
+        <span class="strong small">Ранняя зима <span class="tiny muted">· бета</span></span>
+        <span class="tiny muted">Зимний сезон · до 31 декабря</span>
       </span>
       ${icon('forward', 18)}
     </button>` : ''}
@@ -615,10 +615,10 @@ export async function render(root) {
       <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Как дела у всех сразу</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-mood-chats>${icon('chats', 20)}<div class="grow"><div class="strong small">Чаты по настроению</div><div class="tiny muted">10 комнат под ваше состояние</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-voice-rooms>${icon('phone', 20)}<div class="grow"><div class="strong small">Голосовые комнаты</div><div class="tiny muted">Спокойный вечер, чтение, музыка, общение, сон</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-voice-rooms>${icon('phone', 20)}<div class="grow"><div class="strong small">Голосовые комнаты</div><div class="tiny muted">Создайте свою комнату или зайдите в чужую</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-pnotes>${icon('edit', 20)}<div class="grow"><div class="strong small">Заметки</div><div class="tiny muted">Приватные записи только для вас</div></div><span class="pill" data-pnotes-count style="margin-right:6px">0</span>${icon('forward', 16)}</button>
       <button class="card list-item" data-gallery>${icon('image', 20)}<div class="grow"><div class="strong small">Галерея</div><div class="tiny muted">Все ваши фото и видео из записей</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-profile-music>${icon('volume', 20)}<div class="grow"><div class="strong small">Музыка профиля</div><div class="tiny muted">Бесплатный атмосферный трек в шапку профиля</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-profile-music>${icon('volume', 20)}<div class="grow"><div class="strong small">Музыка профиля</div><div class="tiny muted">Свой трек по ссылке — бесплатно</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
@@ -685,7 +685,7 @@ export async function render(root) {
   const paintMusicWidget = () => {
     if (!musicHost) return;
     import('./profile-music.js?v=20251028').then(({ profileMusicWidget, bindMusicWidget }) => {
-      musicHost.innerHTML = profileMusicWidget(true);
+      musicHost.innerHTML = profileMusicWidget({ isMine: true });
       bindMusicWidget(musicHost, () => {
         // Re-open the picker so the user can change the track.
         import('./profile-music.js?v=20251028').then(({ openMusicPicker }) => {
@@ -699,8 +699,8 @@ export async function render(root) {
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
   body.querySelector('[data-halloween]')?.addEventListener('click', async () => {
-    const { openHalloween } = await import('./halloween.js?v=20251028');
-    openHalloween();
+    const { openWinter } = await import('./winter.js?v=20251101');
+    openWinter();
   });
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
@@ -1665,6 +1665,7 @@ export async function openProfile(username) {
         <div class="tiny muted" style="margin-top:10px">В СпокУм с ${fullDate(user.createdAt).split(',')[0]}</div>
         </div>
       </div>
+      <div data-music-host></div>
       <div class="row between" style="margin:20px 2px 10px"><div class="strong small">Записи</div></div>
       <div class="chips" data-kinds style="margin-bottom:10px"></div>
       <div class="col" data-posts></div>`;
@@ -1677,6 +1678,18 @@ export async function openProfile(username) {
         if (shelf) shelf.innerHTML = giftShelf(gifts);
       } catch {}
       drawShelf(body, user, false);
+    }
+
+    // Profile music widget — read-only. We show their track if the
+    // profile data carries a `music` field; otherwise nothing renders.
+    {
+      const musicHost = body.querySelector('[data-music-host]');
+      if (musicHost) {
+        import('./profile-music.js?v=20251028').then(({ profileMusicWidget, bindMusicWidget }) => {
+          musicHost.innerHTML = profileMusicWidget({ isMine: false, music: user.music || null });
+          bindMusicWidget(musicHost, null);
+        }).catch(() => {});
+      }
     }
 
     const list = body.querySelector('[data-posts]');
