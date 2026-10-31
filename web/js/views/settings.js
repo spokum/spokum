@@ -193,6 +193,7 @@ export async function render(root) {
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('shield', 18)}<span class="strong small">Правила</span></div>
       <button class="list-item" data-rules>${icon('feed', 18)}<div class="grow"><div class="small strong">Правила СпокУма</div><div class="tiny muted">Что можно, что нельзя и что за это бывает</div></div>${icon('forward', 15)}</button>
+      <button class="list-item" data-feedback>${icon('mail', 18)}<div class="grow"><div class="small strong">Идеи и баги</div><div class="tiny muted">Поделитесь идеей или сообщите о баге</div></div>${icon('forward', 15)}</button>
     </div>
 
     <div class="card appear">
@@ -365,6 +366,11 @@ export async function render(root) {
     const { openRules } = await import('./rules.js?v=20251028');
     openRules();
   };
+
+  root.querySelector('[data-feedback]')?.addEventListener('click', async () => {
+    const { openFeedback } = await import('./feedback.js?v=20251028');
+    openFeedback();
+  });
 
   root.querySelector('[data-sounds]')?.addEventListener('click', async () => {
     const { openSounds } = await import('./sounds.js?v=20251028');

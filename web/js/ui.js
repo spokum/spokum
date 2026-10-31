@@ -65,6 +65,9 @@ export function badges(user) {
   if (user.isDeveloper) items.push(badgeButton('badge-dev', solidIcon('hammer', 12), 'Разработчик СпокУма'));
   if (user.isTester) items.push(badgeButton('badge-tester', solidIcon('star', 12), 'Тестер СпокУма'));
   if (user.isProbation) items.push(badgeButton('badge-probation', icon('warn', 12, 2.2), 'Испытательный срок'));
+  if (user.isScam) {
+    items.push(`<span class="badge-icon badge-scam" data-badge="SCAM — мошенник" title="SCAM — мошенник" aria-label="SCAM — мошенник" style="background:#e83030;color:#fff;font-weight:700;font-size:9px;letter-spacing:.5px">SCAM</span>`);
+  }
   return items.length ? `<span class="badges">${items.join('')}</span>` : '';
 }
 

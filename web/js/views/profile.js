@@ -582,6 +582,7 @@ export async function render(root) {
       ${fresh.isModerator ? `<button class="card list-item" data-mod>${icon('shield', 20)}<div class="grow"><div class="strong small">Панель модератора</div><div class="tiny muted">Ваше звание: ${esc(rankName(fresh))}</div></div>${icon('forward', 16)}</button>` : ''}
       <button class="card list-item" data-letters>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо незнакомцу</div><div class="tiny muted">Отпустить письмо или прочитать чужое</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-capsule>${icon('hourglass', 20)}<div class="grow"><div class="strong small">Капсула времени</div><div class="tiny muted">Письмо себе будущему</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-future-letter>${icon('mail', 20)}<div class="grow"><div class="strong small">Письмо в будущее</div><div class="tiny muted">Запечатать на 30 дней, 90 дней или год</div></div>${icon('forward', 16)}</button>
       ${fresh.username  ? `<button class="card list-item" data-gratitude>${icon('heart', 20)}<div class="grow"><div class="strong small">Стена благодарности</div><div class="tiny muted">За что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-quests>${icon('star', 20)}<div class="grow"><div class="strong small">Задания дня</div><div class="tiny muted">3 задания + челлендж дня за монеты</div></div>${icon('forward', 16)}</button>` : ''}
       ${fresh.username  ? `<button class="card list-item" data-daily>${icon('gift', 20)}<div class="grow"><div class="strong small">Ежедневные награды</div><div class="tiny muted">7 дней подряд — монеты и премиум</div></div>${icon('forward', 16)}</button>` : ''}
@@ -604,6 +605,7 @@ export async function render(root) {
       <button class="card list-item" data-cards>${icon('mail', 20)}<div class="grow"><div class="strong small">Открытки</div><div class="tiny muted">Тихие слова для поста, чата или себя</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-bookmarks>${icon('book', 20)}<div class="grow"><div class="strong small">Закладки</div><div class="tiny muted">Сохранённые записи по категориям</div></div><span class="pill" data-bookmark-count style="margin-right:6px">—</span>${icon('forward', 16)}</button>
       <button class="card list-item" data-appeals>${icon('shield', 20)}<div class="grow"><div class="strong small">Мои споры</div><div class="tiny muted">Если наказание кажется несправедливым</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-feedback>${icon('mail', 20)}<div class="grow"><div class="strong small">Идеи и баги</div><div class="tiny muted">Подскажите, как сделать СпокУм лучше</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-invite>${icon('add_user', 20)}<div class="grow"><div class="strong small">Позвать друга</div><div class="tiny muted">Ваш код, монеты вам и другу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-twins>${icon('users', 20)}<div class="grow"><div class="strong small">Похожие по настроению</div><div class="tiny muted">Люди, у которых недели похожи на вашу</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-badges>${icon('trophy', 20)}<div class="grow"><div class="strong small">Достижения</div><div class="tiny muted">Не за популярность, а за заботу</div></div><span class="pill" data-achv-count style="margin-right:6px">—</span>${icon('forward', 16)}</button>
@@ -612,13 +614,15 @@ export async function render(root) {
       <button class="card list-item" data-sounds>${icon('wave', 20)}<div class="grow"><div class="strong small">Звуки для спокойствия</div><div class="tiny muted">Шесть атмосфер с таймером сна</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-compliments>${icon('spark', 20)}<div class="grow"><div class="strong small">Комплименты</div><div class="tiny muted">Мягкие слова, когда они нужны</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-gratitude-journal>${icon('heart', 20)}<div class="grow"><div class="strong small">Благодарность</div><div class="tiny muted">Три вещи, за что вы благодарны сегодня</div></div>${icon('forward', 16)}</button>
-      <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Как дела у всех сразу</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-moodmap>${icon('compass', 20)}<div class="grow"><div class="strong small">Карта настроений</div><div class="tiny muted">Настроения по странам</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-network-mood>${icon('chart', 20)}<div class="grow"><div class="strong small">Настроение сети</div><div class="tiny muted">Круговая диаграмма, топ-3, тренд за неделю</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-mood-chats>${icon('chats', 20)}<div class="grow"><div class="strong small">Чаты по настроению</div><div class="tiny muted">10 комнат под ваше состояние</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-voice-rooms>${icon('phone', 20)}<div class="grow"><div class="strong small">Голосовые комнаты</div><div class="tiny muted">Создайте свою комнату или зайдите в чужую</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-pnotes>${icon('edit', 20)}<div class="grow"><div class="strong small">Заметки</div><div class="tiny muted">Приватные записи только для вас</div></div><span class="pill" data-pnotes-count style="margin-right:6px">0</span>${icon('forward', 16)}</button>
       <button class="card list-item" data-gallery>${icon('image', 20)}<div class="grow"><div class="strong small">Галерея</div><div class="tiny muted">Все ваши фото и видео из записей</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-profile-music>${icon('volume', 20)}<div class="grow"><div class="strong small">Музыка профиля</div><div class="tiny muted">Свой трек по ссылке — бесплатно</div></div>${icon('forward', 16)}</button>
+      <button class="card list-item" data-radio>${icon('volume', 20)}<div class="grow"><div class="strong small">СпокУм Радио</div><div class="tiny muted">Общий плейлист треков</div></div>${icon('forward', 16)}</button>
       <div class="divider" style="margin:8px 0"></div>
       <button class="card list-item" data-notes>${icon('bell', 20)}<div class="grow"><div class="strong small">Уведомления</div><div class="tiny muted" data-bell-count>Всё прочитано</div></div>${icon('forward', 16)}</button>
       <button class="card list-item" data-names>${icon('key', 20)}<div class="grow"><div class="strong small">Мои юзернеймы</div><div class="tiny muted">Несколько имён на один аккаунт</div></div>${icon('forward', 16)}</button>
@@ -639,6 +643,10 @@ export async function render(root) {
   drawShelf(body, fresh, true, () => render(root));
   body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
+  body.querySelector('[data-feedback]')?.addEventListener('click', async () => {
+    const { openFeedback } = await import('./feedback.js?v=20251028');
+    openFeedback();
+  });
   body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
   body.querySelector('[data-twins]')?.addEventListener('click', () => openTwins());
 
@@ -829,6 +837,18 @@ export async function render(root) {
   body.querySelector('[data-moodmap]')?.addEventListener('click', async () => {
     const { openMoodMap } = await import('./extras.js?v=20251028');
     openMoodMap();
+  });
+  body.querySelector('[data-network-mood]')?.addEventListener('click', async () => {
+    const { openNetworkMood } = await import('./network-mood.js?v=20251028');
+    openNetworkMood();
+  });
+  body.querySelector('[data-future-letter]')?.addEventListener('click', async () => {
+    const { openFutureLetter } = await import('./future-letter.js?v=20251028');
+    openFutureLetter();
+  });
+  body.querySelector('[data-radio]')?.addEventListener('click', async () => {
+    const { openRadio } = await import('./radio.js?v=20251028');
+    openRadio();
   });
   body.querySelector('[data-campfire]')?.addEventListener('click', async () => {
     const { openCampfire } = await import('./campfire.js?v=20251028');

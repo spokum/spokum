@@ -22,11 +22,16 @@ export async function render(root) {
         <div style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">${icon('search', 18)}</div>
       </div>
     </div>
+    <button class="card list-item" data-random-chat style="margin-bottom:12px;padding:14px">${icon('users', 20)}<div class="grow"><div class="strong small">Случайный собеседник</div><div class="tiny muted">Анонимный чат 1-на-1</div></div>${icon('forward', 16)}</button>
     <div data-results></div>
     <div data-channels style="margin-bottom:12px"></div>
-    <div class="col" data-list style="gap:2px"></div>`;
+    <div class="col chat-tg chat-list" data-list style="gap:2px"></div>`;
 
   root.querySelector('[data-new]').onclick = openCreate;
+  root.querySelector('[data-random-chat]').onclick = async () => {
+    const { openRandomChat } = await import('./random-chat.js?v=20251028');
+    openRandomChat();
+  };
   const search = root.querySelector('[data-search]');
   const results = root.querySelector('[data-results]');
   search.addEventListener('input', debounce(async () => {
@@ -161,19 +166,19 @@ async function load(root) {
       : 'Ещё нет сообщений';
     const mark = chat.kind === 'group' ? icon('group', 13) : chat.kind === 'channel' ? icon('channel', 13) : '';
     const node = el(`
-      <button class="card list-item appear" style="padding:12px">
-        ${chat.peer ? avatar(chat.peer, 46) : `<div class="avatar avatar-46" style="--h:${chat.hue}">${esc((chat.title || '?')[0].toUpperCase())}</div>`}
+      <button class="card list-item appear chat-tg-row" style="padding:14px">
+        ${chat.peer ? avatar(chat.peer, 52) : `<div class="avatar avatar-52" style="--h:${chat.hue}">${esc((chat.title || '?')[0].toUpperCase())}</div>`}
         <div class="grow" style="min-width:0">
           <div class="row" style="gap:6px">
             ${mark ? `<span class="muted">${mark}</span>` : ''}
             <span class="strong small truncate">${esc(chat.title)}</span>
             ${chat.peer ? badges(chat.peer) : ''}
             <div class="grow"></div>
-            <span class="tiny muted">${last ? timeAgo(last.createdAt) : ''}</span>
+            <span class="tiny muted chat-tg-time">${last ? timeAgo(last.createdAt) : ''}</span>
           </div>
           <div class="row" style="gap:6px;margin-top:2px">
-            <span class="tiny muted truncate grow">${esc(preview)}</span>
-            ${chat.unread ? `<span class="pill good tiny" style="padding:1px 8px">${chat.unread}</span>` : ''}
+            <span class="tiny muted truncate grow chat-tg-preview">${esc(preview)}</span>
+            ${chat.unread ? `<span class="chat-tg-unread">${chat.unread}</span>` : ''}
           </div>
         </div>
       </button>`);
@@ -211,7 +216,7 @@ export async function openChat(chatId) {
   if (!chat) return toast('Чат не найден', 'err');
 
   const view = el(`
-    <div class="chat-view">
+    <div class="chat-view chat-tg">
       <div class="chat-head">
         <button class="btn btn-icon btn-ghost" data-back>${icon('back', 20)}</button>
         <button style="display:contents" data-peer>
@@ -219,7 +224,7 @@ export async function openChat(chatId) {
         </button>
         <div class="grow" style="min-width:0">
           <div class="row" style="gap:6px"><span class="strong small truncate">${esc(chat.title)}</span>${chat.peer ? badges(chat.peer) : ''}</div>
-          <div class="tiny muted truncate">${chat.kind === 'dm' ? `@${esc(chat.peer?.username || '')}` : `${chat.members.length} участников`}</div>
+          <div class="tiny muted truncate chat-tg-status">${chat.kind === 'dm' ? (chat.peer?.lastSeen ? `был(а) ${timeAgo(chat.peer.lastSeen)}` : 'online') : `${chat.members.length} участников`}</div>
         </div>
         ${chat.kind === 'dm' ? `<button class="btn btn-icon btn-ghost" data-video-call>${icon('video', 19)}</button>
         <button class="btn btn-icon btn-ghost" data-call>${icon('phone', 19)}</button>` : ''}
@@ -231,9 +236,9 @@ export async function openChat(chatId) {
         <button class="btn btn-icon btn-ghost" data-emoji-sticker title="Стикеры">${icon('spark', 19)}</button>
         <button class="btn btn-icon btn-ghost" data-stickers title="Свои стикеры">${icon('star', 19)}</button>
         <button class="btn btn-icon btn-ghost" data-image>${icon('image', 19)}</button>
-        <textarea class="input grow" data-input rows="1" placeholder="Сообщение" style="min-height:44px;max-height:120px;resize:none;padding:11px 14px"></textarea>
+        <textarea class="input grow chat-tg-input" data-input rows="1" placeholder="Сообщение" style="min-height:44px;max-height:120px;resize:none;padding:11px 16px"></textarea>
         <button class="btn btn-icon btn-ghost" data-voice>${icon('mic', 19)}</button>
-        <button class="btn btn-primary btn-icon" data-send>${icon('send', 18)}</button>
+        <button class="btn btn-primary btn-icon chat-tg-send" data-send>${icon('send', 18)}</button>
       </div>
     </div>`);
   document.body.appendChild(view);

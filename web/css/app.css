@@ -834,6 +834,7 @@ svg { display: block; flex: none; }
 .badge-premium { background: linear-gradient(140deg, rgba(216,180,92,.3), rgba(217,143,174,.24)); color: #d8b45c; }
 .badge-tester { background: rgba(160,140,220,.18); color: #b0a0e0; }
 .badge-probation { background: rgba(232,160,48,.16); color: #e8a030; }
+.badge-scam { background: #e83030 !important; color: #fff !important; font-weight: 700; font-size: 9px; letter-spacing: .5px; padding: 1px 5px; border-radius: 3px; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -898,6 +899,21 @@ svg { display: block; flex: none; }
 .post-image { margin-top: 12px; border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--line); }
 .post-image img { width: 100%; display: block; }
 .post-actions { margin-top: 14px; display: flex; gap: 6px; align-items: center; }
+
+/* Post-reaction row (Feature 3): small pill buttons with SVG icons.
+   Lives below .post-actions, one reaction per user per post. */
+.post-react-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.post-react-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--muted); font-size: 12px; font-weight: 600;
+  transition: all .16s var(--ease); cursor: pointer;
+}
+.post-react-pill:hover { background: var(--surface-2); color: var(--text); }
+.post-react-pill.on { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.post-react-pill.on svg { fill: currentColor; }
+.post-react-count { font-variant-numeric: tabular-nums; }
 
 .icon-btn {
   display: inline-flex; align-items: center; gap: 7px;
@@ -3084,13 +3100,9 @@ body.still *::after {
 .greet-card .greet-card-title { font-size: 13px; font-weight: 700; opacity: .85; }
 .greet-card .greet-card-quote { font-size: 15px; font-weight: 600; line-height: 1.35; }
 
-/* ---------- Bookmark / emoji glyph inside icon-btn ---------- */
-.icon-btn .emoji-glyph {
-  font-size: 16px; line-height: 1;
-  display: inline-flex; align-items: center;
-}
-.icon-btn[data-bookmark].on .emoji-glyph { filter: none; }
+/* ---------- Bookmark icon button (SVG, no longer an emoji) ---------- */
 .icon-btn[data-bookmark].on { color: #87b7a3; background: rgba(135,183,163,.14); }
+.icon-btn[data-bookmark].on svg { fill: currentColor; }
 
 /* Keep the chat-foot usable when the emoji-sticker button joins the row */
 @media (max-width: 420px) {
@@ -3138,4 +3150,55 @@ body.still *::after {
   width: 40px; height: 40px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; color: #fff; flex-shrink: 0;
+}
+
+/* ── Telegram-inspired chat redesign (Feature 4) ───────────────────── */
+/* Larger avatars for the chat list rows. */
+.avatar-52 { width: 52px; height: 52px; font-size: 18px; }
+
+/* Chat-list rows: spacious, single-line preview, small muted time,
+   circular accent unread badge. */
+.chat-tg-row { padding: 14px !important; gap: 12px; align-items: center; }
+.chat-tg-row .chat-tg-time { font-size: 11px; opacity: .75; flex: none; }
+.chat-tg-row .chat-tg-preview {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-tg-unread {
+  min-width: 22px; height: 22px; padding: 0 7px;
+  border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+  font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+}
+
+/* Open chat: bigger bubble padding, larger font, more gap, accent corners. */
+.chat-tg .chat-body { gap: 8px; padding: 16px 14px; }
+.chat-tg .bubble {
+  padding: 12px 16px; font-size: 15px; line-height: 1.45;
+  border-radius: 14px; border-bottom-left-radius: 4px;
+}
+.chat-tg .bubble.mine {
+  border-bottom-left-radius: 14px; border-bottom-right-radius: 4px;
+}
+.chat-tg .bubble-meta { font-size: 10.5px; opacity: .6; }
+
+/* Chat input: taller, rounder, circular accent send button. */
+.chat-tg .chat-foot { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); gap: 8px; }
+.chat-tg .chat-tg-input {
+  border-radius: 22px; padding: 11px 18px; min-height: 44px;
+}
+.chat-tg .chat-tg-send {
+  width: 40px; height: 40px; border-radius: 50%;
+  padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+}
+
+/* Header: name + "online" status below. */
+.chat-tg .chat-head { gap: 12px; }
+.chat-tg .chat-tg-status { font-size: 11.5px; opacity: .8; }
+
+@media (max-width: 420px) {
+  .chat-tg .chat-foot { gap: 6px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
+  .chat-tg .chat-tg-send { width: 38px; height: 38px; }
+  .chat-tg .chat-foot .btn-icon { width: 36px; height: 36px; border-radius: 12px; }
 }

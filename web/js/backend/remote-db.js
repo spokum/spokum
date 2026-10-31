@@ -45,6 +45,7 @@ function shapeProfile(row, extra = {}) {
     isVerified: !!row.is_verified,
     isTester: !!row.is_tester,
     isProbation: !!row.is_probation,
+    isScam: !!row.is_scam,
     modRank: row.mod_rank ?? 0,
     isBeta: !!row.is_beta || row.username === 'silver' || row.username === 'ulquiorra_cifer',
     coins: row.coins ?? 0,
@@ -1954,6 +1955,30 @@ export async function createBackend(url, key) {
       } catch {
         return { reactions: {}, mine: null };
       }
+    },
+
+    // Post reactions (localStorage fallback; no DB table yet).
+    async reactPost(postId, reaction) {
+      const myId = uid;
+      if (!myId) throw new Error('Нужен вход');
+      const all = JSON.parse(localStorage.getItem('spokum.postReactions') || '{}');
+      const key = String(postId);
+      if (!all[key]) all[key] = {};
+      if (all[key][String(myId)] === String(reaction)) delete all[key][String(myId)];
+      else all[key][String(myId)] = String(reaction);
+      localStorage.setItem('spokum.postReactions', JSON.stringify(all));
+      return { ok: true };
+    },
+
+    async postReactions(postId) {
+      const all = JSON.parse(localStorage.getItem('spokum.postReactions') || '{}');
+      const reactions = all[String(postId)] || {};
+      const result = {};
+      for (const [id, reaction] of Object.entries(reactions)) {
+        if (!result[reaction]) result[reaction] = [];
+        result[reaction].push(Number(id));
+      }
+      return { reactions: result };
     },
 
     async repostPost(postId, comment) {

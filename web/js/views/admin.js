@@ -17,7 +17,8 @@ const TABS = [
   ['audit', 'Журнал'],
   ['promos', 'Промокоды'],
   ['winter', 'Зима'],
-  ['pixel', 'Пиксель-батл']
+  ['pixel', 'Пиксель-батл'],
+  ['feedback', 'Отзывы']
 ];
 
 export async function openAdmin() {
@@ -71,6 +72,7 @@ export async function openAdmin() {
       if (active === 'promos') await drawPromos(body);
       if (active === 'winter') await drawWinter(body);
       if (active === 'pixel') await drawPixelBattle(body);
+      if (active === 'feedback') await drawFeedback(body);
     } catch (error) {
       body.innerHTML = emptyState('warn', 'Ошибка', error.message);
     }
@@ -667,6 +669,7 @@ function openUserActions(user, refresh) {
       <button class="list-item" data-flag="isAdmin">${icon('star', 18)}<span>${user.isAdmin ? 'Снять админку' : 'Выдать админку'}</span></button>
       <button class="list-item" data-flag="isTester">${icon('star', 18)}<span>${user.isTester ? 'Снять значок тестера' : 'Выдать значок тестера'}</span></button>
       <button class="list-item" data-flag="isProbation">${icon('warn', 18)}<span>${user.isProbation ? 'Снять испытательный срок' : 'Поставить на испытательный срок'}</span></button>
+      <button class="list-item" data-flag="isScam" style="color:#e83030">${icon('warn', 18)}<span>${user.isScam ? 'Снять метку SCAM' : 'Повесить метку SCAM'}</span></button>
       <button class="list-item" data-clear>${icon('close', 18)}<span>Снять все статусы</span></button>
       <div class="divider" style="margin:6px 0"></div>
       <button class="list-item" data-beta>${icon('spark', 18)}<span>${user.isBeta ? 'Убрать из беты' : 'Пустить в бету'}</span></button>
@@ -1444,4 +1447,65 @@ function openWinterGrant(user, box) {
       }
     }
   };
+}
+
+async function drawFeedback(body) {
+  let filter = 'all';
+  const paint = () => {
+    const all = (typeof window !== 'undefined' && window.__spokumFeedback) || JSON.parse(localStorage.getItem('spokum.feedback') || '[]');
+    const list = Array.isArray(all) ? all : [];
+    const filtered = list.filter((f) => filter === 'all' ? true : filter === 'new' ? f.status !== 'resolved' : f.status === 'resolved');
+    body.innerHTML = `
+      <div class="row" style="gap:8px;margin-bottom:10px">
+        <button class="chip" data-filter="all" aria-pressed="${filter === 'all'}">Все</button>
+        <button class="chip" data-filter="new" aria-pressed="${filter === 'new'}">Новые</button>
+        <button class="chip" data-filter="resolved" aria-pressed="${filter === 'resolved'}">Решённые</button>
+      </div>
+      <div class="col" data-list style="gap:10px"></div>`;
+    const list2 = body.querySelector('[data-list]');
+    if (!filtered.length) {
+      list2.innerHTML = emptyState('mail', 'Пусто', 'Идей и багов пока нет');
+    } else {
+      filtered.forEach((f) => {
+        const typeBadge = f.type === 'bug'
+          ? `<span class="pill bad tiny" style="background:rgba(232,48,48,.16);color:#e83030">Баг</span>`
+          : `<span class="pill good tiny" style="background:rgba(135,183,163,.18);color:#87b7a3">Идея</span>`;
+        const statusBadge = f.status === 'resolved'
+          ? `<span class="pill tiny">решено</span>`
+          : `<span class="pill tiny" style="background:rgba(232,160,48,.16);color:#e8a030">новое</span>`;
+        list2.appendChild(el(`<div class="card" style="padding:13px">
+          <div class="row between" style="gap:8px;align-items:flex-start">
+            <div class="row" style="gap:6px">${typeBadge}${statusBadge}</div>
+            <span class="tiny muted">${esc(timeAgo(f.createdAt))}</span>
+          </div>
+          <p class="small" style="margin:8px 0 0;white-space:pre-wrap;line-height:1.5">${esc(f.text)}</p>
+          ${f.screenshot ? `<a class="tiny muted" href="${esc(f.screenshot)}" target="_blank" rel="noopener" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px">${icon('image', 13)} скриншот</a>` : ''}
+          <div class="row between" style="margin-top:10px;align-items:center">
+            <span class="tiny muted">@${esc(f.username || f.displayName || 'guest')}</span>
+            <div class="row" style="gap:6px">
+              <button class="btn btn-sm" data-resolve>${f.status === 'resolved' ? 'Вернуть в новые' : 'Отметить решённым'}</button>
+              <button class="btn btn-sm btn-ghost" data-remove style="color:#c98b8b">${icon('trash', 14)}</button>
+            </div>
+          </div>
+        </div>`));
+        const last = list2.lastElementChild;
+        last.querySelector('[data-resolve]').onclick = () => {
+          const updated = list.map((x) => x.id === f.id ? { ...x, status: x.status === 'resolved' ? 'new' : 'resolved' } : x);
+          localStorage.setItem('spokum.feedback', JSON.stringify(updated));
+          paint();
+        };
+        last.querySelector('[data-remove]').onclick = async () => {
+          if (!await confirmSheet({ title: 'Удалить отзыв?', text: 'Отзыв исчезнет безвозвратно.', confirm: 'Удалить', danger: true })) return;
+          const updated = list.filter((x) => String(x.id) !== String(f.id));
+          localStorage.setItem('spokum.feedback', JSON.stringify(updated));
+          paint();
+          toast('Удалено');
+        };
+      });
+    }
+    body.querySelectorAll('[data-filter]').forEach((b) => {
+      b.onclick = () => { filter = b.dataset.filter; paint(); };
+    });
+  };
+  paint();
 }

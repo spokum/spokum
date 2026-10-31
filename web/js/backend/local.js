@@ -389,6 +389,7 @@ function pub(user) {
     isVerified: user.isVerified,
     isTester: !!user.isTester,
     isProbation: !!user.isProbation,
+    isScam: !!user.isScam,
     modRank: user.modRank || 0,
     isBeta: !!user.isBeta || user.username === 'silver' || user.username === 'ulquiorra_cifer',
     coins: user.coins || 0,
@@ -2819,6 +2820,28 @@ export const local = {
     return { reactions, mine };
   },
 
+  async reactPost(postId, reaction) {
+    const user = need();
+    const all = JSON.parse(localStorage.getItem('spokum.postReactions') || '{}');
+    const key = String(postId);
+    if (!all[key]) all[key] = {};
+    if (all[key][String(user.id)] === reaction) delete all[key][String(user.id)];
+    else all[key][String(user.id)] = String(reaction);
+    localStorage.setItem('spokum.postReactions', JSON.stringify(all));
+    return { ok: true };
+  },
+
+  async postReactions(postId) {
+    const all = JSON.parse(localStorage.getItem('spokum.postReactions') || '{}');
+    const reactions = all[String(postId)] || {};
+    const result = {};
+    for (const [uid, reaction] of Object.entries(reactions)) {
+      if (!result[reaction]) result[reaction] = [];
+      result[reaction].push(Number(uid));
+    }
+    return { reactions: result };
+  },
+
   async repostPost(postId, comment) {
     return this.repost(postId, comment);
   },
@@ -3261,9 +3284,10 @@ export const local = {
       target.isVerified = false;
       target.isTester = false;
       target.isProbation = false;
+      target.isScam = false;
       if (target.username !== 'vanya8') target.isAdmin = false;
     } else {
-      for (const key of ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified', 'isTester', 'isProbation']) {
+      for (const key of ['isAdmin', 'isModerator', 'isDeveloper', 'isVerified', 'isTester', 'isProbation', 'isScam']) {
         if (flags[key] !== undefined) target[key] = !!flags[key];
       }
     }

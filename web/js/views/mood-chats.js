@@ -39,6 +39,14 @@ function meta(mood) {
   return MOOD_META[mood] || MOODS[mood] || { label: mood, ink: '#8a93a0' };
 }
 
+// Render a mood-room icon. Falls back to 'star' if the requested icon
+// isn't part of icons.js so a broken emoji-text never reaches the user.
+const KNOWN_ICONS = ['leaf', 'spark', 'wave', 'flame', 'same', 'moon', 'heart', 'star', 'trophy', 'crown', 'comet', 'crystal', 'rose', 'cup'];
+function moodIcon(name, size = 22) {
+  const safe = KNOWN_ICONS.includes(name) ? name : 'star';
+  return icon(safe, size);
+}
+
 const KEY = (mood) => `spokum.moodChat.${mood}`;
 
 function loadMessages(mood) {
@@ -103,7 +111,7 @@ function drawList(body, sheet) {
   ROOMS.forEach((room) => {
     const count = memberCount(room.mood);
     const card = el(`<button class="card list-item" style="padding:12px;align-items:flex-start">
-      <div class="avatar avatar-40" style="--h:200;font-size:22px;display:flex;align-items:center;justify-content:center">${room.emoji}</div>
+      <div class="avatar avatar-40" style="--h:200;display:flex;align-items:center;justify-content:center;color:var(--muted)">${moodIcon(room.icon, 22)}</div>
       <div class="grow" style="text-align:left;min-width:0">
         <div class="row" style="gap:6px"><span class="strong small">${esc(room.title)}</span>
           <span class="tiny muted">· ${esc(meta(room.mood).label)}</span></div>
@@ -124,7 +132,7 @@ function enterRoom(room) {
   const view = el(`<div class="chat-view">
     <div class="chat-head">
       <button class="btn btn-icon btn-ghost" data-back>${icon('back', 20)}</button>
-      <div class="avatar avatar-40" style="--h:200;font-size:22px;display:flex;align-items:center;justify-content:center">${room.emoji}</div>
+      <div class="avatar avatar-40" style="--h:200;display:flex;align-items:center;justify-content:center;color:var(--muted)">${moodIcon(room.icon, 22)}</div>
       <div class="grow" style="min-width:0">
         <div class="strong small truncate">${esc(room.title)}</div>
         <div class="tiny muted truncate" data-count></div>

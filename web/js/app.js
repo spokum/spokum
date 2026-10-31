@@ -386,6 +386,10 @@ async function boot() {
   start();
   announcePremium(state.user);
   checkPixelBattle();
+  // Уведомление о письмах из прошлого, чей срок открыть наступил.
+  import('./views/future-letter.js?v=20251028')
+    .then(({ notifyFutureLetters }) => notifyFutureLetters())
+    .catch(() => {});
 }
 
 function checkPixelBattle() {

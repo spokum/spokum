@@ -975,13 +975,14 @@ export function postCard(post, refresh, options = {}) {
         <button class="icon-btn ${post.liked ? 'on' : ''}" data-like aria-pressed="${post.liked ? 'true' : 'false'}" hidden>${icon('heart', 17)}<span>${post.likes}</span></button>
         <button class="icon-btn" data-comments>${icon('comment', 17)}<span>${post.comments}</span></button>
         <button class="icon-btn ${isSaved(post.id) ? 'on' : ''}" data-save title="Сохранить">${icon('star', 17)}</button>
-        <button class="icon-btn ${isBookmarked(post.id) ? 'on' : ''}" data-bookmark title="В закладки"><span class="emoji-glyph">🔖</span></button>
+        <button class="icon-btn ${isBookmarked(post.id) ? 'on' : ''}" data-bookmark title="В закладки">${icon('star', 17)}</button>
         ${state.user ? `<button class="icon-btn" data-repost title="Репостнуть">${icon('refresh', 17)}</button>` : ''}
         ${post.views ? `<span class="icon-btn" style="pointer-events:none">${icon('eye', 17)}<span>${post.views}</span></span>` : ''}
         <div class="grow"></div>
         <button class="icon-btn" data-share>${icon('share', 17)}</button>
         <button class="icon-btn" data-report>${icon('flag', 17)}</button>
       </div>
+      <div class="post-react-row" data-post-reacts></div>
     </article>`);
 
   // For reposts: lazily fetch the original post and render it inside the bordered box.
@@ -1076,6 +1077,11 @@ export function postCard(post, refresh, options = {}) {
   } else {
     plainLike();
   }
+
+  // Post-reaction row (heart / same / hold / calm / spark). Uses
+  // api.reactPost when available (both backends ship it); otherwise falls
+  // back to the local spokum.postReactions store directly.
+  wirePostReactions(card, post);
 
   card.querySelector('[data-like]').onclick = async (event) => {
     if (!state.user) return toast('Войдите, чтобы ставить лайки', 'err');
@@ -1418,4 +1424,93 @@ export async function openComments(post, refresh) {
     event.preventDefault();
     send();
   });
+}
+
+// ── Post reactions (Feature 3): a small row of SVG icons below each post.
+//    One reaction per user per post; clicking the same icon removes it.
+//    Storage: localStorage `spokum.postReactions = { postId: { userId: reactionType } }`
+//    Honors `api.reactPost` / `api.postReactions` when present (both backends).
+const POST_REACTIONS = [
+  ['heart', 'heart', 'Сердце'],
+  ['same', 'same', 'Я так же'],
+  ['hold', 'hold', 'Держись'],
+  ['calm', 'leaf', 'Спокойно'],
+  ['spark', 'spark', 'Огонь']
+];
+
+function localReactionMap(postId) {
+  try {
+    const all = JSON.parse(localStorage.getItem('spokum.postReactions') || '{}');
+    return all[String(postId)] || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalReactionMap(postId, map) {
+  try {
+    const all = JSON.parse(localStorage.getItem('spokum.postReactions') || '{}');
+    all[String(postId)] = map;
+    localStorage.setItem('spokum.postReactions', JSON.stringify(all));
+  } catch {}
+}
+
+function wirePostReactions(card, post) {
+  const slot = card.querySelector('[data-post-reacts]');
+  if (!slot) return;
+  const myId = state.user?.id;
+  let myReaction = null;
+
+  const paint = (counts) => {
+    slot.innerHTML = POST_REACTIONS.map(([id, glyph, label]) => {
+      const n = counts[id] || 0;
+      const on = myReaction === id;
+      return `<button class="post-react-pill ${on ? 'on' : ''}" data-react="${id}" title="${label}" aria-pressed="${on ? 'true' : 'false'}">${icon(glyph, 16)}${n ? `<span class="post-react-count">${n}</span>` : ''}</button>`;
+    }).join('');
+  };
+
+  const load = async () => {
+    let counts = {};
+    try {
+      if (api.postReactions) {
+        const { reactions } = await api.postReactions(post.id);
+        for (const [kind, ids] of Object.entries(reactions || {})) {
+          counts[kind] = (Array.isArray(ids) ? ids : []).length;
+          if (myId && (Array.isArray(ids) ? ids : []).includes(Number(myId))) myReaction = kind;
+        }
+      } else {
+        const map = localReactionMap(post.id);
+        for (const [, kind] of Object.entries(map)) {
+          counts[kind] = (counts[kind] || 0) + 1;
+          // We can't tell which is ours from the count alone; mark by id key.
+        }
+        if (myId && map[String(myId)]) myReaction = map[String(myId)];
+      }
+    } catch {}
+    paint(counts);
+  };
+
+  slot.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-react]');
+    if (!button) return;
+    if (!state.user) return toast('Войдите, чтобы реагировать', 'err');
+    const kind = button.dataset.react;
+    const was = myReaction;
+    try {
+      if (api.reactPost) {
+        await api.reactPost(post.id, kind);
+      } else {
+        const map = localReactionMap(post.id);
+        if (map[String(myId)] === kind) delete map[String(myId)];
+        else map[String(myId)] = kind;
+        saveLocalReactionMap(post.id, map);
+      }
+      myReaction = was === kind ? null : kind;
+      await load();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  });
+
+  load();
 }

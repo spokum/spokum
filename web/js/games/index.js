@@ -6749,6 +6749,34 @@ export const GAMES = [
     desc: 'Лопай пузырьки, не пропускай больше трёх',
     tint: ['#0a1420', '#163040'],
     mount: bubblePop
+  },
+  {
+    id: 'tower_stack',
+    title: 'Башня',
+    desc: 'Строй башню, не промахнись',
+    tint: ['#0a1520', '#1a3040'],
+    mount: towerStack
+  },
+  {
+    id: 'color_switch',
+    title: 'Цветовой switch',
+    desc: 'Проходи через свой цвет',
+    tint: ['#150a20', '#3a1a4a'],
+    mount: colorSwitch
+  },
+  {
+    id: 'dot_connect',
+    title: 'Точки',
+    desc: 'Соедини пары без пересечений',
+    tint: ['#0a2010', '#1a4030'],
+    mount: dotConnect
+  },
+  {
+    id: 'speed_tap',
+    title: 'Скорость',
+    desc: 'Тапай по целям за 30 секунд',
+    tint: ['#1a0a0a', '#3a2020'],
+    mount: speedTap
   }
 ];
 
@@ -7709,6 +7737,755 @@ function tapRhythm(canvas, report) {
         });
         hud(ctx, w, [`Очки ${s.score}`, `Комбо ${s.combo}`, `Промахи ${s.miss}/7`]);
         if (s.over) overText(ctx, w, h, `Итог ${s.score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+// ── tower_stack — calm tower stacking, blocks shrink on misalign ────
+function towerStack(canvas, report) {
+  return runner(canvas, () => {
+    const PALETTE = ['#7fb3a0', '#93b98d', '#ccb079', '#8aabc7', '#9f96c2', '#c78fa4', '#7fa8e8', '#d8a8e8'];
+    let state = null;
+    const reset = () => {
+      state = {
+        stack: [{ x: 0.5, w: 0.62, color: PALETTE[0] }],
+        current: { x: 0.0, w: 0.62, dir: 1, color: PALETTE[1] },
+        speed: 0.5,
+        score: 0,
+        height: 0,
+        over: false,
+        chips: [],
+        flash: 0
+      };
+    };
+    reset();
+
+    const place = () => {
+      if (state.over) return;
+      const top = state.stack[state.stack.length - 1];
+      const shift = state.current.x - top.x;
+      const overlap = state.current.w - Math.abs(shift);
+      if (overlap <= 0.015) {
+        state.over = true;
+        report(state.score);
+        return;
+      }
+      const nx = top.x + shift / 2;
+      const colorIdx = state.stack.length % PALETTE.length;
+      state.stack.push({ x: nx, w: overlap, color: PALETTE[colorIdx] });
+      const side = shift > 0 ? 1 : -1;
+      const chipW = Math.abs(shift);
+      state.chips.push({
+        x: nx + side * (overlap / 2 + chipW / 2),
+        y: 0,
+        w: chipW,
+        color: state.current.color,
+        vy: -120,
+        rot: side * 2,
+        vr: side * 4,
+        life: 1
+      });
+      state.height += 1;
+      state.score = state.height;
+      state.flash = 0.25;
+      state.speed = Math.min(1.05, 0.5 + state.height * 0.02);
+      const startSide = state.height % 2 === 0 ? 0.02 : 0.98;
+      const startDir = state.height % 2 === 0 ? 1 : -1;
+      state.current = {
+        x: startSide,
+        w: overlap,
+        dir: startDir,
+        color: PALETTE[(state.stack.length) % PALETTE.length]
+      };
+    };
+
+    return {
+      score: () => state.score,
+      bind(bind) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.over) return reset();
+          place();
+        });
+        bind('keydown', (event) => {
+          if (event.key !== ' ') return;
+          if (state.over) return reset();
+          place();
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        const half = state.current.w / 2;
+        state.current.x += state.current.dir * state.speed * dt;
+        if (state.current.x + half > 1) { state.current.x = 1 - half; state.current.dir = -1; }
+        if (state.current.x - half < 0) { state.current.x = half; state.current.dir = 1; }
+        state.chips.forEach((c) => {
+          c.vy += 380 * dt;
+          c.y += c.vy * dt;
+          c.rot += c.vr * dt;
+          c.life -= dt * 0.7;
+        });
+        state.chips = state.chips.filter((c) => c.life > 0);
+        state.flash = Math.max(0, state.flash - dt);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a1520', '#1a3040']);
+        const moon = ctx.createRadialGradient(w * 0.78, h * 0.18, 0, w * 0.78, h * 0.18, h * 0.5);
+        moon.addColorStop(0, 'rgba(180,210,230,0.18)');
+        moon.addColorStop(1, 'rgba(180,210,230,0)');
+        ctx.fillStyle = moon;
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(238,242,251,0.85)';
+        ctx.beginPath();
+        ctx.arc(w * 0.78, h * 0.18, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        const bh = 22;
+        const base = h - 36;
+        const maxShown = Math.floor((h - 100) / bh);
+        const offset = Math.max(0, state.stack.length - maxShown);
+        const shown = state.stack.slice(offset);
+        shown.forEach((block, i) => {
+          const y = base - (i + 1) * bh;
+          ctx.fillStyle = block.color;
+          ctx.beginPath();
+          ctx.roundRect((block.x - block.w / 2) * w, y, block.w * w, bh - 3, 5);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.18)';
+          ctx.beginPath();
+          ctx.roundRect((block.x - block.w / 2) * w + 3, y + 2, block.w * w - 6, 3, 2);
+          ctx.fill();
+        });
+        const pulse = 0.5 + Math.sin(performance.now() * 0.005) * 0.1;
+        const y = base - (shown.length + 1) * bh;
+        ctx.globalAlpha = 0.92 + pulse * 0.08;
+        ctx.fillStyle = state.current.color;
+        ctx.beginPath();
+        ctx.roundRect((state.current.x - state.current.w / 2) * w, y, state.current.w * w, bh - 3, 5);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.beginPath();
+        ctx.roundRect((state.current.x - state.current.w / 2) * w + 3, y + 2, state.current.w * w - 6, 3, 2);
+        ctx.fill();
+
+        state.chips.forEach((c) => {
+          ctx.globalAlpha = Math.max(0, c.life);
+          ctx.save();
+          ctx.translate(c.x * w, y + c.y);
+          ctx.rotate(c.rot);
+          ctx.fillStyle = c.color;
+          ctx.beginPath();
+          ctx.roundRect(-c.w * w / 2, 0, c.w * w, bh - 3, 4);
+          ctx.fill();
+          ctx.restore();
+          ctx.globalAlpha = 1;
+        });
+
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${state.flash * 0.18})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+
+        hud(ctx, w, [`Высота ${state.height}`, `Ширина ${Math.round(state.current.w * 100)}%`]);
+        ctx.fillStyle = 'rgba(238,242,251,0.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('тап — поставить блок', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.over) overText(ctx, w, h, `Башня ${state.height}`, 'Тап, чтобы построить заново');
+      }
+    };
+  });
+}
+
+// ── color_switch — calm color switching flappy-style game ───────────
+function colorSwitch(canvas, report) {
+  return runner(canvas, () => {
+    const COLORS = [
+      { name: 'calm',     hex: '#7fb3a0' },
+      { name: 'joy',      hex: '#ccb079' },
+      { name: 'love',     hex: '#c78fa4' },
+      { name: 'inspired', hex: '#93b98d' }
+    ];
+    const hexByName = Object.fromEntries(COLORS.map((c) => [c.name, c.hex]));
+    let state = null;
+    const reset = () => {
+      state = {
+        y: 0.5,
+        v: 0,
+        obstacles: [],
+        switches: [],
+        spawn: 0.6,
+        score: 0,
+        dist: 0,
+        over: false,
+        color: 'calm',
+        flash: 0,
+        passed: 0,
+        stars: Array.from({ length: 50 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.6 + 0.5, drift: Math.random() * 0.5 }))
+      };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      bind(bind) {
+        const flap = (event) => {
+          event?.preventDefault?.();
+          if (state.over) return reset();
+          state.v = -0.78;
+        };
+        bind('pointerdown', flap);
+        bind('keydown', (event) => {
+          if (event.key === ' ' || event.key === 'ArrowUp') flap(event);
+        }, window);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.dist += dt;
+        state.v += dt * 2.4;
+        state.y += state.v * dt;
+        state.flash = Math.max(0, state.flash - dt * 2);
+
+        const speed = 0.30 + state.dist * 0.003;
+        state.obstacles.forEach((o) => { o.x -= speed * dt; });
+        state.switches.forEach((s) => { s.x -= speed * dt; });
+        state.obstacles = state.obstacles.filter((o) => o.x > -0.2);
+        state.switches = state.switches.filter((s) => s.x > -0.2);
+
+        state.spawn -= dt;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(1.1, 1.8 - state.dist * 0.005);
+          const color = COLORS[Math.floor(Math.random() * COLORS.length)].name;
+          state.obstacles.push({
+            x: 1.15,
+            y: 0.5,
+            inner: 0.18,
+            outer: 0.28,
+            color,
+            passed: false,
+            rotated: Math.random() * Math.PI
+          });
+          if (Math.random() < 0.55) {
+            state.switches.push({
+              x: 1.0,
+              y: 0.3 + Math.random() * 0.4,
+              color: COLORS[Math.floor(Math.random() * COLORS.length)].name,
+              taken: false
+            });
+          }
+        }
+
+        const ballX = 0.22;
+        const ballY = state.y;
+        for (const o of state.obstacles) {
+          const dx = (o.x - ballX);
+          if (!o.passed && Math.abs(dx) < 0.03) {
+            const ang = Math.atan2(ballY - 0.5, dx);
+            const colorIdx = COLORS.findIndex((c) => c.name === o.color);
+            const center = colorIdx * Math.PI / 2 + o.rotated;
+            let diff = ((ang - center + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+            const inSafeArc = Math.abs(diff) < Math.PI / 4 - 0.05;
+            const inRing = Math.abs(ballY - 0.5) < o.outer && Math.abs(ballY - 0.5) > o.inner - 0.02;
+            if (inRing && !inSafeArc) {
+              state.over = true;
+              report(state.score);
+              return;
+            }
+          }
+          if (!o.passed && o.x < ballX - 0.04) {
+            o.passed = true;
+            state.score += 1;
+            state.passed += 1;
+            state.flash = 0.35;
+          }
+        }
+        for (const s of state.switches) {
+          if (!s.taken && Math.abs(s.x - ballX) < 0.04 && Math.abs(s.y - ballY) < 0.05) {
+            s.taken = true;
+            state.color = s.color;
+            state.flash = 0.5;
+          }
+        }
+        if (state.y > 0.98 || state.y < 0.02) {
+          state.over = true;
+          report(state.score);
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#150a20', '#3a1a4a']);
+        ctx.fillStyle = 'rgba(238,242,251,0.55)';
+        state.stars.forEach((s) => {
+          const a = 0.4 + Math.sin((state.dist + s.x * 10) * 2) * 0.3;
+          ctx.globalAlpha = Math.max(0.15, a);
+          ctx.fillRect(s.x * w, (s.y * h + state.dist * 12 * (1 + s.drift)) % h, s.s, s.s);
+        });
+        ctx.globalAlpha = 1;
+
+        state.switches.forEach((s) => {
+          if (s.taken) return;
+          const cx = s.x * w;
+          const cy = s.y * h;
+          const r = 14;
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          g.addColorStop(0, hexByName[s.color]);
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = hexByName[s.color];
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r * 0.6, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+
+        state.obstacles.forEach((o) => {
+          const cx = o.x * w;
+          const cy = 0.5 * h;
+          const outer = o.outer * h;
+          const inner = o.inner * h;
+          for (let i = 0; i < 4; i++) {
+            const c = COLORS[i];
+            ctx.strokeStyle = c.hex;
+            ctx.lineWidth = Math.max(6, (outer - inner));
+            ctx.beginPath();
+            const start = i * Math.PI / 2 + o.rotated;
+            ctx.arc(cx, cy, (outer + inner) / 2, start + 0.04, start + Math.PI / 2 - 0.04);
+            ctx.stroke();
+          }
+        });
+
+        const bx = 0.22 * w;
+        const by = state.y * h;
+        const br = Math.max(8, h * 0.024);
+        const ballColor = hexByName[state.color];
+        ctx.fillStyle = `${ballColor}33`;
+        ctx.beginPath();
+        ctx.arc(bx, by, br * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = ballColor;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${state.flash * 0.18})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+
+        ctx.fillStyle = ballColor;
+        ctx.beginPath();
+        ctx.arc(w - 24, 22, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        hud(ctx, w, [`Очки ${state.score}`]);
+        ctx.fillStyle = 'rgba(238,242,251,0.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('тап — взмах · проходи через свой цвет', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, 'Тап, чтобы попробовать снова');
+      }
+    };
+  });
+}
+
+// ── dot_connect — connect same-color dots without crossing ─────────
+function dotConnect(canvas, report) {
+  return runner(canvas, () => {
+    const COLORS = ['#7fb3a0', '#ccb079', '#8aabc7', '#c78fa4', '#93b98d', '#9f96c2', '#d8a8e8'];
+    let state = null;
+    const levels = [
+      { grid: 4, pairs: 3 },
+      { grid: 5, pairs: 4 },
+      { grid: 5, pairs: 5 },
+      { grid: 6, pairs: 6 },
+      { grid: 7, pairs: 7 }
+    ];
+    const makeLevel = (idx) => {
+      const cfg = levels[Math.min(idx, levels.length - 1)];
+      const n = cfg.grid;
+      const colors = COLORS.slice(0, cfg.pairs);
+      const cells = [];
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) cells.push({ r, c });
+      for (let i = cells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cells[i], cells[j]] = [cells[j], cells[i]];
+      }
+      const dots = [];
+      let ci = 0;
+      for (let p = 0; p < cfg.pairs; p++) {
+        const a = cells[ci++], b = cells[ci++];
+        dots.push({ r: a.r, c: a.c, color: colors[p], id: p });
+        dots.push({ r: b.r, c: b.c, color: colors[p], id: p });
+      }
+      return { n, dots, pairs: cfg.pairs, lines: [], selected: null, level: idx, complete: false, flash: 0, shake: 0, win: 0 };
+    };
+    const reset = (lvl = 0) => { state = makeLevel(lvl); };
+    reset(0);
+
+    const dotAt = (r, c) => state.dots.find((d) => d.r === r && d.c === c);
+
+    const segInfo = (s) => {
+      if (s.y1 === s.y2) return { dir: 'h', y: s.y1, x1: Math.min(s.x1, s.x2), x2: Math.max(s.x1, s.x2) };
+      return { dir: 'v', x: s.x1, y1: Math.min(s.y1, s.y2), y2: Math.max(s.y1, s.y2) };
+    };
+    const segCross = (a, b) => {
+      const A = segInfo(a), B = segInfo(b);
+      if (A.dir === 'h' && B.dir === 'h') {
+        if (A.y !== B.y) return false;
+        return !(A.x2 < B.x1 - 0.001 || B.x2 < A.x1 - 0.001);
+      }
+      if (A.dir === 'v' && B.dir === 'v') {
+        if (A.x !== B.x) return false;
+        return !(A.y2 < B.y1 - 0.001 || B.y2 < A.y1 - 0.001);
+      }
+      const H = A.dir === 'h' ? A : B;
+      const V = A.dir === 'h' ? B : A;
+      return V.x >= H.x1 - 0.001 && V.x <= H.x2 + 0.001 && H.y >= V.y1 - 0.001 && H.y <= V.y2 + 0.001;
+    };
+    const candidates = (a, b) => {
+      const a2 = { x1: a.c, y1: a.r, x2: b.c, y2: a.r };
+      const a3 = { x1: b.c, y1: a.r, x2: b.c, y2: b.r };
+      const b2 = { x1: a.c, y1: a.r, x2: a.c, y2: b.r };
+      const b3 = { x1: a.c, y1: b.r, x2: b.c, y2: b.r };
+      return [
+        { kind: 'HV', segs: [a2, a3] },
+        { kind: 'VH', segs: [b2, b3] }
+      ];
+    };
+    const pathCrosses = (segs) => {
+      for (const line of state.lines) {
+        for (const s of segs) {
+          for (const ls of line.segs) {
+            const sharesEndpoint =
+              (s.x1 === ls.x1 && s.y1 === ls.y1) ||
+              (s.x1 === ls.x2 && s.y1 === ls.y2) ||
+              (s.x2 === ls.x1 && s.y2 === ls.y1) ||
+              (s.x2 === ls.x2 && s.y2 === ls.y2);
+            if (sharesEndpoint) continue;
+            if (segCross(s, ls)) return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    return {
+      score: () => state.level * 100 + state.lines.length * 20,
+      bind(bind, node) {
+        bind('pointerdown', (event) => {
+          event.preventDefault();
+          if (state.complete) {
+            reset(state.level + 1);
+            return;
+          }
+          const rect = node.getBoundingClientRect();
+          const x = ((event.touches?.[0]?.clientX ?? event.clientX) - rect.left) / rect.width;
+          const y = ((event.touches?.[0]?.clientY ?? event.clientY) - rect.top) / rect.height;
+          const pad = 0.08;
+          const gx = (x - pad) / (1 - 2 * pad);
+          const gy = (y - pad) / (1 - 2 * pad);
+          if (gx < 0 || gx > 1 || gy < 0 || gy > 1) return;
+          const c = Math.round(gx * (state.n - 1));
+          const r = Math.round(gy * (state.n - 1));
+          if (c < 0 || c >= state.n || r < 0 || r >= state.n) return;
+          const cellXn = c / (state.n - 1);
+          const cellYn = r / (state.n - 1);
+          if (Math.hypot(gx - cellXn, gy - cellYn) > 0.16) return;
+          const dot = dotAt(r, c);
+          if (!dot) { state.selected = null; return; }
+          if (!state.selected) { state.selected = dot; return; }
+          if (state.selected === dot) { state.selected = null; return; }
+          if (state.selected.color !== dot.color || state.selected.id !== dot.id) {
+            state.selected = dot;
+            return;
+          }
+          if (state.lines.some((l) => l.id === dot.id)) { state.selected = null; return; }
+          const cands = candidates(state.selected, dot);
+          const ok = cands.find((p) => !pathCrosses(p.segs));
+          if (!ok) { state.shake = 0.4; state.selected = null; return; }
+          state.lines.push({ id: dot.id, color: dot.color, segs: ok.segs, a: state.selected, b: dot });
+          state.selected = null;
+          state.flash = 0.3;
+          if (state.lines.length === state.pairs) {
+            state.complete = true;
+            state.win = 1.6;
+            setTimeout(() => report(state.level * 100 + state.pairs * 20), 50);
+          }
+        });
+      },
+      update(dt) {
+        state.flash = Math.max(0, state.flash - dt * 2);
+        state.shake = Math.max(0, state.shake - dt * 2);
+        if (state.win > 0) state.win -= dt;
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a2010', '#1a4030']);
+        const pad = Math.min(w, h) * 0.08;
+        const fieldW = w - pad * 2;
+        const fieldH = h - pad * 2;
+        const cellW = fieldW / Math.max(1, state.n - 1);
+        const cellH = fieldH / Math.max(1, state.n - 1);
+        const cellX = (c) => pad + c * cellW;
+        const cellY = (r) => pad + r * cellH;
+        ctx.fillStyle = 'rgba(238,242,251,0.06)';
+        for (let r = 0; r < state.n; r++) {
+          for (let c = 0; c < state.n; c++) {
+            ctx.beginPath();
+            ctx.arc(cellX(c), cellY(r), 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        state.lines.forEach((line) => {
+          ctx.strokeStyle = line.color;
+          ctx.lineWidth = 5;
+          // segs are in grid units (c, r). Convert to pixels.
+          ctx.beginPath();
+          line.segs.forEach((s, i) => {
+            const x1 = pad + s.x1 * cellW;
+            const y1 = pad + s.y1 * cellH;
+            const x2 = pad + s.x2 * cellW;
+            const y2 = pad + s.y2 * cellH;
+            if (i === 0) ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+          });
+          ctx.stroke();
+        });
+        state.dots.forEach((d) => {
+          const cx = cellX(d.c);
+          const cy = cellY(d.r);
+          const isSel = state.selected === d;
+          const r = isSel ? 16 : 12;
+          if (isSel) {
+            ctx.fillStyle = `${d.color}33`;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = d.color;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.stroke();
+          const connected = state.lines.some((l) => l.id === d.id);
+          if (connected) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(cx - 5, cy);
+            ctx.lineTo(cx - 1, cy + 4);
+            ctx.lineTo(cx + 5, cy - 4);
+            ctx.stroke();
+          }
+        });
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${state.flash * 0.15})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+        if (state.shake > 0) {
+          ctx.fillStyle = `rgba(255,120,120,${state.shake * 0.18})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+        hud(ctx, w, [`Уровень ${state.level + 1}`, `Соединено ${state.lines.length}/${state.pairs}`]);
+        ctx.fillStyle = 'rgba(238,242,251,0.5)';
+        ctx.font = '500 12px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('тап — выбрать точку, потом парную', w / 2, h - 12);
+        ctx.textAlign = 'start';
+        if (state.complete) {
+          overText(ctx, w, h, `Уровень ${state.level + 1} пройден!`, 'Тап — следующий уровень');
+        }
+      }
+    };
+  });
+}
+
+// ── speed_tap — 30s reaction game with combo multiplier ────────────
+function speedTap(canvas, report) {
+  return runner(canvas, () => {
+    const DURATION = 30;
+    let state = null;
+    const reset = () => {
+      state = {
+        score: 0,
+        combo: 0,
+        best: 0,
+        targets: [],
+        spawn: 0.4,
+        time: DURATION,
+        over: false,
+        misses: 0,
+        hits: 0,
+        flash: 0,
+        bad: 0,
+        particles: []
+      };
+    };
+    reset();
+
+    return {
+      score: () => state.score,
+      bind(bind, node) {
+        const tap = (event) => {
+          if (state.over) { reset(); return; }
+          const rect = node.getBoundingClientRect();
+          const x = ((event.touches?.[0]?.clientX ?? event.clientX) - rect.left) / rect.width;
+          const y = ((event.touches?.[0]?.clientY ?? event.clientY) - rect.top) / rect.height;
+          let hit = null;
+          state.targets = state.targets.filter((t) => {
+            if (hit) return true;
+            if (Math.hypot(t.x - x, t.y - y) < t.r + 0.03) { hit = t; return false; }
+            return true;
+          });
+          if (hit) {
+            state.combo += 1;
+            state.best = Math.max(state.best, state.combo);
+            const mult = 1 + Math.floor(state.combo / 5);
+            state.score += 1 * mult;
+            state.hits += 1;
+            state.flash = 0.25;
+            for (let i = 0; i < 10; i++) {
+              state.particles.push({
+                x: hit.x, y: hit.y,
+                vx: (Math.random() - 0.5) * 1.2,
+                vy: (Math.random() - 0.5) * 1.2,
+                life: 0.4,
+                color: hit.color
+              });
+            }
+          } else {
+            state.score = Math.max(0, state.score - 1);
+            state.combo = 0;
+            state.misses += 1;
+            state.bad = 0.35;
+          }
+        };
+        bind('pointerdown', tap);
+      },
+      update(dt) {
+        if (state.over) return;
+        state.time -= dt;
+        if (state.time <= 0) {
+          state.time = 0;
+          state.over = true;
+          report(state.score);
+          return;
+        }
+        state.spawn -= dt;
+        const intensity = 1 - state.time / DURATION;
+        if (state.spawn <= 0) {
+          state.spawn = Math.max(0.35, 0.85 - intensity * 0.5);
+          const palette = ['#7fb3a0', '#ccb079', '#8aabc7', '#c78fa4', '#93b98d', '#9f96c2'];
+          state.targets.push({
+            x: 0.12 + Math.random() * 0.76,
+            y: 0.18 + Math.random() * 0.7,
+            r: 0.05 - intensity * 0.012,
+            life: Math.max(0.7, 1.4 - intensity * 0.7),
+            color: palette[Math.floor(Math.random() * palette.length)],
+            born: state.time
+          });
+        }
+        state.targets.forEach((t) => { t.life -= dt; });
+        const expired = state.targets.filter((t) => t.life <= 0);
+        if (expired.length) {
+          state.misses += expired.length;
+          state.combo = 0;
+        }
+        state.targets = state.targets.filter((t) => t.life > 0);
+        state.particles.forEach((p) => {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+        });
+        state.particles = state.particles.filter((p) => p.life > 0);
+        state.flash = Math.max(0, state.flash - dt * 3);
+        state.bad = Math.max(0, state.bad - dt * 3);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#1a0a0a', '#3a2020']);
+        const pct = state.time / DURATION;
+        const cx = w / 2, cy = 38, R = 18;
+        ctx.strokeStyle = 'rgba(238,242,251,0.12)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = pct > 0.3 ? '#7fb3a0' : (pct > 0.15 ? '#ccb079' : '#c58279');
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#eef2fb';
+        ctx.font = '700 13px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.ceil(state.time)}`, cx, cy + 4);
+        ctx.textAlign = 'start';
+
+        state.targets.forEach((t) => {
+          const a = Math.min(1, t.life * 1.4);
+          const r = t.r * w * (0.85 + Math.sin(performance.now() * 0.01) * 0.08);
+          const g = ctx.createRadialGradient(t.x * w, t.y * h, 0, t.x * w, t.y * h, r);
+          g.addColorStop(0, t.color);
+          g.addColorStop(1, `${t.color}00`);
+          ctx.globalAlpha = a;
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = t.color;
+          ctx.beginPath();
+          ctx.arc(t.x * w, t.y * h, r * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.beginPath();
+          ctx.arc(t.x * w - r * 0.18, t.y * h - r * 0.18, r * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+
+        state.particles.forEach((p) => {
+          ctx.globalAlpha = Math.max(0, p.life * 2.5);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x * w - 2, p.y * h - 2, 4, 4);
+          ctx.globalAlpha = 1;
+        });
+
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${state.flash * 0.14})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+        if (state.bad > 0) {
+          ctx.fillStyle = `rgba(255,120,120,${state.bad * 0.16})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+
+        const mult = 1 + Math.floor(state.combo / 5);
+        hud(ctx, w, [
+          `Очки ${state.score}`,
+          `Комбо x${state.combo} (мн.x${mult})`,
+          `Попаданий ${state.hits} · Мимо ${state.misses}`
+        ]);
+        if (state.over) overText(ctx, w, h, `Итог ${state.score}`, `Лучшее комбо ${state.best} · тап для повтора`);
       }
     };
   });
