@@ -1,6 +1,11 @@
-name: Build Desktop (Windows EXE)
+name: Build Desktop EXE
 
 on:
+  push:
+    branches: [main, Main]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,18 +21,19 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install
+      - name: Install dependencies
         working-directory: desktop
         run: npm install
 
-      - name: Build
+      - name: Build EXE
         working-directory: desktop
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win portable
 
-      - name: Upload
-        uses: softprops/action-gh-release@v2
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: desktop
           files: desktop/dist/*.exe
+          name: "СпокУм для Windows"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

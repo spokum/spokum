@@ -1,24 +1,23 @@
 {
   "name": "spokum-desktop",
-  "version": "2.1.0",
+  "version": "1.0.0",
+  "description": "СпокУм — соцсеть про спокойствие и настроение",
   "main": "main.js",
-  "repository": { "type": "git", "url": "https://github.com/spokum/spokum.git" },
-  "build": {
-    "appId": "com.spokum.app",
-    "productName": "Spokum",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "icon.png"],
-    "win": {
-      "target": ["portable"],
-      "icon": "icon.png"
-    },
-    "portable": {
-      "artifactName": "spokum.exe"
-    },
-    "publish": null
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable",
+    "build:exe": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.spokum.app",
+    "productName": "СпокУм",
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico"
+    }
   }
 }

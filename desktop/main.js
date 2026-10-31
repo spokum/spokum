@@ -1,37 +1,58 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, Notification, shell } = require('electron');
 const path = require('path');
 
-let win;
+let mainWindow;
 
 function createWindow() {
-  win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 420,
     height: 800,
     minWidth: 360,
     minHeight: 600,
     title: 'СпокУм',
-    backgroundColor: '#0e1116',
+    backgroundColor: '#0f1419',
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
+      nodeIntegration: false,
       contextIsolation: true,
-      nodeIntegration: false
-    }
+      preload: path.join(__dirname, 'preload.js')
+    },
+    icon: path.join(__dirname, 'icon.png')
   });
 
-  win.loadURL('https://spokum.ru/');
+  mainWindow.loadURL('https://spokum.ru/');
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  // Open external links in browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes('spokum.ru') || url.includes('api.spokum.ru')) {
+      return { action: 'allow' };
+    }
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  win.on('closed', () => { win = null; });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
+// Native notifications from web
+const { ipcMain } = require('electron');
+ipcMain.on('show-notification', (event, { title, body }) => {
+  if (Notification.isSupported()) {
+    new Notification({
+      title: title || 'СпокУм',
+      body: body || '',
+      silent: false
+    }).show();
+  }
+});
+
 app.whenReady().then(() => {
-  const { Menu } = require('electron');
-  Menu.setApplicationMenu(null);
+  // Set app user model id for Windows notifications
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.spokum.app');
+  }
   createWindow();
 });
 

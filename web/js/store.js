@@ -76,14 +76,8 @@ export function forget(key) {
 }
 
 export function isBeta(user) {
-  const who = user || state.user;
-  if (!who) return false;
-  // Beta is granted to:
-  //  • @silver only
-  //  • anyone an admin has flagged with `isBeta: true`
-  if (who.isBeta) return true;
-  if (who.username === 'silver') return true;
-  return false;
+  // All features are now available to everyone.
+  return true;
 }
 
 const BETA_USERNAMES = new Set(['silver']);

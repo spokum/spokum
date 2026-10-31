@@ -186,6 +186,56 @@ public class MainActivity extends AppCompatActivity {
       public void apply() {
         runOnUiThread(MainActivity.this::recreate);
       }
+
+      @JavascriptInterface
+      public void showNotification(String title, String body) {
+        runOnUiThread(() -> {
+          try {
+            String channel = "spokum_messages";
+            android.app.NotificationManager mgr = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+              android.app.NotificationChannel ch = new android.app.NotificationChannel(channel, "Сообщения", android.app.NotificationManager.IMPORTANCE_HIGH);
+              ch.enableLights(true);
+              ch.enableVibration(true);
+              mgr.createNotificationChannel(ch);
+            }
+            android.app.Notification n = new androidx.core.app.NotificationCompat.Builder(MainActivity.this, channel)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title != null ? title : "СпокУм")
+                .setContentText(body != null ? body : "")
+                .setAutoCancel(true)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .build();
+            mgr.notify((int) System.currentTimeMillis(), n);
+          } catch (Exception e) {
+            // ignore
+          }
+        });
+      }
+
+      @JavascriptInterface
+      public boolean areNotificationsEnabled() {
+        try {
+          android.app.NotificationManager mgr = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+          return mgr.areNotificationsEnabled();
+        } catch (Exception e) {
+          return false;
+        }
+      }
+
+      @JavascriptInterface
+      public void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          if (ContextCompat.checkSelfPermission(MainActivity.this, "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{"android.permission.POST_NOTIFICATIONS"}, 44);
+          }
+        }
+      }
+
+      @JavascriptInterface
+      public String version() {
+        return "1.0." + (System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "local");
+      }
     }, "SpokumHost");
 
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

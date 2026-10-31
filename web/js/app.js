@@ -631,16 +631,32 @@ document.addEventListener('click', async (event) => {
   openLightbox(shot.dataset.full || shot.src, { caption: shot.dataset.caption || (shot.classList.contains('status-icon') ? 'Статус' : '') });
 }, true);
 
-window.addEventListener('spokum:message', () => {
+window.addEventListener('spokum:message', (event) => {
   unreadAt = Date.now();
   refreshUnread();
+  // Native notification on Android
+  try {
+    if (window.SpokumHost?.showNotification && document.hidden) {
+      const msg = event.detail;
+      if (msg && msg.body) {
+        const name = msg.author?.displayName || msg.author?.username || 'СпокУм';
+        window.SpokumHost.showNotification(name, String(msg.body).slice(0, 100));
+      }
+    }
+  } catch {}
 });
 
 window.addEventListener('spokum:notify', async (event) => {
-  const bell = await import('./views/notifications.js?v=20251028');
+  const bell = await import('./views/notifications.js?v=20251103');
   const item = event.detail || {};
   if (!bell.markShown(item.id)) return;
   bell.bumpBell();
+  // Native notification on Android
+  try {
+    if (window.SpokumHost?.showNotification) {
+      window.SpokumHost.showNotification(item.title || 'СпокУм', item.body || '');
+    }
+  } catch {}
   if (state.quiet) return;
   if (document.hidden) bell.systemNotify(item);
   else if (item.kind !== 'message' && item.kind !== 'newpost') toast(item.title || 'Новое уведомление');

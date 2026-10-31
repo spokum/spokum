@@ -16,32 +16,6 @@ android {
     versionName "1.0.${buildNumber}"
   }
 
-  signingConfigs {
-    release {
-      def keystore = file("release.keystore")
-      if (keystore.exists()) {
-        storeFile keystore
-        storePassword System.getenv("SPOKUM_STORE_PASSWORD")
-        keyAlias System.getenv("SPOKUM_KEY_ALIAS")
-        keyPassword System.getenv("SPOKUM_KEY_PASSWORD")
-      }
-    }
-  }
-
-  buildTypes {
-    release {
-      minifyEnabled false
-      shrinkResources false
-      signingConfig file("release.keystore").exists() ? signingConfigs.release : signingConfigs.debug
-    }
-  }
-
-  packagingOptions {
-    resources {
-      excludes += ['META-INF/*.version', 'DebugProbesKt.bin']
-    }
-  }
-
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
