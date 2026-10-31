@@ -2,6 +2,8 @@
   "name": "spokum-desktop",
   "version": "1.0.0",
   "description": "СпокУм — соцсеть про спокойствие и настроение",
+  "homepage": "https://spokum.ru",
+  "author": "SpokУм",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
