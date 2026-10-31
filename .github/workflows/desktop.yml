@@ -1,4 +1,4 @@
-name: Build Desktop EXE
+name: Build Desktop Apps
 
 on:
   push:
@@ -12,28 +12,88 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Install dependencies
         working-directory: desktop
         run: npm install
-
-      - name: Build EXE
+      - name: Build Windows EXE
         working-directory: desktop
         run: npx electron-builder --win portable
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v1
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: desktop
-          files: desktop/dist/*.exe
-          name: "СпокУм для Windows"
+          name: spokum-windows
+          path: desktop/dist/*.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+      - name: Install RPM tools for Fedora
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+      - name: Build Linux AppImage and RPM
+        working-directory: desktop
+        run: npx electron-builder --linux AppImage rpm
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spokum-linux
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.rpm
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name "*.exe" -exec cp {} release/ \;
+          find artifacts -name "*.AppImage" -exec cp {} release/ \;
+          find artifacts -name "*.rpm" -exec cp {} release/ \;
+          ls -la release/
+      - name: Delete old release
+        run: gh release delete desktop --yes --cleanup-tag || true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create new release
+        run: |
+          gh release create desktop release/* \
+            --title "СпокУм для Desktop" \
+            --notes "СпокУм для Windows и Linux (Fedora)
+
+          Файлы:
+          - spokum-*.exe — Windows portable
+          - spokum-*.AppImage — Linux (любой дистрибутив)
+          - spokum-*.rpm — Fedora, CentOS, openSUSE
+
+          Установка на Fedora:
+          sudo dnf install spokum-*.rpm
+
+          Установка AppImage:
+          chmod +x spokum-*.AppImage
+          ./spokum-*.AppImage"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
