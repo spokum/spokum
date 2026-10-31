@@ -8,8 +8,8 @@
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win portable",
-    "build:linux": "electron-builder --linux AppImage rpm",
-    "build:all": "electron-builder --win portable --linux AppImage rpm"
+    "build:linux": "electron-builder --linux AppImage deb rpm",
+    "build:all": "electron-builder --win portable --linux AppImage deb rpm"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.spokum.app",
-    "productName": "СпокУм",
+    "productName": "СпokУм",
     "directories": {
       "output": "dist"
     },
@@ -28,7 +28,7 @@
     "linux": {
       "target": [
         { "target": "AppImage", "arch": ["x64"] },
-        { "target": "rpm", "arch": ["x64"] }
+        { "target": "deb", "arch": ["x64"] }
       ],
       "icon": "icon.png",
       "category": "Network",

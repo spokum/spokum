@@ -41,20 +41,16 @@ jobs:
       - name: Install dependencies
         working-directory: desktop
         run: npm install
-      - name: Install RPM tools for Fedora
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm
-      - name: Build Linux AppImage and RPM
+      - name: Build Linux AppImage and DEB
         working-directory: desktop
-        run: npx electron-builder --linux AppImage rpm
+        run: npx electron-builder --linux AppImage deb
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: spokum-linux
           path: |
             desktop/dist/*.AppImage
-            desktop/dist/*.rpm
+            desktop/dist/*.deb
 
   release:
     needs: [build-windows, build-linux]
@@ -72,7 +68,7 @@ jobs:
           mkdir -p release
           find artifacts -name "*.exe" -exec cp {} release/ \;
           find artifacts -name "*.AppImage" -exec cp {} release/ \;
-          find artifacts -name "*.rpm" -exec cp {} release/ \;
+          find artifacts -name "*.deb" -exec cp {} release/ \;
           ls -la release/
       - name: Delete old release
         run: gh release delete desktop --yes --cleanup-tag || true
@@ -82,18 +78,20 @@ jobs:
         run: |
           gh release create desktop release/* \
             --title "СпокУм для Desktop" \
-            --notes "СпокУм для Windows и Linux (Fedora)
+            --notes "СпокУм для Windows и Linux
 
           Файлы:
-          - spokum-*.exe — Windows portable
-          - spokum-*.AppImage — Linux (любой дистрибутив)
-          - spokum-*.rpm — Fedora, CentOS, openSUSE
+          - .exe — Windows portable
+          - .AppImage — Linux (любой дистрибутив, включая Fedora)
+          - .deb — Ubuntu, Debian, Mint
 
           Установка на Fedora:
-          sudo dnf install spokum-*.rpm
-
-          Установка AppImage:
           chmod +x spokum-*.AppImage
-          ./spokum-*.AppImage"
+          ./spokum-*.AppImage
+
+          Установка на Ubuntu/Debian:
+          sudo dpkg -i spokum-*.deb
+
+          Windows: просто запустите .exe файл"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
