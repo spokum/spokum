@@ -89,6 +89,21 @@ public class MainActivity extends AppCompatActivity {
     webView.setBackgroundColor(0xFF101318);
     webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
+    // Auto-subscribe to FCM topic so push notifications reach this device
+    try {
+      com.google.firebase.messaging.FirebaseMessaging.getInstance()
+        .subscribeToTopic("spokum_all")
+        .addOnCompleteListener(task -> {
+          if (task.isSuccessful()) {
+            android.util.Log.d("Spokum", "Subscribed to spokum_all topic");
+          } else {
+            android.util.Log.w("Spokum", "Failed to subscribe to topic", task.getException());
+          }
+        });
+    } catch (Exception e) {
+      android.util.Log.w("Spokum", "FCM subscribe error: " + e.getMessage());
+    }
+
     // Load exclusively from bundled assets. No in-app updates (RuStore policy 8.5).
     // Clear any previously-downloaded update folder so it never overrides assets.
     File legacyUpdates = new File(getFilesDir(), "web");
