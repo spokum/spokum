@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "890906584720",
+    "project_id": "spokum",
+    "storage_bucket": "spokum.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:890906584720:android:d4de8257507ce46ba5da15",
+        "android_client_info": {
+          "package_name": "com.spokum.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8Wgg2sxPPZMB9zvaX37rtjxKf7Fauo2Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

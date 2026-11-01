@@ -1,5 +1,6 @@
 plugins {
   id 'com.android.application'
+  id 'com.google.gms.google-services'
 }
 
 def buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
@@ -46,4 +47,7 @@ dependencies {
   implementation platform('org.jetbrains.kotlin:kotlin-bom:1.9.24')
   implementation 'androidx.appcompat:appcompat:1.7.0'
   implementation 'androidx.webkit:webkit:1.11.0'
+  implementation 'com.google.firebase:firebase-messaging:24.0.0'
 }
+
+apply plugin: 'com.google.gms.google-services'

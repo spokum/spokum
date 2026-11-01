@@ -236,6 +236,32 @@ public class MainActivity extends AppCompatActivity {
       public String version() {
         return "1.0." + (System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "local");
       }
+
+      @JavascriptInterface
+      public String getFcmToken() {
+        try {
+          final String[] tokenHolder = new String[1];
+          final CountDownLatch latch = new CountDownLatch(1);
+          com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken()
+            .addOnCompleteListener(task -> {
+              if (task.isSuccessful() && task.getResult() != null) {
+                tokenHolder[0] = task.getResult();
+              }
+              latch.countDown();
+            });
+          latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+          return tokenHolder[0] != null ? tokenHolder[0] : "";
+        } catch (Exception e) {
+          return "";
+        }
+      }
+
+      @JavascriptInterface
+      public void subscribeToTopic(String topic) {
+        try {
+          com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic(topic);
+        } catch (Exception e) {}
+      }
     }, "SpokumHost");
 
     getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
