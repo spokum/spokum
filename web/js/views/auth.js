@@ -189,7 +189,7 @@ export function renderAuth(root, done) {
       <button class="btn btn-primary" data-submit>${mode === 'login' ? 'Войти' : 'Создать аккаунт'}</button>
       ${mode === 'login' ? '<button type="button" class="btn btn-ghost btn-sm" data-forgot>Забыли пароль?</button>' : ''}
       <p class="tiny muted center" style="margin:0;line-height:1.5">${mode === 'login' ? 'Нет аккаунта? Переключись на регистрацию' : 'Минимум 8 символов в пароле. Данные остаются приватными'}</p>
-      ${mode === 'register' ? '<p class="tiny muted center" style="margin:0;line-height:1.6">Создавая аккаунт, вы принимаете <a href="/offer.html" target="_blank" class="link-btn">пользовательское соглашение</a>, <a href="/privacy.html" target="_blank" class="link-btn">политику конфиденциальности</a> и <a href="/consent.html" target="_blank" class="link-btn">согласие на обработку данных</a></p>' : ''}`;
+      ${mode === 'register' ? '<p class="tiny muted center" style="margin:0;line-height:1.6">Создавая аккаунт, вы принимаете <a href="/offer.html" class="link-btn">пользовательское соглашение</a>, <a href="/privacy.html" class="link-btn">политику конфиденциальности</a> и <a href="/consent.html" class="link-btn">согласие на обработку данных</a></p>' : ''}`;
 
     form.querySelector('[data-rules]')?.addEventListener('click', async () => {
       const { openRules } = await import('./rules.js?v=20251028');

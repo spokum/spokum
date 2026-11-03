@@ -83,7 +83,8 @@ public class MainActivity extends AppCompatActivity {
     settings.setAllowFileAccess(false);
     settings.setAllowContentAccess(false);
     settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-    settings.setSupportMultipleWindows(false);
+    settings.setSupportMultipleWindows(true);
+    settings.setJavaScriptCanOpenWindowsAutomatically(true);
     settings.setTextZoom(100);
 
     webView.setBackgroundColor(0xFF101318);
@@ -155,7 +156,35 @@ public class MainActivity extends AppCompatActivity {
 
     webView.setWebChromeClient(new WebChromeClient() {
       @Override
-      public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+      public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+        // Handle target="_blank" links: open them in the same WebView
+        WebView newView = new WebView(MainActivity.this);
+        newView.setWebViewClient(new WebViewClient() {
+          @Override
+          public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
+            String url = req.getUrl().toString();
+            // Internal links (privacy, offer, consent) — load in main WebView
+            if (url.contains("privacy.html") || url.contains("offer.html") || url.contains("consent.html") || url.contains("appassets.androidplatform.net")) {
+              webView.loadUrl(url);
+              newView.destroy();
+              return true;
+            }
+            // External links — open in browser
+            try {
+              startActivity(new Intent(Intent.ACTION_VIEW, req.getUrl()));
+            } catch (Exception ignored) {}
+            newView.destroy();
+            return true;
+          }
+        });
+        WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+        transport.setWebView(newView);
+        resultMsg.sendToTarget();
+        return true;
+      }
+
+      @Override
+      public void onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
         if (filePicker != null) {
           filePicker.onReceiveValue(null);
         }
