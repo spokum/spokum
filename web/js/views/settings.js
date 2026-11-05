@@ -192,6 +192,14 @@ export async function render(root) {
 
     <div class="card appear">
       <div class="row" style="margin-bottom:10px">${icon('shield', 18)}<span class="strong small">Правила</span></div>
+      <label class="row between" style="padding:8px 0;align-items:flex-start;gap:10px">
+        <span style="flex:1;min-width:0">
+          <span class="small">ИИ-модерация контента</span>
+          <span class="tiny muted" style="display:block;margin-top:2px;line-height:1.5">Автоматически проверяет посты, комментарии и сообщения на нарушения</span>
+          <span class="tiny" data-ai-mod-status style="display:block;margin-top:4px"></span>
+        </span>
+        <input type="checkbox" data-ai-mod ${localStorage.getItem('spokum.aiModeration.enabled') === '1' ? 'checked' : ''}>
+      </label>
       <button class="list-item" data-rules>${icon('feed', 18)}<div class="grow"><div class="small strong">Правила СпокУма</div><div class="tiny muted">Что можно, что нельзя и что за это бывает</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-feedback>${icon('mail', 18)}<div class="grow"><div class="small strong">Идеи и баги</div><div class="tiny muted">Поделитесь идеей или сообщите о баге</div></div>${icon('forward', 15)}</button>
     </div>
@@ -366,6 +374,36 @@ export async function render(root) {
     const { openRules } = await import('./rules.js?v=20251028');
     openRules();
   };
+
+  // ── ИИ-модерация: тумблер в разделе «Правила». Динамический импорт,
+  //    чтобы не тянуть модуль в настройки без необходимости.
+  const aiModBox = root.querySelector('[data-ai-mod]');
+  const aiModStatus = root.querySelector('[data-ai-mod-status]');
+  const paintAiModStatus = async () => {
+    if (!aiModStatus) return;
+    try {
+      const { isAiModerationEnabled, getAiReports } = await import('./ai-moderation.js?v=20251028');
+      const on = isAiModerationEnabled();
+      const count = (getAiReports() || []).length;
+      aiModStatus.textContent = on
+        ? `Включено · снято записей: ${count}`
+        : 'Выключено';
+      aiModStatus.style.color = on ? 'var(--accent, #87b7a3)' : 'var(--muted)';
+    } catch {}
+  };
+  paintAiModStatus();
+  aiModBox?.addEventListener('change', async (event) => {
+    const on = event.target.checked;
+    try {
+      const { setAiModerationEnabled } = await import('./ai-moderation.js?v=20251028');
+      setAiModerationEnabled(on);
+      toast(on ? 'ИИ-модерация включена' : 'ИИ-модерация выключена');
+      paintAiModStatus();
+    } catch (error) {
+      event.target.checked = !on;
+      toast(error.message, 'err');
+    }
+  });
 
   root.querySelector('[data-feedback]')?.addEventListener('click', async () => {
     const { openFeedback } = await import('./feedback.js?v=20251028');

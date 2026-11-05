@@ -482,6 +482,23 @@ function renderComposer(root) {
     const label = button.querySelector('span');
     const previous = label ? label.textContent : '';
     try {
+      // ── ИИ-модерация: проверяем текст до отправки. Если AI выключен,
+      //    модуль не загружаем (non-blocking). Сбой AI не блокирует пост.
+      const postText = draft.text || '';
+      if (postText.trim() && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
+        if (label) label.textContent = 'Проверяем';
+        try {
+          const { moderatePost } = await import('./ai-moderation.js?v=20251028');
+          const verdict = await moderatePost(postText);
+          if (verdict?.removed) {
+            toast('Пост снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
+            return;
+          }
+        } catch (modErr) {
+          // Не блокируем публикацию при ошибке AI
+          console.warn('AI moderation failed (post):', modErr);
+        }
+      }
       let image = draft.media[0] || null;
       if (image && api.uploadMedia && api.mode === 'supabase') {
         if (label) label.textContent = 'Загружаем';
@@ -964,12 +981,14 @@ export function postCard(post, refresh, options = {}) {
       </div>
       ${post.pinned ? `<div class="post-repost">${icon('star', 13)}<span>Закреплено автором</span></div>` : ''}
       ${post.publishAt && post.publishAt > Date.now() ? `<div class="post-repost">${icon('clock', 13)}<span>Выйдет ${esc(timeAgo(post.publishAt).replace('назад', ''))} спустя, пока видно только вам</span></div>` : ''}
-      ${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
+      ${post.aiRemoved
+        ? `<div class="post-ai-removed" style="margin-top:10px;padding:12px 14px;border-radius:12px;background:rgba(232,48,48,.08);border:1px solid rgba(232,48,48,.22);color:#e8a8a8;font-size:13px;line-height:1.5">${icon('shield', 15)} Пост снят ИИ-модерацией${post.aiRemovedReason ? `: ${esc(post.aiRemovedReason)}` : ''}</div>`
+        : `${post.text ? `<p class="post-text">${tagged(post.text)}</p>` : ''}
       ${post.repostOf ? `<div class="repost-box" data-origin><div class="tiny muted">${icon('refresh', 13)} Загружаем оригинал…</div></div>` : ''}
       ${post.sound && !post.media?.length && !post.video ? voiceBlock(post) : ''}
       ${postMedia(post)}
       ${pollBlock(post)}
-      ${post.removed ? `<div class="pill bad" style="margin-top:10px">Скрыт модератором: ${esc(post.removedReason || 'без причины')}</div>` : ''}
+      ${post.removed ? `<div class="pill bad" style="margin-top:10px">Скрыт модератором: ${esc(post.removedReason || 'без причины')}</div>` : ''}`}
       <div class="post-actions">
         <span data-reacts></span>
         <button class="icon-btn ${post.liked ? 'on' : ''}" data-like aria-pressed="${post.liked ? 'true' : 'false'}" hidden>${icon('heart', 17)}<span>${post.likes}</span></button>
@@ -1403,6 +1422,20 @@ export async function openComments(post, refresh) {
     input.disabled = true;
     if (button) button.disabled = true;
     try {
+      // ── ИИ-модерация комментария. Non-blocking, если AI выключен или упал.
+      if (localStorage.getItem('spokum.aiModeration.enabled') === '1') {
+        try {
+          const { moderateComment } = await import('./ai-moderation.js?v=20251028');
+          const verdict = await moderateComment(text);
+          if (verdict?.removed) {
+            toast('Комментарий снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
+            input.value = text;
+            return;
+          }
+        } catch (modErr) {
+          console.warn('AI moderation failed (comment):', modErr);
+        }
+      }
       const replyTo = replyTarget ? { commentId: replyTarget.id, userId: replyTarget.author?.id } : null;
       await api.addComment(post.id, text, replyTo);
       post.comments += 1;

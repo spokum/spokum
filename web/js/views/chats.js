@@ -317,6 +317,20 @@ export async function openChat(chatId) {
   const send = async (payload) => {
     if (isOffline()) return toast('Нет интернета, сообщение не уйдёт', 'err');
     try {
+      // ── ИИ-модерация текстовых сообщений. Non-blocking: если AI выключен
+      //    или упал по сети, сообщение всё равно уходит.
+      if (payload?.kind === 'text' && payload.body && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
+        try {
+          const { moderateMessage } = await import('./ai-moderation.js?v=20251028');
+          const verdict = await moderateMessage(payload.body);
+          if (verdict?.removed) {
+            toast('Сообщение снято модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
+            return;
+          }
+        } catch (modErr) {
+          console.warn('AI moderation failed (message):', modErr);
+        }
+      }
       if (replyTarget) { payload.replyToId = replyTarget.id; replyTarget = null; replyBar.style.display = 'none'; }
       await api.sendMessage(chatId, payload);
       input.value = '';

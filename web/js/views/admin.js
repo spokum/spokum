@@ -13,6 +13,7 @@ const TABS = [
   ['content', 'Контент'],
   ['announce', 'Эфир'],
   ['guard', 'Автофильтр'],
+  ['ai_mod', 'ИИ-модерация'],
   ['actions', 'Наказания'],
   ['audit', 'Журнал'],
   ['promos', 'Промокоды'],
@@ -67,6 +68,7 @@ export async function openAdmin() {
       if (active === 'content') await drawContent(body);
       if (active === 'announce') await drawAnnounce(body);
       if (active === 'guard') await drawGuard(body);
+      if (active === 'ai_mod') await drawAiMod(body);
       if (active === 'actions') await drawActions(body);
       if (active === 'audit') await drawAudit(body);
       if (active === 'promos') await drawPromos(body);
@@ -1507,5 +1509,88 @@ async function drawFeedback(body) {
       b.onclick = () => { filter = b.dataset.filter; paint(); };
     });
   };
+  paint();
+}
+
+// ── ИИ-модерация: вкл/выкл, список отчётов, очистка. Данные лежат в
+//    localStorage (spokum.aiModeration.*). Динамический импорт, чтобы не
+//    тянуть модуль в админку без необходимости.
+async function drawAiMod(body) {
+  const mod = await import('./ai-moderation.js?v=20251028');
+  const { isAiModerationEnabled, setAiModerationEnabled, getAiReports, removeReport, clearAiReports } = mod;
+
+  const paint = () => {
+    const enabled = isAiModerationEnabled();
+    const reports = getAiReports() || [];
+    const total = reports.length;
+
+    body.innerHTML = `
+      <div class="card" style="padding:14px">
+        <div class="row" style="gap:8px;align-items:center">
+          <span style="flex:0 0 auto;opacity:.6">${icon('shield', 18)}</span>
+          <div class="grow" style="min-width:0">
+            <div class="strong small">ИИ-модерация контента</div>
+            <div class="tiny muted">Проверяет посты, комментарии и сообщения через gpt-6.1-terra</div>
+          </div>
+          <span class="pill ${enabled ? 'good' : 'bad'}" data-status style="margin-right:6px">${enabled ? 'ВКЛ' : 'ВЫКЛ'}</span>
+          <button class="btn btn-sm ${enabled ? 'btn-danger' : 'btn-primary'}" data-toggle>${enabled ? 'Выключить' : 'Включить'}</button>
+        </div>
+        <div class="tiny muted" style="margin-top:10px;line-height:1.5">Когда включено, каждый пост, комментарий и текстовое сообщение проверяются перед отправкой. Нарушения снимаются, а запись попадает в список ниже. Сбой сети не блокирует публикацию.</div>
+      </div>
+
+      <div class="card" style="padding:14px;margin-top:12px">
+        <div class="row between" style="gap:8px">
+          <div class="strong small">Отчёты · ${total}</div>
+          ${total ? `<button class="btn btn-sm btn-ghost" data-clear style="color:#c98b8b">${icon('trash', 14)} Очистить все</button>` : ''}
+        </div>
+        <div class="col" data-list style="gap:10px;margin-top:10px"></div>
+      </div>`;
+
+    const list = body.querySelector('[data-list]');
+    if (!total) {
+      list.innerHTML = emptyState('shield', 'Пусто', 'ИИ-модерация ещё ничего не сняла');
+    } else {
+      reports.forEach((r) => {
+        const ctx = r.context || 'контент';
+        const preview = (r.text || '').slice(0, 140);
+        const row = el(`<div class="card" style="padding:12px">
+          <div class="row between" style="gap:8px;align-items:flex-start">
+            <div class="row" style="gap:6px;flex-wrap:wrap">
+              <span class="pill tiny" style="background:rgba(135,183,163,.18);color:#87b7a3">${esc(ctx)}</span>
+              <span class="pill tiny bad" style="background:rgba(232,48,48,.16);color:#e83030">${esc(r.reason || 'нарушение правил')}</span>
+            </div>
+            <span class="tiny muted">${esc(timeAgo(r.timestamp))}</span>
+          </div>
+          <p class="small" style="margin:8px 0 0;white-space:pre-wrap;line-height:1.5;color:var(--muted)">${esc(preview)}${(r.text || '').length > 140 ? '…' : ''}</p>
+          <div class="row between" style="margin-top:10px;align-items:center">
+            <span class="tiny muted">${esc(new Date(r.timestamp).toLocaleString('ru-RU'))}</span>
+            <button class="btn btn-sm" data-restore>Восстановить</button>
+          </div>
+        </div>`);
+        row.querySelector('[data-restore]').onclick = () => {
+          // Пока что просто убираем запись (визуальное восстановление)
+          removeReport(r.id);
+          toast('Запись удалена из списка');
+          paint();
+        };
+        list.appendChild(row);
+      });
+    }
+
+    body.querySelector('[data-toggle]').onclick = () => {
+      const next = !isAiModerationEnabled();
+      setAiModerationEnabled(next);
+      toast(next ? 'ИИ-модерация включена' : 'ИИ-модерация выключена');
+      paint();
+    };
+
+    body.querySelector('[data-clear]')?.addEventListener('click', async () => {
+      if (!await confirmSheet({ title: 'Очистить все отчёты?', text: 'Список снятых записей станет пустым.', confirm: 'Очистить', danger: true })) return;
+      clearAiReports();
+      toast('Отчёты очищены');
+      paint();
+    });
+  };
+
   paint();
 }
