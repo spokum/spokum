@@ -1,6 +1,6 @@
 // ИИ-модерация СпокУм через codex-relay API (gpt-6.1-terra)
 // Проверяет посты, комментарии, сообщения на нарушения.
-// Работает постоянно пока включена. Экономит токены: max 60 tokens, короткий промпт.
+// Работает постоянно пока включена админом. Пользователи не могут выключить.
 
 const AI_API = "https://codex-relay.codes/v1/chat/completions";
 const AI_KEY = "sk-O51FMMei5VmA4YTXDzoTdHEn6xriAtZ7Z4c5ZfTkFGFa3xat";
@@ -19,9 +19,7 @@ export function setAiModerationEnabled(on) {
 }
 
 function getReports() {
-  try {
-    return JSON.parse(localStorage.getItem(REPORTS_KEY) || "[]") || [];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(REPORTS_KEY) || "[]") || []; } catch { return []; }
 }
 
 function addReport(report) {
@@ -32,14 +30,11 @@ function addReport(report) {
 }
 
 export function getAiReports() { return getReports(); }
-
 export function removeReport(id) {
   localStorage.setItem(REPORTS_KEY, JSON.stringify(getReports().filter((r) => r.id !== id)));
 }
-
 export function clearAiReports() { localStorage.setItem(REPORTS_KEY, "[]"); }
 
-// Strike system: 3 strikes = 1 hour mute, 5 = 1 day, 10 = 3 days
 function getStrikes(userId) {
   try {
     const all = JSON.parse(localStorage.getItem(STRIKES_KEY) || "{}");
@@ -52,10 +47,9 @@ function addStrike(userId, username) {
   const cur = all[userId] || { count: 0, lastStrike: 0, muteUntil: 0 };
   cur.count++;
   cur.lastStrike = Date.now();
-  // Auto-mute thresholds
-  if (cur.count >= 10) cur.muteUntil = Date.now() + 3 * 24 * 3600 * 1000; // 3 days
-  else if (cur.count >= 5) cur.muteUntil = Date.now() + 24 * 3600 * 1000; // 1 day
-  else if (cur.count >= 3) cur.muteUntil = Date.now() + 3600 * 1000; // 1 hour
+  if (cur.count >= 10) cur.muteUntil = Date.now() + 3 * 24 * 3600 * 1000;
+  else if (cur.count >= 5) cur.muteUntil = Date.now() + 24 * 3600 * 1000;
+  else if (cur.count >= 3) cur.muteUntil = Date.now() + 3600 * 1000;
   all[userId] = cur;
   localStorage.setItem(STRIKES_KEY, JSON.stringify(all));
   return cur;
@@ -68,7 +62,6 @@ export function isUserAiMuted(userId) {
   return s.muteUntil > Date.now();
 }
 
-// Rules with rule numbers for reports
 const RULES = {
   "Мат": "Нарушение правила 1: ненормативная лексика",
   "Оскорбление": "Нарушение правила 2: оскорбление участников",
@@ -78,29 +71,47 @@ const RULES = {
   "Насилие": "Нарушение правила 6: призывы к насилию",
   "Ненависть": "Нарушение правила 7: разжигание ненависти",
   "Провокация": "Нарушение правила 8: провокация конфликта",
+  "Экстремизм": "Нарушение правила 9: экстремизм, нацизм, свастика",
+  "Дискриминация": "Нарушение правила 10: дискриминация по любому признаку",
+  "Шантаж": "Нарушение правила 11: шантаж и вымогательство",
+  "Контент 18+": "Нарушение правила 12: контент 18+ в общей ленте",
 };
 
-// Short, strict prompt to save tokens
-const SYSTEM_PROMPT = `Модератор СпокУм. Проверяй текст на нарушения.
-Запрещено: мат, оскорбления, угрозы, спам, реклама, насилие, ненависть, провокации.
-Ответ ТОЛЬКО JSON:
-{"ok":true} если текст нормальный
-{"ok":false,"rule":"Мат","punishment":"предупреждение"} если нарушение
-rule может быть: Мат, Оскорбление, Угроза, Спам, Реклама, Насилие, Ненависть, Провокация
-punishment: предупреждение, снятие, мут
-Не пиши ничего кроме JSON.`;
+const SYSTEM_PROMPT = `Ты строгий модератор соцсети СпокУм. Проверяешь каждый текст.
+ЗАПРЕЩЕНО абсолютно:
+- Мат и ненормативная лексика (любые варианты, замены букв, звёздочки)
+- Оскорбления, унижения, насмешки над человеком
+- Угрозы любого вида
+- Спам, повторяющиеся сообщения
+- Реклама, ссылки на сторонние ресурсы без разрешения
+- Призывы к насилию
+- Разжигание ненависти по расе, нации, религии, полу, ориентации
+- Провокации конфликтов
+- Экстремизм, нацизм, фашизм, свастика, их символика и пропаганда
+- Дискриминация любого вида
+- Шантаж, вымогательство, угрозы раскрыть личные данные
+- Контент 18+ в общем доступе
+- Обход фильтров (замена букв цифрами, намеренные опечатки)
+
+Будь максимально строгим. При любом сомнении — снимай.
+
+Ответ ТОЛЬКО JSON, ничего больше:
+{"ok":true} — текст чистый
+{"ok":false,"rule":"Мат","punishment":"снятие"} — нарушение
+
+rule строго из списка: Мат, Оскорбление, Угроза, Спам, Реклама, Насилие, Ненависть, Провокация, Экстремизм, Дискриминация, Шантаж, Контент 18+
+punishment: предупреждение (первый раз), снятие (повтор), мут (систематически)`;
 
 async function moderateContent(text, context, userInfo) {
   if (!isAiModerationEnabled()) return { action: "allow" };
   if (!text || text.trim().length < 2) return { action: "allow" };
 
-  // Check if user is already muted by AI
   if (userInfo?.id && isUserAiMuted(userInfo.id)) {
     const strikes = getStrikes(userInfo.id);
     return {
       action: "remove",
-      rule: "Пользователь в муте",
-      reason: "ИИ-мутерация: пользователь временно ограничен",
+      rule: "Мут",
+      reason: "Снял: ИИ-модератор | Пользователь в муте | Наказание: мут",
       punishment: "мут",
       muteUntil: strikes.muteUntil,
     };
@@ -139,13 +150,11 @@ async function moderateContent(text, context, userInfo) {
       const ruleDescription = RULES[rule] || `Нарушение: ${rule}`;
       const fullReason = `Снял: ИИ-модератор | ${ruleDescription} | Наказание: ${punishment}`;
 
-      // Add strike
       let strikeInfo = null;
       if (userInfo?.id) {
         strikeInfo = addStrike(userInfo.id, userInfo.username);
       }
 
-      // Add report
       addReport({
         id: Date.now() + "-" + Math.random().toString(36).slice(2, 6),
         text: text.slice(0, 200),

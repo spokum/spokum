@@ -488,7 +488,7 @@ function renderComposer(root) {
       if (postText.trim() && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         if (label) label.textContent = 'Проверяем';
         try {
-          const { moderatePost } = await import('./ai-moderation.js?v=20251107');
+          const { moderatePost } = await import('./ai-moderation.js?v=20251108');
           const verdict = await moderatePost(postText, { id: state.user?.id, username: state.user?.username });
           if (verdict?.removed) {
             toast('Пост снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
@@ -1425,7 +1425,7 @@ export async function openComments(post, refresh) {
       // ── ИИ-модерация комментария. Non-blocking, если AI выключен или упал.
       if (localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         try {
-          const { moderateComment } = await import('./ai-moderation.js?v=20251107');
+          const { moderateComment } = await import('./ai-moderation.js?v=20251108');
           const verdict = await moderateComment(text, { id: state.user?.id, username: state.user?.username });
           if (verdict?.removed) {
             toast('Комментарий снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');

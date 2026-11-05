@@ -1516,7 +1516,7 @@ async function drawFeedback(body) {
 //    localStorage (spokum.aiModeration.*). Динамический импорт, чтобы не
 //    тянуть модуль в админку без необходимости.
 async function drawAiMod(body) {
-  const mod = await import('./ai-moderation.js?v=20251107');
+  const mod = await import('./ai-moderation.js?v=20251108');
   const { isAiModerationEnabled, setAiModerationEnabled, getAiReports, removeReport, clearAiReports } = mod;
 
   const paint = () => {
