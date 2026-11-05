@@ -382,7 +382,7 @@ export async function render(root) {
   const paintAiModStatus = async () => {
     if (!aiModStatus) return;
     try {
-      const { isAiModerationEnabled, getAiReports } = await import('./ai-moderation.js?v=20251028');
+      const { isAiModerationEnabled, getAiReports } = await import('./ai-moderation.js?v=20251107');
       const on = isAiModerationEnabled();
       const count = (getAiReports() || []).length;
       aiModStatus.textContent = on
@@ -395,7 +395,7 @@ export async function render(root) {
   aiModBox?.addEventListener('change', async (event) => {
     const on = event.target.checked;
     try {
-      const { setAiModerationEnabled } = await import('./ai-moderation.js?v=20251028');
+      const { setAiModerationEnabled } = await import('./ai-moderation.js?v=20251107');
       setAiModerationEnabled(on);
       toast(on ? 'ИИ-модерация включена' : 'ИИ-модерация выключена');
       paintAiModStatus();

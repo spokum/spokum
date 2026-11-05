@@ -321,8 +321,8 @@ export async function openChat(chatId) {
       //    или упал по сети, сообщение всё равно уходит.
       if (payload?.kind === 'text' && payload.body && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         try {
-          const { moderateMessage } = await import('./ai-moderation.js?v=20251028');
-          const verdict = await moderateMessage(payload.body);
+          const { moderateMessage } = await import('./ai-moderation.js?v=20251107');
+          const verdict = await moderateMessage(payload.body, { id: state.user?.id, username: state.user?.username });
           if (verdict?.removed) {
             toast('Сообщение снято модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
             return;
