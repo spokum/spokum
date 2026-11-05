@@ -142,9 +142,18 @@ public class MainActivity extends AppCompatActivity {
       
       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
         Uri url = request.getUrl();
+        String path = url.getPath();
+        // Internal HTML pages (privacy, offer, consent) — load with /www/ prefix
+        // because assets are in assets/www/ but links point to /privacy.html etc.
+        if (path != null && (path.endsWith("privacy.html") || path.endsWith("offer.html") || path.endsWith("consent.html"))) {
+          String newUrl = "https://appassets.androidplatform.net/www" + path;
+          webView.loadUrl(newUrl);
+          return true;
+        }
         if ("appassets.androidplatform.net".equals(url.getHost())) {
           return false;
         }
+        // External links — open in browser
         try {
           startActivity(new Intent(Intent.ACTION_VIEW, url));
         } catch (Exception ignored) {
