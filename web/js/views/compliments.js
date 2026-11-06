@@ -2,8 +2,6 @@ import { el, esc, uid } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, confirmSheet, emptyState } from '../ui.js';
 
-// Мягкие, тёплые, не-романтичные комплименты на русском.
-// Подобраны так, чтобы согревать, а не давить.
 const COMPLIMENTS = [
   'Ты делаешь этот день светлее',
   'Твоё спокойствие заразительно',
@@ -70,7 +68,6 @@ function loadRecent() {
 function pushRecent(text) {
   const recent = loadRecent().filter((t) => t !== text);
   recent.unshift(text);
-  // Храним не больше 12 последних, чтобы не повторять недавнее.
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, 12)));
 }
 
@@ -83,7 +80,6 @@ export function getRandomCompliment() {
   return text;
 }
 
-// Мягкие градиенты для карточки. Чередуем, чтобы каждый раз новый фон.
 const GRADIENTS = [
   'linear-gradient(135deg,#3a2c4a,#7c5a8a)',
   'linear-gradient(135deg,#2c4a44,#5a8a78)',
@@ -235,7 +231,6 @@ export function openCompliments() {
   return sheet;
 }
 
-// Стили комплиментов. Подключаем один раз.
 if (typeof document !== 'undefined' && !document.getElementById('compliments-styles')) {
   const style = document.createElement('style');
   style.id = 'compliments-styles';

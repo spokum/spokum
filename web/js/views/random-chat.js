@@ -3,15 +3,6 @@ import { el, esc, uid } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, toast } from '../ui.js';
 
-// Случайный собеседник — анонимный чат 1-на-1 между двумя вкладками.
-// Упрощённая реализация: сопоставление происходит через localStorage,
-// поэтому работает между вкладками одного браузера.
-//
-// Ключи в localStorage:
-//   spokum.randomChat.waiting  — [{ id, since }] вкладки, ищущие собеседника
-//   spokum.randomChat.chats    — [{ id, a, b, messages, createdAt, closedAt }]
-// sessionStorage:
-//   spokum.randomChat.self     — стабильный id этой вкладки (UUID)
 
 const WAITING_KEY = 'spokum.randomChat.waiting';
 const CHATS_KEY = 'spokum.randomChat.chats';
@@ -57,19 +48,15 @@ function writeChats(list) {
   try { localStorage.setItem(CHATS_KEY, JSON.stringify(list)); } catch {}
 }
 
-// Найти активный чат, в котором участвует эта вкладка.
 function activeChat(selfId) {
   return readChats().find((c) => !c.closedAt && (c.a === selfId || c.b === selfId));
 }
 
 function findPartner(selfId) {
-  // Сопоставление с другим ожидающим.
   const waiting = readWaiting();
   const partner = waiting.find((w) => w.id !== selfId);
   if (!partner) return null;
-  // Удаляем обоих из очереди.
   writeWaiting(waiting.filter((w) => w.id !== selfId && w.id !== partner.id));
-  // Создаём чат.
   const chat = {
     id: uid(),
     a: selfId,
@@ -99,7 +86,6 @@ function sendMessage(chat, selfId, text) {
   if (idx < 0) return;
   chats[idx].messages = chats[idx].messages || [];
   chats[idx].messages.push({ from: selfId, text, at: Date.now() });
-  // Чистим старые закрытые чаты (> 1 часа), чтобы не копить мусор.
   const cutoff = Date.now() - 60 * 60 * 1000;
   const cleaned = chats.filter((c) => !c.closedAt || c.closedAt > cutoff);
   writeChats(cleaned);
@@ -116,7 +102,6 @@ export function openRandomChat() {
   const sheet = openSheet('Случайный собеседник', body, {
     onClose: () => {
       if (pollTimer) clearInterval(pollTimer);
-      // При закрытии шторки выходим из поиска и из чата.
       const waiting = readWaiting().filter((w) => w.id !== selfId);
       writeWaiting(waiting);
       if (currentChat) leaveChat(currentChat);
@@ -197,11 +182,9 @@ export function openRandomChat() {
           <div class="small" style="max-width:78%;padding:8px 11px;border-radius:14px;background:${mine ? 'var(--accent)' : 'var(--surface-2, var(--surface))'};color:${mine ? '#0e1320' : 'var(--ink)'};word-break:break-word;line-height:1.4">${esc(m.text)}</div>
         </div>`;
       }).join('');
-      // Прокрутка вниз.
       msgsHost.scrollTop = msgsHost.scrollHeight;
     }
 
-    // Если собеседник вышел — показываем плашку и блокируем ввод.
     if (currentChat.closedAt) {
       body.querySelector('[data-status]').textContent = 'Собеседник вышел';
       body.querySelector('[data-text]').disabled = true;
@@ -241,7 +224,6 @@ export function openRandomChat() {
     if (mode !== 'chat') return;
     const chat = activeChat(selfId);
     if (!chat) {
-      // Чат был закрыт другой стороной или сам — выходим в idle.
       currentChat = null;
       mode = 'idle';
       stopPoll();
@@ -259,7 +241,6 @@ export function openRandomChat() {
 
   const startSearch = () => {
     mode = 'searching';
-    // Добавляем себя в очередь ожидания (если ещё не там).
     const waiting = readWaiting();
     if (!waiting.find((w) => w.id === selfId)) {
       waiting.push({ id: selfId, name: myName, since: Date.now() });
@@ -273,7 +254,6 @@ export function openRandomChat() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => {
       if (mode === 'searching') {
-        // Пробуем найти партнёра.
         const chat = findPartner(selfId);
         if (chat) {
           currentChat = chat;
@@ -281,13 +261,11 @@ export function openRandomChat() {
           mode = 'chat';
           render();
         } else {
-          // Может, уже есть чат, созданный другой стороной.
           const existing = activeChat(selfId);
           if (existing) {
             currentChat = existing;
             lastMessagesCount = (existing.messages || []).length;
             mode = 'chat';
-            // Убираем себя из очереди.
             writeWaiting(readWaiting().filter((w) => w.id !== selfId));
             render();
           }
@@ -303,7 +281,6 @@ export function openRandomChat() {
     pollTimer = null;
   };
 
-  // Слушаем storage-события от других вкладок, чтобы быстрее реагировать.
   const onStorage = (event) => {
     if (event.key === CHATS_KEY) {
       if (mode === 'searching') {
@@ -322,7 +299,6 @@ export function openRandomChat() {
   };
   window.addEventListener('storage', onStorage);
 
-  // Подчищаем слушатель при закрытии шторки.
   const origClose = sheet.close;
   sheet.close = () => {
     window.removeEventListener('storage', onStorage);
@@ -332,7 +308,6 @@ export function openRandomChat() {
     origClose();
   };
 
-  // На старте: если уже есть активный чат — продолжаем его.
   const existing = activeChat(selfId);
   if (existing) {
     currentChat = existing;

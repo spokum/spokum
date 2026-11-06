@@ -70,10 +70,6 @@ export async function render(root) {
   loadRecommendedChannels(root);
 }
 
-// Fetches the recommended channels list and renders it above the user's
-// DMs. Channels come from the existing "Новый канал" entry in openCreate
-// (kind='channel' chats). Anyone can subscribe / unsubscribe here, the
-// owner sees a "ваш канал" pill and can post by opening the chat.
 async function loadRecommendedChannels(root) {
   const host = root.querySelector('[data-channels]');
   if (!host) return;
@@ -317,8 +313,6 @@ export async function openChat(chatId) {
   const send = async (payload) => {
     if (isOffline()) return toast('Нет интернета, сообщение не уйдёт', 'err');
     try {
-      // ── ИИ-модерация текстовых сообщений. Non-blocking: если AI выключен
-      //    или упал по сети, сообщение всё равно уходит.
       if (payload?.kind === 'text' && payload.body && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         try {
           const { moderateMessage } = await import('./ai-moderation.js?v=20251108');
@@ -405,7 +399,6 @@ function wireReact(node, message, rows, done) {
         return `<span class="react-chip" data-glyph="${esc(glyph)}">${icon(iconName, 16)}${count > 1 ? `<i>${count}</i>` : ''}</span>`;
       })
       .join('')}</div>`);
-    // Tapping a pill toggles your own reaction off.
     strip.querySelectorAll('.react-chip').forEach((chip) => {
       const glyph = chip.dataset.glyph;
       chip.addEventListener('click', async (event) => {

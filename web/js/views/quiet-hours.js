@@ -54,7 +54,6 @@ export function isQuietHour(now = new Date()) {
   const end = parseHM(cfg.end);
   if (start === end) return false;
   if (start < end) return cur >= start && cur < end;
-  // overnight wrap: 22:00 → 08:00
   return cur >= start || cur < end;
 }
 

@@ -14,7 +14,6 @@ export const RARITY = {
   legend: { label: 'Легендарное', color: '#ccb079', glow: 'rgba(204,176,121,.5)' }
 };
 
-// Russian titles. (Task spec had a stray CJK fragment in the first title — replaced with proper Russian.)
 export function gameAchievementsList() {
   return [
     { id: 'first_play',        title: 'Первый запуск',  desc: 'Сыграйте в любую игру',          icon: 'play',    rarity: 'common', check: (s) => s.totalPlays >= 1 },
@@ -54,7 +53,6 @@ function writeRawStats(stats) {
   } catch {}
 }
 
-// Returns a flat stats object suitable for achievement checks.
 export function computeGameStats() {
   const raw = readRawStats();
   let uniqueCount = 0;
@@ -70,12 +68,10 @@ export function computeGameStats() {
   };
 }
 
-// Returns the raw stored stats (with uniqueGames as an object map).
 export function rawGameStats() {
   return readRawStats();
 }
 
-// Call when a game ends. Updates localStorage stats and returns the new flat stats.
 export function recordGamePlay(gameId, score) {
   if (!gameId) return computeGameStats();
   const raw = readRawStats();
@@ -87,18 +83,15 @@ export function recordGamePlay(gameId, score) {
   const s = Number(score) || 0;
   if (s > (Number(raw.bestScore) || 0)) raw.bestScore = s;
 
-  // Per-game best score in its own key (matches games.js bestKey pattern).
   const bestKey = BEST_PREFIX + String(gameId);
   const cur = Number(localStorage.getItem(bestKey)) || 0;
   if (s > cur) {
     try { localStorage.setItem(bestKey, String(s)); } catch {}
   }
 
-  // Streak handling.
   const today = dateKey(new Date());
   const yesterday = dateKey(new Date(Date.now() - 86400000));
   if (raw.lastPlayDate === today) {
-    // already played today — keep streak
   } else if (raw.lastPlayDate === yesterday) {
     raw.gameStreak = (Number(raw.gameStreak) || 0) + 1;
   } else {
@@ -146,7 +139,6 @@ export function toggleGameAchievementPin(id) {
   if (idx >= 0) {
     list.splice(idx, 1);
   } else {
-    // Only allow pinning unlocked achievements, and cap at MAX_PINS.
     const stats = computeGameStats();
     const item = gameAchievementsList().find((a) => a.id === String(id));
     if (!item) return list;

@@ -834,7 +834,24 @@ svg { display: block; flex: none; }
 .badge-premium { background: linear-gradient(140deg, rgba(216,180,92,.3), rgba(217,143,174,.24)); color: #d8b45c; }
 .badge-tester { background: rgba(160,140,220,.18); color: #b0a0e0; }
 .badge-probation { background: rgba(232,160,48,.16); color: #e8a030; }
-.badge-scam { background: #e83030 !important; color: #fff !important; font-weight: 700; font-size: 9px; letter-spacing: .5px; padding: 1px 5px; border-radius: 3px; }
+.badge-scam {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e83030;
+  color: #fff;
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: .5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #ff4444;
+  box-shadow: 0 0 4px rgba(232,48,48,.5);
+  cursor: default;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.2;
+}
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px;

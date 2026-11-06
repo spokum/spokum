@@ -70,7 +70,6 @@ export function status() {
   }
   if (data.lastClaim >= yesterdayStart) {
     if (data.day >= 7) {
-      // Day 7 was claimed yesterday — start a fresh streak at day 1
       return { claimedToday: false, availableDay: 1, claimedDays: 0 };
     }
     return { claimedToday: false, availableDay: data.day + 1, claimedDays: data.day };
@@ -108,8 +107,6 @@ async function claim(onRefresh) {
         if (typeof setUser === 'function') setUser({ ...state.user });
       }
     } catch {
-      // grantPremium is admin-only in current backends — silently skip.
-      // The user still gets the coins.
     }
   }
 

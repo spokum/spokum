@@ -28,8 +28,6 @@ export async function initBackend() {
     if (starting) return starting;
     starting = (async () => {
       try {
-        // Quick health check — if the server is unreachable, fall back to local mode
-        // so the app still works (offline mode with browser storage).
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 4000);
         const healthResp = await fetch(supabaseUrl + '/rest/v1/', {
@@ -76,7 +74,6 @@ export function forget(key) {
 }
 
 export function isBeta(user) {
-  // All features are now available to everyone.
   return true;
 }
 

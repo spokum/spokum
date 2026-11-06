@@ -3,10 +3,6 @@ import { el, esc, uid, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, emptyState, confirmSheet } from '../ui.js';
 
-// СпокУм Радио — общий плейлист, который хранится локально в браузере.
-// Любой пользователь может добавить трек по прямой ссылке (MP3/WAV/Ogg).
-// Формат записи: { id, url, name, addedBy, addedAt }
-// Хранилище: localStorage.spokum.radio
 
 const KEY = 'spokum.radio';
 
@@ -25,8 +21,6 @@ function save(list) {
   try { localStorage.setItem(KEY, JSON.stringify(list)); } catch {}
 }
 
-// Один общий <audio> на всё приложение — чтобы при закрытии шторки
-// музыку можно было остановить. Создаётся лениво.
 let audioEl = null;
 let currentTrackId = null;
 let volume = 0.8;
@@ -37,7 +31,6 @@ function getAudio() {
   audioEl.volume = volume;
   audioEl.addEventListener('ended', () => {
     currentTrackId = null;
-    // Сигнализируем событие для перерисовки (если кто слушает).
     try { window.dispatchEvent(new CustomEvent('spokum:radio-ended')); } catch {}
   });
   audioEl.addEventListener('error', () => {
@@ -73,7 +66,6 @@ function stopAll() {
 function isValidAudioUrl(url) {
   if (!/^https?:\/\//i.test(url)) return false;
   if (/\.(mp3|wav|ogg|m4a|aac|flac)(\?|#|$)/i.test(url)) return true;
-  // Разрешаем и "голые" URL — пусть браузер сам разбирается.
   return true;
 }
 
@@ -133,7 +125,6 @@ export function openRadio() {
         node.querySelector('[data-play]').onclick = (event) => {
           event.stopPropagation();
           toggleTrack(track);
-          // Перерисовать только эту карточку.
           draw();
         };
         node.querySelector('[data-kill]').onclick = async (event) => {
@@ -177,10 +168,8 @@ export function openRadio() {
   };
 
   draw();
-  // Перерисовка при окончании трека, чтобы убрать статус «сейчас играет».
   const onEnded = () => draw();
   window.addEventListener('spokum:radio-ended', onEnded);
-  // На закрытии шторки снимаем слушатель и стопаем музыку.
   const origClose = sheet.close;
   sheet.close = () => {
     window.removeEventListener('spokum:radio-ended', onEnded);

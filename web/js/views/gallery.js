@@ -3,10 +3,6 @@ import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, openLightbox, toast, emptyState } from '../ui.js';
 
-// Gallery: collects every image and video from a user's posts and shows
-// them in a responsive grid. Tap a tile to open the lightbox. Videos are
-// detected by the post kind (`video`/`album`) or by a `media` field that
-// looks like a data-URL video.
 
 function isVideo(post) {
   if (post.kind === 'video') return true;

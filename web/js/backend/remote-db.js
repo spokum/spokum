@@ -1462,12 +1462,8 @@ export async function createBackend(url, key) {
     async giftTypes() {
       const { data, error } = await sb.from('gift_types').select('*').order('sort');
       guard(error);
-      // Merge remote gift types with local limited-edition gifts.
-      // Remote DB stores some limited gifts with "LIMITED: " prefix in the title and no isLimited flag.
-      // We drop those ugly remote entries and replace them with clean local versions that have isLimited: true.
       const rawRemote = data || [];
       const remote = rawRemote.filter((g) => !/^LIMITED\s*:/i.test(g.title || ''));
-      // Build dedupe sets from the cleaned remote list
       const seenIds = new Set(remote.map((g) => g.id));
       const seenTitles = new Set(remote.map((g) => (g.title || '').toLowerCase().trim()));
       const localOnly = LOCAL_GIFT_TYPES.filter((g) =>
@@ -1657,10 +1653,7 @@ export async function createBackend(url, key) {
       return data;
     },
 
-    // Halloween admin grants — stored in localStorage pending queue (same as local mode).
-    // The recipient's browser picks them up on next load via applyHalloweenPending().
     async adminGrantHalloween(userId, kind, amount) {
-      // No server RPC — Halloween is client-side only. Queue in localStorage.
       const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
       if (!pending[userId]) pending[userId] = {};
       pending[userId][kind] = (pending[userId][kind] || 0) + Number(amount);
@@ -1684,8 +1677,6 @@ export async function createBackend(url, key) {
       return { ok: true };
     },
 
-    // Winter admin grants — stored in localStorage pending queue (same as local mode).
-    // The Winter event view (js/views/winter.js) applies them on next load.
     async adminGrantWinter(userId, kind, amount) {
       if (!['snowflakes', 'coins', 'stars'].includes(kind)) throw new Error('Неизвестный тип награды');
       const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
@@ -1938,8 +1929,6 @@ export async function createBackend(url, key) {
       return { reactions: data || {} };
     },
 
-    // Spec-named emoji reactions. On the server side the existing
-    // `message_react` RPC accepts any glyph string — we pass the emoji through.
     async reactMessage(messageId, emoji) {
       const { data, error } = await sb.rpc('message_react', { target: messageId, glyph: emoji || '' });
       guard(error);
@@ -1947,9 +1936,6 @@ export async function createBackend(url, key) {
     },
 
     async messageReactions(messageId) {
-      // No dedicated per-message RPC; chats.js uses chatReactions(chatId) for
-      // display. This method is provided per spec and returns a graceful empty
-      // result so callers don't break when the RPC isn't available yet.
       try {
         const { data, error } = await sb.rpc('message_reactions', { target: messageId });
         if (error) return { reactions: {}, mine: null };
@@ -1962,7 +1948,6 @@ export async function createBackend(url, key) {
       }
     },
 
-    // Post reactions (localStorage fallback; no DB table yet).
     async reactPost(postId, reaction) {
       const myId = uid;
       if (!myId) throw new Error('Нужен вход');
@@ -2147,7 +2132,6 @@ export async function createBackend(url, key) {
     },
 
     async setFlags(id, flags) {
-      // Store isScam locally since the DB doesn't have that column
       if (flags && flags.isScam !== undefined) {
         try {
           const scamMap = JSON.parse(localStorage.getItem('spokum.scamUsers') || '{}');
@@ -2156,15 +2140,12 @@ export async function createBackend(url, key) {
           localStorage.setItem('spokum.scamUsers', JSON.stringify(scamMap));
         } catch {}
       }
-      // Send to RPC (isScam will be ignored by the DB function, but other flags work)
       try {
         const { error } = await sb.rpc('admin_set_flags', { target: id, flags });
         if (error && !/is_scam|isScam/i.test(error.message || '')) guard(error);
       } catch (e) {
-        // If RPC fails entirely, still continue — local scam flag is already set
       }
       const user = await profileById(id);
-      // Merge local isScam into the returned user
       try {
         const scamMap = JSON.parse(localStorage.getItem('spokum.scamUsers') || '{}');
         if (scamMap[id]) user.isScam = true;
@@ -2663,8 +2644,6 @@ export async function createBackend(url, key) {
       guard(error);
       return { requests: data || [] };
     },
-    // Spec-named aliases (friends). Wrap the existing RPCs so both the new
-    // friends.js view and the older openFriends code path keep working.
     async friendRequest(userId) {
       const { data, error } = await sb.rpc('send_friend_request', { p_target: userId });
       guard(error);
@@ -2676,7 +2655,6 @@ export async function createBackend(url, key) {
       return data || { ok: true };
     },
     async declineFriend(userId) {
-      // No dedicated decline RPC — drop the pending request via remove_friend.
       const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
       guard(error);
       return data || { ok: true };

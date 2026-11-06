@@ -324,13 +324,10 @@ function renderComposer(root) {
     probeMention();
   });
 
-  // --- @mentions dropdown: when the cursor follows "@word", show a list of
-  // matching users; clicking one inserts "@username " at the cursor. ---
   function currentMentionQuery() {
     const before = area.value.slice(0, area.selectionStart || area.value.length);
     const match = before.match(/@([a-z0-9_]{0,20})$/i);
     if (!match) return null;
-    // Don't trigger on emails — require the @ to be at start or after whitespace.
     const pre = before.slice(0, before.length - match[0].length);
     if (pre.length && !/\s/.test(pre[pre.length - 1])) return null;
     return match[1];
@@ -363,7 +360,6 @@ function renderComposer(root) {
     const q = currentMentionQuery();
     if (q === null) { mentionList.hidden = true; return; }
     if (q.length === 0) {
-      // Show a hint to start typing
       mentionList.innerHTML = `<div class="mention-hint">${icon('add_user', 14)}<span>Начните вводить имя пользователя после @</span></div>`;
       mentionList.hidden = false;
       return;
@@ -482,8 +478,6 @@ function renderComposer(root) {
     const label = button.querySelector('span');
     const previous = label ? label.textContent : '';
     try {
-      // ── ИИ-модерация: проверяем текст до отправки. Если AI выключен,
-      //    модуль не загружаем (non-blocking). Сбой AI не блокирует пост.
       const postText = draft.text || '';
       if (postText.trim() && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         if (label) label.textContent = 'Проверяем';
@@ -495,7 +489,6 @@ function renderComposer(root) {
             return;
           }
         } catch (modErr) {
-          // Не блокируем публикацию при ошибке AI
           console.warn('AI moderation failed (post):', modErr);
         }
       }
@@ -1004,7 +997,6 @@ export function postCard(post, refresh, options = {}) {
       <div class="post-react-row" data-post-reacts></div>
     </article>`);
 
-  // For reposts: lazily fetch the original post and render it inside the bordered box.
   if (post.repostOf && api.getPost) {
     const slot = card.querySelector('[data-origin]');
     if (slot) {
@@ -1097,9 +1089,6 @@ export function postCard(post, refresh, options = {}) {
     plainLike();
   }
 
-  // Post-reaction row (heart / same / hold / calm / spark). Uses
-  // api.reactPost when available (both backends ship it); otherwise falls
-  // back to the local spokum.postReactions store directly.
   wirePostReactions(card, post);
 
   card.querySelector('[data-like]').onclick = async (event) => {
@@ -1138,7 +1127,6 @@ export function postCard(post, refresh, options = {}) {
     };
   });
 
-  // @mentions inside post text → open that user's profile
   card.querySelectorAll('.mention').forEach((node) => {
     node.onclick = (event) => {
       event.stopPropagation();
@@ -1159,8 +1147,6 @@ export function postCard(post, refresh, options = {}) {
   return card;
 }
 
-// Repost sheet: original post preview (greyed out) + a comment textarea +
-// "Репост" button. Calls api.repostPost (alias of api.repost in both backends).
 export function openRepostSheet(post, refresh) {
   if (!state.user) return toast('Войдите, чтобы делать репосты', 'err');
   if (state.user.id === post.author.id) return toast('Свои посты репостить не нужно', 'err');
@@ -1422,7 +1408,6 @@ export async function openComments(post, refresh) {
     input.disabled = true;
     if (button) button.disabled = true;
     try {
-      // ── ИИ-модерация комментария. Non-blocking, если AI выключен или упал.
       if (localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         try {
           const { moderateComment } = await import('./ai-moderation.js?v=20251108');
@@ -1459,10 +1444,6 @@ export async function openComments(post, refresh) {
   });
 }
 
-// ── Post reactions (Feature 3): a small row of SVG icons below each post.
-//    One reaction per user per post; clicking the same icon removes it.
-//    Storage: localStorage `spokum.postReactions = { postId: { userId: reactionType } }`
-//    Honors `api.reactPost` / `api.postReactions` when present (both backends).
 const POST_REACTIONS = [
   ['heart', 'heart', 'Сердце'],
   ['same', 'same', 'Я так же'],
@@ -1515,7 +1496,6 @@ function wirePostReactions(card, post) {
         const map = localReactionMap(post.id);
         for (const [, kind] of Object.entries(map)) {
           counts[kind] = (counts[kind] || 0) + 1;
-          // We can't tell which is ours from the count alone; mark by id key.
         }
         if (myId && map[String(myId)]) myReaction = map[String(myId)];
       }

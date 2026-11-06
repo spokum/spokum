@@ -1,6 +1,3 @@
-// ИИ-модерация СпокУм через codex-relay API (gpt-6.1-terra)
-// Проверяет посты, комментарии, сообщения на нарушения.
-// Работает постоянно пока включена админом. Пользователи не могут выключить.
 
 const AI_API = "https://codex-relay.codes/v1/chat/completions";
 const AI_KEY = "sk-O51FMMei5VmA4YTXDzoTdHEn6xriAtZ7Z4c5ZfTkFGFa3xat";

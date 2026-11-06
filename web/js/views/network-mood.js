@@ -3,11 +3,6 @@ import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { openSheet, emptyState, toast } from '../ui.js';
 
-// Настроение сети — общий срез настроений всех пользователей СпокУма.
-// Собираем данные из двух источников:
-//   1) api.searchUsers('')   — первые 40 пользователей (с их текущим настроением)
-//   2) api.listPosts({limit}) — последние записи (с настроением поста)
-// Считаем проценты, рисуем SVG-круговую диаграмму, показываем топ-3.
 
 const MOOD_ICONS = {
   calm: 'leaf',
@@ -21,7 +16,6 @@ const MOOD_ICONS = {
 };
 
 function svgArc(cx, cy, r, startAngle, endAngle) {
-  // Возвращает path-строку для сектора круга (pie slice).
   const start = polar(cx, cy, r, endAngle);
   const end = polar(cx, cy, r, startAngle);
   const largeArc = endAngle - startAngle <= Math.PI ? 0 : 1;
@@ -51,8 +45,6 @@ export async function openNetworkMood() {
     posts = p?.posts || [];
   } catch { /* ignore */ }
 
-  // Агрегируем настроения: учитываем и текущее настроение пользователя,
-  // и настроения его последних постов (по одному баллу за каждый источник).
   const counts = {};
   const trend = {}; // по дням недели за последние 7 дней
   const now = Date.now();
@@ -87,7 +79,6 @@ export async function openNetworkMood() {
   const dominant = sorted[0];
   const top3 = sorted.slice(0, 3);
 
-  // SVG-пирог
   const cx = 90, cy = 90, R = 70;
   let angle = -Math.PI / 2;
   const slices = sorted.map((row) => {
@@ -96,7 +87,6 @@ export async function openNetworkMood() {
     return slice;
   });
 
-  // Тренд за неделю (по дням): для каждого дня находим доминирующее настроение.
   const dayLabels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   const today = new Date().getDay();
   const weekRows = [];

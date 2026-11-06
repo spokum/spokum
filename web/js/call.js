@@ -154,18 +154,15 @@ function wire(call) {
     api.callSignal?.(call.chatId, call.peer.id, 'ice', { candidate: event.candidate.toJSON() }).catch(() => {});
   };
 
-  // Grace period for ICE disconnect — peer might be temporarily unreachable
   const ICE_GRACE = 4000;
 
   pc.oniceconnectionstatechange = () => {
     const st = pc.iceConnectionState;
-    // Clear any pending disconnect timer if ICE recovers
     if (call.iceDisconnectTimer) {
       clearTimeout(call.iceDisconnectTimer);
       call.iceDisconnectTimer = null;
     }
     if (st === 'disconnected') {
-      // Peer likely hung up or network dropped — wait briefly, then end
       status.textContent = 'Соединение потеряно…';
       call.iceDisconnectTimer = setTimeout(() => {
         const cur = pc.iceConnectionState;
@@ -193,8 +190,6 @@ function wire(call) {
       view.querySelector('.call-body').classList.toggle('shrink', call.withVideo);
     }
     if (pc.connectionState === 'failed') teardown('Связь не установилась');
-    // Don't tear down on 'disconnected' here — ICE handler above manages it with a grace period.
-    // Just update the label so the user sees something is wrong.
     if (pc.connectionState === 'disconnected' && call.connectedAt) {
       status.textContent = 'Связь пропала…';
     }
@@ -411,8 +406,6 @@ export function initCalls() {
 
   const check = async () => {
     if (!state.user || !api.callInbox) return;
-    // Keep polling even when tab is hidden IF a call is active —
-    // the user needs to know immediately when the peer hangs up.
     if (document.hidden && !active && !pending) return;
     try {
       const { signals } = await api.callInbox(lastSignal);
@@ -423,8 +416,6 @@ export function initCalls() {
   const pace = () => {
     clearInterval(poller);
     const alive = live || api.realtimeUp?.();
-    // Poll fast (3s) while a call is active so hang-up signals arrive promptly.
-    // Otherwise scale by visibility and realtime status.
     let gap;
     if (active || pending) gap = 3000;
     else if (document.hidden) gap = 45000;

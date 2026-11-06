@@ -2,8 +2,6 @@ import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet } from '../ui.js';
 
-// Спокойные звуки, синтезируемые прямо в браузере через Web Audio API.
-// Никаких аудиофайлов: всё генерируется на лету и крутится бесконечным циклом.
 
 const SOUNDS = [
   { id: 'rain', name: 'Дождь', hint: 'Пологий шум и капли', icon: 'wave' },
@@ -38,7 +36,6 @@ function setMasterVolume(value) {
   masterGain.gain.setTargetAtTime(v, audioCtx.currentTime, 0.05);
 }
 
-// --- Буферы шума ---
 
 function whiteNoiseBuffer(ctx, seconds = 4) {
   const length = ctx.sampleRate * seconds;
@@ -52,7 +49,6 @@ function pinkNoiseBuffer(ctx, seconds = 4) {
   const length = ctx.sampleRate * seconds;
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
-  // Voss-McCartney упрощённый: несколько октав белого шума складываются.
   let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
   for (let i = 0; i < length; i++) {
     const w = Math.random() * 2 - 1;
@@ -88,7 +84,6 @@ function loopingSource(ctx, buffer) {
   return src;
 }
 
-// --- Движки звуков ---
 
 function buildRain(ctx, out) {
   const src = loopingSource(ctx, whiteNoiseBuffer(ctx, 4));
@@ -100,7 +95,6 @@ function buildRain(ctx, out) {
   gain.gain.value = 0;
   gain.gain.setTargetAtTime(0.34, ctx.currentTime, 0.6);
 
-  // Лёгкое колебание громкости — будто дождь то усиливается, то стихает.
   const lfo = ctx.createOscillator();
   lfo.frequency.value = 0.18;
   const lfoGain = ctx.createGain();
@@ -111,7 +105,6 @@ function buildRain(ctx, out) {
   src.start();
   lfo.start();
 
-  // Капли — короткие синус-импульсы с быстрой огибающей.
   const dropletTimers = [];
   const scheduleDroplet = () => {
     const t = ctx.currentTime + 0.02;
@@ -145,7 +138,6 @@ function buildRain(ctx, out) {
 }
 
 function buildOcean(ctx, out) {
-  // Низкочастотный шум + медленный LFO на громкости = набегающие волны.
   const src = loopingSource(ctx, brownNoiseBuffer(ctx, 5));
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
@@ -178,7 +170,6 @@ function buildOcean(ctx, out) {
 }
 
 function buildForest(ctx, out) {
-  // Розовый шум — листва. Плюс редкие короткие "птичьи" писки.
   const src = loopingSource(ctx, pinkNoiseBuffer(ctx, 4));
   const filter = ctx.createBiquadFilter();
   filter.type = 'bandpass';
@@ -226,7 +217,6 @@ function buildForest(ctx, out) {
 }
 
 function buildFire(ctx, out) {
-  // Коричневый шум как гул пламени + случайные "щелчки" углей.
   const src = loopingSource(ctx, brownNoiseBuffer(ctx, 5));
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
@@ -241,7 +231,6 @@ function buildFire(ctx, out) {
   const crackleTimers = [];
   const scheduleCrackle = () => {
     const t = ctx.currentTime + 0.02;
-    // Короткий всплеск широкополосного шума через окно Ханна.
     const len = Math.floor(ctx.sampleRate * 0.04);
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
@@ -275,7 +264,6 @@ function buildFire(ctx, out) {
 }
 
 function buildNight(ctx, out) {
-  // Очень низкий синус-гул + редкие сверчки.
   const hum = ctx.createOscillator();
   hum.type = 'sine';
   hum.frequency.value = 58;
@@ -285,7 +273,6 @@ function buildNight(ctx, out) {
   hum.connect(humGain).connect(out);
   hum.start();
 
-  // Лёгкая модуляция гула.
   const trem = ctx.createOscillator();
   trem.frequency.value = 0.25;
   const tremGain = ctx.createGain();
@@ -331,7 +318,6 @@ function buildNight(ctx, out) {
 }
 
 function buildWind(ctx, out) {
-  // Белый шум через полосовой фильтр с медленно блуждающей частотой.
   const src = loopingSource(ctx, whiteNoiseBuffer(ctx, 5));
   const filter = ctx.createBiquadFilter();
   filter.type = 'bandpass';
@@ -342,7 +328,6 @@ function buildWind(ctx, out) {
   gain.gain.value = 0;
   gain.gain.setTargetAtTime(0.26, ctx.currentTime, 0.8);
 
-  // LFO на частоте фильтра — будто ветер то ниже, то выше.
   const lfo = ctx.createOscillator();
   lfo.type = 'sine';
   lfo.frequency.value = 0.07;
@@ -351,7 +336,6 @@ function buildWind(ctx, out) {
   lfo.connect(lfoGain).connect(filter.frequency);
   lfo.start();
 
-  // LFO на громкости — порывы.
   const ampLfo = ctx.createOscillator();
   ampLfo.type = 'sine';
   ampLfo.frequency.value = 0.13;
@@ -408,7 +392,6 @@ function play(id) {
   return true;
 }
 
-// --- UI ---
 
 function formatMin(min) {
   if (min === 0) return 'выключить таймер';
@@ -585,7 +568,6 @@ export function openSounds() {
   return sheet;
 }
 
-// Минимальные стили для звуков. Подключаем один раз при первом открытии.
 if (typeof document !== 'undefined' && !document.getElementById('sounds-styles')) {
   const style = document.createElement('style');
   style.id = 'sounds-styles';

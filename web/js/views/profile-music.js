@@ -3,22 +3,9 @@ import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, confirmSheet } from '../ui.js';
 
-// Profile music — FREE for everyone (no premium gate). The user pastes a
-// direct URL to an audio file (MP3, WAV, OGG) and we play it through a
-// plain <audio> element. No preset tracks, no Web Audio synthesis.
-//
-// State shape in localStorage:
-//   spokum.profileMusic = { url, name }
-//
-// The same shape is mirrored into the user's profile via `api.updateMe`
-// so other people who open the profile can hear the track too — best
-// effort: in remote mode the column may be missing and the call is a
-// no-op, the local widget then just falls back to the owner's view.
 
 const KEY = 'spokum.profileMusic';
 
-// Single shared <audio> element used by both the picker preview button
-// and the profile widget so we never have two tracks playing at once.
 let currentAudio = null;
 let currentBtns = new Set();
 
@@ -43,8 +30,6 @@ function clearProfileMusic() {
   try { localStorage.removeItem(KEY); } catch {}
 }
 
-// Stop and release any playing audio. Updates every known play button so
-// the UI settles back into the "play" state.
 export function stopProfileMusic() {
   if (currentAudio) {
     try { currentAudio.pause(); } catch {}
@@ -57,7 +42,6 @@ export function stopProfileMusic() {
 }
 
 function playUrl(url, btn) {
-  // Already playing this? Toggle off.
   if (currentAudio && currentAudio.dataset && currentAudio.dataset.url === url) {
     stopProfileMusic();
     return;
@@ -81,7 +65,6 @@ function playUrl(url, btn) {
   });
 }
 
-// ── Picker sheet ─────────────────────────────────────────────────────
 
 export function openMusicPicker(done) {
   const body = el('<div class="col" style="gap:10px"></div>');
@@ -154,14 +137,6 @@ export function openMusicPicker(done) {
   return sheet;
 }
 
-// ── Inline profile widget ────────────────────────────────────────────
-//
-// Renders a small player for the supplied music. Call with an options
-// object: { isMine: bool, music: {url,name}|null }.
-//   - isMine=true + music=null → falls back to localStorage (own profile)
-//   - isMine=false + music={...} → shows their track (read-only)
-//   - music has no url → returns '' (nothing rendered)
-// The edit button is only shown when isMine is true.
 export function profileMusicWidget(opts = {}) {
   const isMine = !!opts.isMine;
   let music = opts.music || null;
@@ -178,8 +153,6 @@ export function profileMusicWidget(opts = {}) {
   </div>`;
 }
 
-// Wire the widget's play and (optional) edit buttons. `onEdit` is the
-// callback used to reopen the picker.
 export function bindMusicWidget(host, onEdit) {
   const widget = host.querySelector('[data-music-widget]');
   if (!widget) return;

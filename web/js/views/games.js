@@ -29,8 +29,6 @@ export async function render(root) {
   const shown = [...GAMES].sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
   shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
-    // Premium games are gated to beta testers (@silver, @ulquiorra_cifer,
-    // admin-flagged isBeta) OR active premium subscribers.
     const locked = !!game.premium && !paid && !beta;
     const card = el(`
       <button class="game-card appear${locked ? ' locked' : ''}">
@@ -101,7 +99,6 @@ function launch(game, done) {
   document.body.appendChild(stage);
   const canvas = stage.querySelector('canvas');
   const hint = stage.querySelector('[data-hint]');
-  // Auto-hide the how-to-play hint after 6s or on first interaction.
   let hintHidden = false;
   const hideHint = () => {
     if (hintHidden) return;
@@ -128,9 +125,6 @@ function launch(game, done) {
       bestBox.textContent = `Рекорд ${best}`;
       toast(`Новый рекорд ${score}`);
     }
-    // Track game achievements (local-only stats). Fire-and-forget.
-    // Guard against double-counting when the game calls report on game-over
-    // AND the back button calls it again on exit.
     if (!recorded) {
       recorded = true;
       try {

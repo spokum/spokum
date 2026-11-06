@@ -277,7 +277,6 @@ export async function openNotifications() {
   const sheet = openSheet('Уведомления', body);
 
   const draw = async () => {
-    // Quiet hours: show a banner instead of the notification list.
     try {
       const { isQuietHour } = await import('./quiet-hours.js?v=20251028');
       if (isQuietHour()) {

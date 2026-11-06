@@ -1264,7 +1264,6 @@ async function drawPixelBattle(body) {
   await checkStatus();
 }
 
-// ── Winter: grant snowflakes, coins, stars, items ───────────────────────────
 const WINTER_ITEMS = [
   { id: 'snowflakeFrame', title: 'Снежная рамка', cost: 50 },
   { id: 'iceGlow',        title: 'Ледяное свечение', cost: 80 },
@@ -1336,7 +1335,6 @@ async function drawWinter(body) {
 }
 
 function openWinterGrant(user, box) {
-  // Load user's current winter stats from server (admin endpoint) or show form
   box.style.display = 'block';
   box.innerHTML = `
     <div class="card" style="padding:12px;border-color:rgba(79,195,247,.25)">
@@ -1403,7 +1401,6 @@ function openWinterGrant(user, box) {
         await api.adminGrantWinter?.(user.id, kind, amount);
         toast(`Выдано ${amount} ${kind === 'snowflakes' ? 'снежинок' : kind === 'coins' ? 'монет' : 'звёзд'} → @${esc(user.username)}`);
       } catch (e) {
-        // Fallback: local mode — grant to current user only
         if (e.message.includes('not a function') || e.message.includes('undefined')) {
           const key = `spokum.winter.${kind}`;
           const cur = Number(localStorage.getItem(key) || 0);
@@ -1512,9 +1509,6 @@ async function drawFeedback(body) {
   paint();
 }
 
-// ── ИИ-модерация: вкл/выкл, список отчётов, очистка. Данные лежат в
-//    localStorage (spokum.aiModeration.*). Динамический импорт, чтобы не
-//    тянуть модуль в админку без необходимости.
 async function drawAiMod(body) {
   const mod = await import('./ai-moderation.js?v=20251108');
   const { isAiModerationEnabled, setAiModerationEnabled, getAiReports, removeReport, clearAiReports } = mod;
@@ -1568,7 +1562,6 @@ async function drawAiMod(body) {
           </div>
         </div>`);
         row.querySelector('[data-restore]').onclick = () => {
-          // Пока что просто убираем запись (визуальное восстановление)
           removeReport(r.id);
           toast('Запись удалена из списка');
           paint();

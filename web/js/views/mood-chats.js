@@ -3,12 +3,6 @@ import { el, esc, uid, clockTime, timeAgo, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, openSheet, emptyState } from '../ui.js';
 
-// 10 mood-based chat rooms. Two moods (`tender`, `lift`) are not part of the
-// global MOODS map in store.js (which currently lists 8). We define local
-// meta for them so the room picker always renders, regardless of the global
-// mood map. When the user enters a room, we still try to set their profile
-// mood via api.updateMe — backends that don't know the new mood simply
-// ignore the unknown key.
 const ROOMS = [
   { mood: 'calm',     icon: 'leaf', title: 'Спокойные',     hint: 'Тихий шёпот листвы' },
   { mood: 'joy',      icon: 'spark', title: 'Радостные',     hint: 'Делимся светлым' },
@@ -39,8 +33,6 @@ function meta(mood) {
   return MOOD_META[mood] || MOODS[mood] || { label: mood, ink: '#8a93a0' };
 }
 
-// Render a mood-room icon. Falls back to 'star' if the requested icon
-// isn't part of icons.js so a broken emoji-text never reaches the user.
 const KNOWN_ICONS = ['leaf', 'spark', 'wave', 'flame', 'same', 'moon', 'heart', 'star', 'trophy', 'crown', 'comet', 'crystal', 'rose', 'cup'];
 function moodIcon(name, size = 22) {
   const safe = KNOWN_ICONS.includes(name) ? name : 'star';
@@ -67,9 +59,6 @@ function saveMessages(mood, list) {
 }
 
 function memberCount(mood) {
-  // Members are everyone who has ever posted in the room, plus the current
-  // user (even if they just lurk). Pure-local heuristic — there's no
-  // shared backend in local mode, so we count unique authors in the log.
   const messages = loadMessages(mood);
   const ids = new Set(messages.map((m) => m.userId));
   if (state.user?.id) ids.add(state.user.id);
@@ -87,8 +76,6 @@ function viewerInfo() {
       hue: Number(u.hue) || 220
     };
   }
-  // Allow guests to read and post anonymously so the feature works in
-  // local mode without forcing a login.
   const guestName = localStorage.getItem('spokum.moodChat.guestName') || 'Гость';
   return {
     userId: 'guest-' + (localStorage.getItem('spokum.deviceId') || 'anon'),
@@ -185,7 +172,6 @@ function enterRoom(room) {
   };
   draw();
 
-  // Poll for new messages from other tabs / windows.
   const refresh = () => {
     draw();
     paintCount();
@@ -238,10 +224,6 @@ function enterRoom(room) {
     input.style.height = `${Math.min(120, input.scrollHeight)}px`;
   });
 
-  // Entering a room updates the user's current mood so the rest of the app
-  // reflects the same feeling. Best-effort: ignore failures (the local
-  // backend supports any mood key; the remote one may not know `tender` /
-  // `lift` yet, which is fine — we still keep the chat working).
   if (state.user) {
     api.updateMe?.({ mood: room.mood })
       .then(({ user } = {}) => { if (user) setUser(user); })

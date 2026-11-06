@@ -22,8 +22,6 @@ const KEYS = {
   bestMemory: 'spokum.winter.best.iceMemory'
 };
 
-// Apply pending admin grants for the current user (queued by admins in localStorage).
-// Called when the Winter view opens so granted rewards show up immediately.
 function applyWinterPending() {
   try {
     const pending = JSON.parse(localStorage.getItem('spokum.winter.pending') || '{}');
@@ -58,7 +56,6 @@ function applyWinterPending() {
     delete pending['self'];
     localStorage.setItem('spokum.winter.pending', JSON.stringify(pending));
     if (granted.length) {
-      // Defer toast so the UI is ready
       setTimeout(() => {
         try {
           import('../ui.js?v=20251028').then(({ toast }) =>
@@ -259,11 +256,9 @@ function snowflakeCatch(canvas, report) {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, cw, ch);
 
-        // snow speckles
         ctx.fillStyle = 'rgba(180,210,255,.5)';
         for (const st of stars) ctx.fillRect(st.x * cw, (st.y * ch) % ch, st.s, st.s);
 
-        // moon (pale winter moon)
         ctx.fillStyle = 'rgba(200,220,255,.18)';
         ctx.beginPath(); ctx.arc(cw - 36, 40, 26, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#dde8ff';
@@ -273,16 +268,13 @@ function snowflakeCatch(canvas, report) {
         ctx.save();
         ctx.translate(shakeX, 0);
 
-        // falling snowflakes (6-armed crystals)
         for (const it of s.items) {
           const px = it.x * cw, py = it.y * ch, r = it.r * cw;
           ctx.save();
           ctx.translate(px, py);
           ctx.rotate(it.rot);
-          // glow
           ctx.fillStyle = 'rgba(180,220,255,.25)';
           ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2); ctx.fill();
-          // 6 arms
           ctx.strokeStyle = '#e8f4ff';
           ctx.lineWidth = Math.max(1.5, r * 0.22);
           ctx.lineCap = 'round';
@@ -291,20 +283,17 @@ function snowflakeCatch(canvas, report) {
             ctx.rotate((Math.PI / 3) * i);
             ctx.beginPath();
             ctx.moveTo(0, 0); ctx.lineTo(0, -r * 1.4); ctx.stroke();
-            // side branches
             ctx.beginPath();
             ctx.moveTo(0, -r * 0.9); ctx.lineTo(-r * 0.35, -r * 1.15); ctx.stroke();
             ctx.beginPath();
             ctx.moveTo(0, -r * 0.9); ctx.lineTo(r * 0.35, -r * 1.15); ctx.stroke();
             ctx.restore();
           }
-          // center dot
           ctx.fillStyle = '#4fc3f7';
           ctx.beginPath(); ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         }
 
-        // sparks
         for (const p of s.sparks) {
           ctx.globalAlpha = Math.max(0, p.life * 2);
           ctx.fillStyle = p.color;
@@ -312,7 +301,6 @@ function snowflakeCatch(canvas, report) {
         }
         ctx.globalAlpha = 1;
 
-        // mitten basket (red with white trim)
         const bx = s.x * cw, by = 0.86 * ch;
         ctx.fillStyle = '#c0392b';
         ctx.beginPath();
@@ -321,7 +309,6 @@ function snowflakeCatch(canvas, report) {
         ctx.closePath(); ctx.fill();
         ctx.strokeStyle = '#7a1f15';
         ctx.lineWidth = 2; ctx.stroke();
-        // white fluffy trim
         ctx.fillStyle = '#f4f8ff';
         ctx.beginPath();
         ctx.ellipse(bx, by - 6, 28, 5, 0, 0, Math.PI * 2); ctx.fill();
@@ -330,7 +317,6 @@ function snowflakeCatch(canvas, report) {
 
         ctx.restore();
 
-        // HUD
         ctx.fillStyle = 'rgba(200,225,255,.92)';
         ctx.font = '600 15px Inter, system-ui, sans-serif';
         ctx.textAlign = 'left';
@@ -338,7 +324,6 @@ function snowflakeCatch(canvas, report) {
         ctx.fillStyle = s.miss >= 2 ? '#ff6060' : 'rgba(200,225,255,.7)';
         ctx.fillText(`Промахи: ${s.miss}/3`, 14, 48);
 
-        // lives (snowflakes)
         for (let i = 0; i < 3; i++) {
           ctx.fillStyle = i < (3 - s.miss) ? '#4fc3f7' : 'rgba(79,195,247,.25)';
           const hx = cw - 18 - i * 22, hy = 24;
@@ -400,7 +385,6 @@ function starHunt(canvas, report) {
             return true;
           });
           if (!hit) {
-            // miss puff (snow puff)
             for (let i = 0; i < 6; i++) s.sparkles.push({ x: x * width, y: y * height, vx: (Math.random() - 0.5) * 100, vy: (Math.random() - 0.5) * 100, life: 0.3, color: 'rgba(200,225,255,.7)' });
           }
         });
@@ -434,7 +418,6 @@ function starHunt(canvas, report) {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, cw, ch);
 
-        // twinkling background stars
         const t = performance.now() / 1000;
         for (const st of stars) {
           const a = 0.3 + Math.sin(t * 2 + st.b * 6) * 0.3;
@@ -442,15 +425,12 @@ function starHunt(canvas, report) {
           ctx.fillRect(st.x * cw, st.y * ch, st.s, st.s);
         }
 
-        // floating target stars (5-pointed)
         for (const g of s.stars) {
           const gx = g.x * cw, gy = g.y * ch, r = g.r * cw;
           const alpha = Math.min(1, g.life) * (g.life < 0.5 ? g.life * 2 : 1);
           ctx.globalAlpha = alpha;
-          // glow
           ctx.fillStyle = g.color + '33';
           ctx.beginPath(); ctx.arc(gx, gy, r * 1.7, 0, Math.PI * 2); ctx.fill();
-          // 5-pointed star
           ctx.fillStyle = g.color;
           ctx.beginPath();
           for (let i = 0; i < 10; i++) {
@@ -462,13 +442,11 @@ function starHunt(canvas, report) {
           }
           ctx.closePath();
           ctx.fill();
-          // shine
           ctx.fillStyle = 'rgba(255,255,255,.55)';
           ctx.beginPath(); ctx.arc(gx - r * 0.25, gy - r * 0.25, r * 0.16, 0, Math.PI * 2); ctx.fill();
           ctx.globalAlpha = 1;
         }
 
-        // sparkles
         for (const p of s.sparkles) {
           ctx.globalAlpha = Math.max(0, p.life * 2);
           ctx.fillStyle = p.color;
@@ -476,13 +454,11 @@ function starHunt(canvas, report) {
         }
         ctx.globalAlpha = 1;
 
-        // HUD
         ctx.fillStyle = 'rgba(200,225,255,.92)';
         ctx.font = '600 15px Inter, system-ui, sans-serif';
         ctx.textAlign = 'left';
         ctx.fillText(`Звёзд: ${s.score}`, 14, 26);
 
-        // timer bar
         const barW = cw - 28;
         ctx.fillStyle = 'rgba(255,255,255,.12)';
         ctx.fillRect(14, 38, barW, 6);
@@ -552,10 +528,8 @@ function iceMemory(canvas, report) {
           const p = e.touches?.[0] || e;
           const x = (p.clientX - r.left) / r.width;
           const y = (p.clientY - r.top) / r.height;
-          // 2x2 grid of ice crystals
           const col = x < 0.5 ? 0 : 1;
           const row = y < 0.55 ? 0 : 1;
-          // only count if inside grid area
           if (y < 0.42 || y > 0.92) return;
           const idx = row * 2 + col;
           s.flash = idx;
@@ -604,7 +578,6 @@ function iceMemory(canvas, report) {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, cw, ch);
 
-        // title area
         ctx.fillStyle = 'rgba(200,225,255,.85)';
         ctx.font = '700 16px Inter, system-ui, sans-serif';
         ctx.textAlign = 'center';
@@ -613,7 +586,6 @@ function iceMemory(canvas, report) {
         ctx.fillStyle = 'rgba(200,225,255,.55)';
         ctx.fillText(`Раунд ${s.round}`, cw / 2, 52);
 
-        // 2x2 grid of ice crystals (top: 0.42 - 0.92)
         const cellW = cw / 2;
         const cellH = (ch * 0.5) / 2;
         for (let i = 0; i < 4; i++) {
@@ -623,12 +595,10 @@ function iceMemory(canvas, report) {
           const cy = ch * 0.42 + row * cellH + cellH / 2;
           const lit = s.flash === i;
           const r = Math.min(cellW, cellH) * 0.32;
-          // glow
           if (lit) {
             ctx.fillStyle = POTS[i].color + '55';
             ctx.beginPath(); ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2); ctx.fill();
           }
-          // crystal body (hexagon)
           ctx.fillStyle = '#0a1a2a';
           ctx.beginPath();
           for (let k = 0; k < 6; k++) {
@@ -638,7 +608,6 @@ function iceMemory(canvas, report) {
             if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
           }
           ctx.closePath(); ctx.fill();
-          // crystal facet
           ctx.fillStyle = lit ? POTS[i].color : POTS[i].color + '88';
           ctx.beginPath();
           for (let k = 0; k < 6; k++) {
@@ -648,7 +617,6 @@ function iceMemory(canvas, report) {
             if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
           }
           ctx.closePath(); ctx.fill();
-          // rim
           ctx.strokeStyle = lit ? '#fff' : 'rgba(255,255,255,.4)';
           ctx.lineWidth = lit ? 3 : 1.5;
           ctx.beginPath();
@@ -661,7 +629,6 @@ function iceMemory(canvas, report) {
           ctx.closePath(); ctx.stroke();
         }
 
-        // frost sparks
         for (const b of s.bubble) {
           ctx.globalAlpha = Math.max(0, b.life);
           ctx.fillStyle = b.color;
@@ -669,7 +636,6 @@ function iceMemory(canvas, report) {
         }
         ctx.globalAlpha = 1;
 
-        // sequence progress dots
         if (!s.showing && s.seq.length) {
           const total = s.seq.length;
           const done = s.input.length;
@@ -750,7 +716,6 @@ function paintStats(view) {
       <div class="hw-stat-num" data-num style="color:${st.color}">${st.value}</div>
       <div class="hw-stat-label">${esc(st.label)}</div>
     </div>`).join('');
-  // animated count-up
   box.querySelectorAll('[data-num]').forEach((node, i) => {
     const target = stats[i].value;
     if (target <= 0) return;
@@ -785,7 +750,6 @@ function paintReward(view) {
     btn.classList.remove('hw-claimed');
     btn.innerHTML = `${icon('star', 26)} Получить награду`;
   }
-  // countdown to next midnight
   const update = () => {
     if (!view.isConnected) return;
     count.textContent = 'Следующая через ' + fmtHMS(msToMidnight());
@@ -888,7 +852,6 @@ function paintShop(view) {
       const id = btn.dataset.buy;
       const item = SHOP.find((x) => x.id === id);
       if (!item) return;
-      // Re-read owned & coins fresh — they may have changed since render.
       const ownedNow = readArr(KEYS.owned);
       if (ownedNow.includes(id)) {
         toast('Уже куплено', 'err');
@@ -900,20 +863,17 @@ function paintShop(view) {
         toast('Не хватает монет', 'err');
         return;
       }
-      // Deduct coins and grant the item.
       writeNum(KEYS.coins, coinsNow - item.price);
       ownedNow.push(id);
       writeArr(KEYS.owned, ownedNow);
       toast('Куплено: ' + item.name);
       confettiBurst(view);
-      // Re-render shop + stats + owned items list.
       paintShop(view);
       paintStats(view);
       paintReward(view);
       paintOwned(view);
     };
   });
-  // Also refresh the owned-items list whenever the shop is repainted.
   paintOwned(view);
 }
 
@@ -989,7 +949,6 @@ function paintGames(view) {
       let handle = null;
       let granted = -1; // last score we already paid out, to avoid double-granting
 
-      // inline play: mount directly on the embedded canvas
       btn.disabled = true;
       btn.innerHTML = `${icon('pause', 16)} В игре`;
       card.classList.add('playing');
@@ -1001,7 +960,6 @@ function paintGames(view) {
           if (bestBox) bestBox.textContent = best;
           toast('Новый рекорд: ' + best);
         }
-        // only pay once per score value (game-over reports, then stop may re-report)
         if (score <= 0 || score === granted) return;
         granted = score;
         const r = g.reward(score);
@@ -1014,22 +972,16 @@ function paintGames(view) {
         if (force) { /* reserved for future use */ }
       };
 
-      // stop any existing handle (shouldn't happen — card is re-rendered on stop)
       if (handle) handle.stop();
-      // canvas size is handled by fitCanvas() inside runner() — it reads
-      // the CSS dimensions (width:100%; height:400px from .hw-canvas)
       handle = g.mount(canvas, report);
 
-      // change button to stop
       btn.innerHTML = `${icon('close', 16)} Завершить`;
       btn.disabled = false;
       btn.onclick = () => {
         const sc = handle ? handle.score() : 0;
         handle?.stop();
         handle = null;
-        // pay out the current score if the game didn't already (e.g. user stopped mid-game)
         if (sc > 0) report(sc);
-        // re-render game card (reset)
         paintGames(view);
         paintStats(view);
         paintLeaderboard(view);
@@ -1070,11 +1022,8 @@ function openLocked(reason) {
 export function openWinter() {
   const user = state.user;
   if (!user) return openLocked('Нужен вход для участия. Войдите, чтобы открыть ивент.');
-  // Winter event is currently in beta — only @silver and admin-flagged
-  // beta users can open it.
   if (!isBeta(user)) return openLocked('Ивент пока открыт только бета-тестерам. Скоро будет у всех.');
 
-  // Apply any pending admin grants before showing the event
   applyWinterPending();
 
   const view = el(`
@@ -1155,7 +1104,6 @@ export function openWinter() {
   document.body.style.overflow = 'hidden';
   spawnFloatingDecor(view);
 
-  // back button
   const close = () => {
     if (view._rewardTimer) clearInterval(view._rewardTimer);
     view.remove();
@@ -1163,7 +1111,6 @@ export function openWinter() {
   };
   view.querySelector('[data-back]').onclick = close;
 
-  // render all sections
   paintStats(view);
   paintReward(view);
   paintGames(view);
@@ -1172,7 +1119,6 @@ export function openWinter() {
   paintShop(view);
   paintOwned(view);
 
-  // Winter reward claim
   const claimBtn = view.querySelector('[data-claim]');
   claimBtn.onclick = () => {
     const last = Number(localStorage.getItem(KEYS.lastReward) || 0);
@@ -1195,5 +1141,4 @@ export function openWinter() {
   return { close, view };
 }
 
-// Backwards-compat alias for any code that still imports openHalloween.
 export const openHalloween = openWinter;

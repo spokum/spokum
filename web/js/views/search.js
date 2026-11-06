@@ -20,9 +20,6 @@ export async function openSearch(initialQuery = '') {
   const btn = host.querySelector('[data-go]');
   const tabs = host.querySelector('[data-tabs]');
 
-  // Tabs: "Всё" runs the unified searchAll RPC (server-side). The other
-  // tabs are client-side filters that also work in local mode where
-  // searchAll is not available.
   const TABS = [
     { id: 'all',     label: 'Всё' },
     { id: 'people',  label: 'Люди' },
@@ -66,7 +63,6 @@ export async function openSearch(initialQuery = '') {
         if (event.target.closest('[data-follow]')) return;
         const id = Number(node.dataset.channel);
         try {
-          // Open the channel chat directly via the existing chat view.
           sheet.close();
           const { openChat } = await import('./chats.js?v=20251028');
           document.querySelector('[data-tab="chats"]')?.click();
@@ -98,7 +94,6 @@ export async function openSearch(initialQuery = '') {
       return;
     }
     if (active === 'channels') {
-      // Channel search works without searchAll — it has its own endpoint.
       if (!api.searchChannels) {
         results.innerHTML = emptyState('warn', 'Поиск каналов недоступен', 'Эта база не поддерживает поиск каналов');
         return;
@@ -116,8 +111,6 @@ export async function openSearch(initialQuery = '') {
       return;
     }
     if (!api.searchAll) {
-      // Local mode without a server: do a best-effort client-side search
-      // via searchUsers + searchChannels.
       results.innerHTML = '<div class="small muted center" style="padding:12px">Ищем...</div>';
       try {
         const out = { users: [], posts: [], groups: [], channels: [] };
@@ -138,7 +131,6 @@ export async function openSearch(initialQuery = '') {
     results.innerHTML = '<div class="small muted center" style="padding:12px">Ищем...</div>';
     try {
       const data = await api.searchAll(q);
-      // Enrich with channels if the server didn't return them.
       if (!data.channels && api.searchChannels) {
         try {
           const { channels } = await api.searchChannels(q);

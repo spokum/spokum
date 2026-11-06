@@ -87,7 +87,6 @@ export async function runDiagnostics() {
       const response = await fetch(`${url}/auth/v1/health`, { headers: { apikey: key } });
       return response.ok ? 'отвечает' : `не отвечает, код ${response.status}`;
     }));
-    // If server check failed, mark for the local-mode notice
     if (!results[results.length - 1].ok) serverDown = true;
 
     results.push(await probe('Данные', async () => {

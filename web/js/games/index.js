@@ -6785,9 +6785,6 @@ export const GAMES = [
   { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror }
 ];
 
-// ── color_match — Simon-says style color matching game ─────────────
-// Four colored panels light up in a growing sequence; the player must
-// tap them back in the same order. Each round adds one more step.
 function colorMatch(canvas, report) {
   return runner(canvas, () => {
     const COLORS = [
@@ -6918,12 +6915,6 @@ function colorMatch(canvas, report) {
   });
 }
 
-// ── number_puzzle — classic 15-puzzle ──────────────────────────────
-// 4x4 grid with numbers 1..15 and one empty slot. Tap a tile adjacent
-// to the empty slot to slide it. Score = moves (lower is better, but
-// we report moves so the leaderboard rewards fewer moves with higher
-// score via `score = 1000 - moves`). The game ends when the tiles are
-// in order. Tracks elapsed time + moves.
 function numberPuzzle(canvas, report) {
   return runner(canvas, () => {
     const N = 4;
@@ -6938,7 +6929,6 @@ function numberPuzzle(canvas, report) {
     const shuffle = () => {
       tiles = Array.from({ length: 16 }, (_, i) => (i + 1) % 16);
       empty = 15;
-      // Random-walk shuffle so the puzzle is always solvable.
       let prev = -1;
       for (let i = 0; i < 200; i++) {
         const neigh = neighbors(empty).filter((n) => n !== prev);
@@ -7010,7 +7000,6 @@ function numberPuzzle(canvas, report) {
         const cell = Math.min((w - pad * 2) / N, (h - pad * 2 - 30) / N);
         const ox = (w - cell * N) / 2;
         const oy = (h - cell * N - 30) / 2 + 30;
-        // Board background
         ctx.fillStyle = 'rgba(255,255,255,.04)';
         ctx.beginPath();
         ctx.roundRect(ox - 6, oy - 6, cell * N + 12, cell * N + 12, 14);
@@ -7052,9 +7041,6 @@ function numberPuzzle(canvas, report) {
   });
 }
 
-// ── bubble_pop — pop floating bubbles, miss no more than 3 ─────────
-// Bubbles rise from the bottom at increasing speed. Tap to pop them.
-// Miss 3 and the game ends. Each popped bubble = +1 point.
 function bubblePop(canvas, report) {
   return runner(canvas, () => {
     let bubbles = [];
@@ -7119,8 +7105,6 @@ function bubblePop(canvas, report) {
           b.wobble += dt * 2;
           b.x += Math.sin(b.wobble) * 0.005;
         }
-        // Count missed bubbles (slipped off the top untouched) and drop
-        // any popped/missed bubble from the field.
         for (const b of bubbles) {
           if (b.y < -0.1 && !b.popped) {
             b.popped = true;
@@ -7747,7 +7731,6 @@ function tapRhythm(canvas, report) {
   });
 }
 
-// ── tower_stack — calm tower stacking, blocks shrink on misalign ────
 function towerStack(canvas, report) {
   return runner(canvas, () => {
     const PALETTE = ['#7fb3a0', '#93b98d', '#ccb079', '#8aabc7', '#9f96c2', '#c78fa4', '#7fa8e8', '#d8a8e8'];
@@ -7906,7 +7889,6 @@ function towerStack(canvas, report) {
   });
 }
 
-// ── color_switch — calm color switching flappy-style game ───────────
 function colorSwitch(canvas, report) {
   return runner(canvas, () => {
     const COLORS = [
@@ -8106,7 +8088,6 @@ function colorSwitch(canvas, report) {
   });
 }
 
-// ── dot_connect — connect same-color dots without crossing ─────────
 function dotConnect(canvas, report) {
   return runner(canvas, () => {
     const COLORS = ['#7fb3a0', '#ccb079', '#8aabc7', '#c78fa4', '#93b98d', '#9f96c2', '#d8a8e8'];
@@ -8259,7 +8240,6 @@ function dotConnect(canvas, report) {
         state.lines.forEach((line) => {
           ctx.strokeStyle = line.color;
           ctx.lineWidth = 5;
-          // segs are in grid units (c, r). Convert to pixels.
           ctx.beginPath();
           line.segs.forEach((s, i) => {
             const x1 = pad + s.x1 * cellW;
@@ -8324,7 +8304,6 @@ function dotConnect(canvas, report) {
   });
 }
 
-// ── speed_tap — 30s reaction game with combo multiplier ────────────
 function speedTap(canvas, report) {
   return runner(canvas, () => {
     const DURATION = 30;
@@ -8496,10 +8475,6 @@ function speedTap(canvas, report) {
   });
 }
 
-// ── orbit_duel — two planets orbit a sun on different paths ─────────
-// Player controls one planet (tap to switch between inner/outer orbit).
-// A companion planet orbits the opposite path. Avoid asteroids that
-// spawn on random orbits, collect energy orbs for points. Speed grows.
 function orbitDuel(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     let width = w, height = h;
@@ -8627,10 +8602,6 @@ function orbitDuel(canvas, report) {
   });
 }
 
-// ── gravity_well — guide a drifting ship via gravity wells ─────────
-// Ship has momentum; tap to create a temporary gravity well that pulls
-// the ship toward the tap point. Pass through gates for points, avoid
-// black holes. Walls wrap around.
 function gravityWell(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     let width = w, height = h;
@@ -8757,9 +8728,6 @@ function gravityWell(canvas, report) {
   });
 }
 
-// ── rhythm_grid — 4x4 spatial memory rhythm game ───────────────────
-// Cells light up in patterns; repeat them by tapping in order. Each
-// round adds one more cell to the sequence. Like Simon but on a grid.
 function rhythmGrid(canvas, report) {
   return runner(canvas, () => {
     const N = 4;
@@ -8847,10 +8815,6 @@ function rhythmGrid(canvas, report) {
   });
 }
 
-// ── paint_fill — Flood-It style puzzle with chosen origin ──────────
-// Tap a color, then tap a cell to flood-fill that cell's connected
-// region with the chosen color. Fill the whole grid in one color within
-// the move limit. Each level has a bigger grid.
 function paintFill(canvas, report) {
   return runner(canvas, () => {
     const PALETTE = ['#ff6b8a', '#ffb04d', '#ffe14d', '#7ed957', '#5ad0d0', '#5aa0ff', '#a98aff'];
@@ -8955,10 +8919,6 @@ function paintFill(canvas, report) {
   });
 }
 
-// ── mirror — dual-control via mirror mechanic ──────────────────────
-// Drag your finger on the left half: the player dot follows it, and a
-// mirror dot on the right half moves inversely. Collect orbs (each dot
-// collects on its own half), avoid the red hazards. Manage both sides.
 function mirror(canvas, report) {
   return runner(canvas, ({ w, h }) => {
     let width = w, height = h;

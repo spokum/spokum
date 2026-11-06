@@ -47,8 +47,6 @@ function formatDateStamp(ts) {
   return new Date(ts).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// Маленький ларец-карточка. Запертый — тёмный, с замком и датой вскрытия.
-// Открытый — светлый, с печатью и текстом.
 function capsuleCard(capsule, refresh) {
   const unlocked = capsule.openAt <= Date.now();
   const revealed = !!capsule.opened;

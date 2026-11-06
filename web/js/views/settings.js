@@ -46,13 +46,11 @@ const THEMES = [
   ['ocean', 'Океан', 'linear-gradient(140deg,#001a2a,#003355)', '#80d0ff', false],
   ['forest2', 'Тёмный лес', 'linear-gradient(140deg,#050a05,#0a1a0a)', '#90c090', false],
   ['cherry', 'Сакура ночь', 'linear-gradient(140deg,#1a0a14,#3a1528)', '#ff9ab0', false],
-  // ── New light themes (free) ─────────────────────────────────────
   ['cloud', 'Облако', 'linear-gradient(140deg,#ffffff,#dde6f0)', '#1f2a3a', false],
   ['lavender_light', 'Лаванда светлая', 'linear-gradient(140deg,#f7f3ff,#e6dcf5)', '#3a2a52', false],
   ['mint_light', 'Мята светлая', 'linear-gradient(140deg,#f1fbf4,#d4ecdc)', '#1c3528', false],
   ['peach', 'Персик', 'linear-gradient(140deg,#fff5ec,#fbe3c8)', '#5c3a1e', false],
   ['sky', 'Небо', 'linear-gradient(140deg,#f2f9ff,#cfe4f5)', '#1f3550', false],
-  // ── New dark themes (free) ──────────────────────────────────────
   ['deep_space', 'Космос', 'linear-gradient(140deg,#03051a,#0d1230)', '#c8d4ff', false],
   ['volcano', 'Вулкан', 'linear-gradient(140deg,#1a0606,#3a0d0d)', '#f0b89a', false],
   ['aurora_borealis', 'Северное сияние', 'linear-gradient(140deg,#02110c,#0a2a35)', '#9be0c8', false],
@@ -375,8 +373,6 @@ export async function render(root) {
     openRules();
   };
 
-  // ── ИИ-модерация: тумблер в разделе «Правила». Динамический импорт,
-  //    чтобы не тянуть модуль в настройки без необходимости.
   const aiModBox = root.querySelector('[data-ai-mod]');
   const aiModStatus = root.querySelector('[data-ai-mod-status]');
   const paintAiModStatus = async () => {

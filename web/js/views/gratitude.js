@@ -103,12 +103,6 @@ export async function render(root) {
   await mount(root);
 }
 
-// ============================================================
-// Дневник благодарности (личный, без сервера).
-// Записи за день хранятся в localStorage под ключом
-// spokum.gratitude.<YYYY-MM-DD>. С публичной "Стеной благодарности"
-// наверху файла дневник не связан — это приватная практика.
-// ============================================================
 
 const JOURNAL_PREFIX = 'spokum.gratitude.';
 
@@ -173,8 +167,6 @@ export function getGratitudeStats() {
 }
 
 export function getGratitudeStreak() {
-  // Считаем подряд идущие дни с записями, заканчивая сегодня.
-  // Если сегодня записи нет — серия 0, даже если вчера писали.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   if (!readEntry(today)) return 0;
@@ -328,7 +320,6 @@ export function openGratitudeJournal() {
   return sheet;
 }
 
-// Стили дневника благодарности. Подключаем один раз.
 if (typeof document !== 'undefined' && !document.getElementById('gratitude-journal-styles')) {
   const style = document.createElement('style');
   style.id = 'gratitude-journal-styles';

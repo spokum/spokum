@@ -69,20 +69,15 @@ export const DAILY_QUOTES = [
   { id: 'q50', text: 'Каждый день — новый шанс начать заново', author: 'Народная мудрость' }
 ];
 
-// День года (0..365). Учитывает високосные годы — цитата на 29 февраля
-// детерминированно выбирается из «обычного» индекса.
 function dayOfYear(date) {
   const start = new Date(date.getFullYear(), 0, 0);
   const diff = date - start;
   return Math.floor(diff / 86400000);
 }
 
-// Возвращает цитату для указанной даты (или сегодня).
 export function getDailyQuote(date = new Date()) {
   const total = DAILY_QUOTES.length;
   const day = dayOfYear(date);
-  // Сдвигаем год, чтобы цитаты не повторялись каждый год в один и тот же день
-  // слишком предсказуемо. Берём индекс = (день + год) % всего.
   const year = date.getFullYear();
   const index = (day + year) % total;
   return DAILY_QUOTES[index];
@@ -119,7 +114,6 @@ function toggleFavorite(id) {
   return true;
 }
 
-// Превращает дату в человекочитаемую подпись «сегодня / вчера / N дней назад»
 function relativeDay(date) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -184,8 +178,6 @@ export function openDailyQuote() {
   const body = el('<div class="col" style="gap:12px"></div>');
   const sheet = openSheet('Цитата дня', body);
 
-  // Начинаем с сегодняшней цитаты; навигация двигает «смещение» в днях
-  // относительно сегодня — для просмотра, но «цитата дня» остаётся той же.
   let offset = 0;
 
   const render = () => {
@@ -237,7 +229,6 @@ export function openDailyQuote() {
     body.querySelector('[data-fav]').onclick = () => {
       const nowFav = toggleFavorite(quote.id);
       toast(nowFav ? 'Добавлено в избранное' : 'Убрано из избранного');
-      // Обновляем только кнопку и список избранного, чтобы не сбить навигацию
       const favBtn = body.querySelector('[data-fav]');
       favBtn.className = `btn btn-sm ${nowFav ? 'btn-primary' : ''}`;
       favBtn.innerHTML = `${icon(nowFav ? 'heart' : 'star', 14)} ${nowFav ? 'В избранном' : 'В избранное'}`;
@@ -262,7 +253,6 @@ export function openDailyQuote() {
         if (!ok) return;
         writeFavorites(readFavorites().filter((x) => x !== id));
         toast('Убрано из избранного');
-        // Если текущая цитата была этой — обновить всю карточку
         if (offset === 0 && getDailyQuote().id === id) {
           render();
         } else {
@@ -277,9 +267,6 @@ export function openDailyQuote() {
   return sheet;
 }
 
-// Маленький виджет для профиля — показывает сегодняшнюю цитату и по тапу
-// открывает полный sheet. Используется как fallback, когда нет серверной
-// цитаты (api.todayQuote).
 export function dailyQuoteWidgetHtml() {
   const q = getDailyQuote();
   return `<button class="card appear" data-dq-open style="

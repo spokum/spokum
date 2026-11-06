@@ -3,13 +3,6 @@ import { el, esc, uid } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, emptyState, confirmSheet, pickImage } from '../ui.js';
 
-// Voice rooms in SpokУm. There are no preset rooms — every room is created
-// by a user (stored as an array in `spokum.voiceRooms`). The full WebRTC
-// mesh is too heavy for a single session of work, so the inside-room view
-// ships a simulated audio floor (a "говорит..." indicator flickers
-// randomly for fake participants). Real P2P audio can be layered in later
-// by swapping `simFloor` for a peer-connection manager — the rest of the
-// UI stays the same.
 
 const STATE_KEY = 'spokum.voiceRooms';
 const AVATAR_ICONS = ['star', 'moon', 'heart', 'flame', 'crystal', 'trophy', 'gift', 'crown', 'shield', 'spark'];
@@ -49,8 +42,6 @@ function viewerInfo() {
   };
 }
 
-// Render a room's avatar — either an uploaded image (data URL) or one of
-// the SVG icons from icons.js. Never an emoji character.
 function roomAvatar(room, size = 40) {
   if (room && room.avatarType === 'image' && room.avatar) {
     return `<img src="${esc(room.avatar)}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block">`;
@@ -136,7 +127,6 @@ async function confirmDelete(room, body, sheet) {
   const rooms = loadRooms().filter((r) => r.id !== room.id);
   saveRooms(rooms);
   toast('Комната удалена');
-  // Re-render the list in place — keeps the same sheet open.
   drawList(body, sheet);
 }
 
@@ -203,8 +193,6 @@ function openCreateRoom() {
     const nameLen = body.querySelector('[data-name-len]');
     const descLen = body.querySelector('[data-desc-len]');
 
-    // Persist input values into `form` so re-renders (icon pick, image
-    // upload) don't wipe what the user has typed.
     const syncForm = () => {
       form.name = nameInp.value;
       form.description = descInp.value;
@@ -240,7 +228,6 @@ function openCreateRoom() {
         syncForm();
         form.avatar = btn.dataset.icon;
         form.avatarType = 'icon';
-        // Stable hue per icon so the preview avatar has some color.
         const idx = AVATAR_ICONS.indexOf(form.avatar);
         form.hue = 200 + idx * 12;
         paint();
@@ -290,9 +277,6 @@ function ensureMic() {
     if (!navigator.mediaDevices?.getUserMedia) return done(false);
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then((stream) => {
-        // Stop tracks immediately — we don't actually broadcast in this
-        // version, we only needed the permission grant so the UI can
-        // truthfully say "микрофон работает".
         stream.getTracks().forEach((t) => t.stop());
         done(true);
       })
@@ -349,7 +333,6 @@ function enterRoom(roomId) {
   const paint = () => {
     const cur = refresh();
     if (!cur) {
-      // Room was deleted (creator removed it).
       view.remove();
       clearInterval(tick);
       window.removeEventListener('storage', onStorage);
@@ -416,8 +399,6 @@ function enterRoom(roomId) {
   };
   join();
 
-  // Simulated "speaking" indicator — flips random non-muted participants
-  // on and off so the UI feels alive without real audio analysis.
   const tick = setInterval(() => {
     const rooms = loadRooms();
     const idx = rooms.findIndex((r) => r.id === roomId);
@@ -440,7 +421,6 @@ function enterRoom(roomId) {
     }
   }, 1200);
 
-  // Sync across tabs: refresh participants when another tab changes state.
   const onStorage = () => paint();
   window.addEventListener('storage', onStorage);
 
@@ -495,7 +475,6 @@ function enterRoom(roomId) {
     openVoiceRooms();
   };
 
-  // Clean up if the view is removed by anything else.
   const observer = new MutationObserver(() => {
     if (!document.body.contains(view)) {
       clearInterval(tick);

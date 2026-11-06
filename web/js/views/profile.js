@@ -4,23 +4,15 @@ import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
 
-// ── Bio formatting ─────────────────────────────────────────────────
-// Supports **bold**, *italic* and \n line breaks. The text is escaped
-// first, so we operate on the escaped string when inserting tags.
 export function formatBio(text) {
   if (!text) return '';
   let out = esc(text);
-  // **bold** -> <strong>
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  // *italic* -> <em> (after bold so we don't double-process the same **)
   out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  // \n -> <br>
   out = out.replace(/\n/g, '<br>');
   return out;
 }
 
-// Build a URL for a social handle. Accepts full URLs, @handles, and bare
-// usernames. Returns null if the value is empty.
 function socialUrl(platform, value) {
   if (!value) return null;
   const v = String(value).trim();
@@ -28,9 +20,6 @@ function socialUrl(platform, value) {
   if (/^https?:\/\//i.test(v)) return v;
   const handle = v.replace(/^@/, '');
   if (platform === 'telegram') {
-    // Telegram accepts usernames with t.me/ or @ — and phone numbers as
-    // plain digits. We treat anything starting with a + or digit as a
-    // phone number, otherwise it's a username.
     if (/^\+?\d[\d\s-]+$/.test(handle)) return `https://t.me/${handle.replace(/[^\d]/g, '')}`;
     return `https://t.me/${handle}`;
   }
@@ -489,9 +478,6 @@ export async function render(root) {
     <div data-body></div>`;
 
   const body = root.querySelector('[data-body]');
-  // Daily quote widget: prefer server quote (api.todayQuote), fall back to
-  // the local 50-quote collection. Either way, the widget is clickable and
-  // opens the full daily-quote sheet (favorites, navigation, share-as-post).
   if (user?.username) {
     const renderLocalQuoteWidget = () => {
       import('./daily-quote.js?v=20251102').then(({ dailyQuoteWidgetHtml, bindDailyQuoteWidget }) => {
@@ -674,9 +660,6 @@ export async function render(root) {
   body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
   body.querySelector('[data-twins]')?.addEventListener('click', () => openTwins());
 
-  // ── New buttons: mood chats, voice rooms, private notes, gallery,
-  //    profile music. These load lazily so the main profile render
-  //    doesn't pay for them up-front.
   body.querySelector('[data-mood-chats]')?.addEventListener('click', async () => {
     const { openMoodChats } = await import('./mood-chats.js?v=20251028');
     openMoodChats();
@@ -688,7 +671,6 @@ export async function render(root) {
   body.querySelector('[data-pnotes]')?.addEventListener('click', async () => {
     const { openNotes } = await import('./notes.js?v=20251028');
     openNotes();
-    // Refresh the count badge after the sheet closes (best-effort).
     setTimeout(() => {
       import('./notes.js?v=20251028').then(({ getNotesCount }) => {
         const node = body.querySelector('[data-pnotes-count]');
@@ -705,21 +687,17 @@ export async function render(root) {
     openMusicPicker(() => paintMusicWidget());
   });
 
-  // Notes count badge.
   import('./notes.js?v=20251028').then(({ getNotesCount }) => {
     const node = body.querySelector('[data-pnotes-count]');
     if (node) node.textContent = String(getNotesCount());
   }).catch(() => {});
 
-  // Profile music widget — shown above the actions list when the user
-  // has chosen a track. Free for everyone (no premium gate).
   const musicHost = body.querySelector('[data-music-host]');
   const paintMusicWidget = () => {
     if (!musicHost) return;
     import('./profile-music.js?v=20251028').then(({ profileMusicWidget, bindMusicWidget }) => {
       musicHost.innerHTML = profileMusicWidget({ isMine: true });
       bindMusicWidget(musicHost, () => {
-        // Re-open the picker so the user can change the track.
         import('./profile-music.js?v=20251028').then(({ openMusicPicker }) => {
           openMusicPicker(() => paintMusicWidget());
         });
@@ -764,7 +742,6 @@ export async function render(root) {
     openMoodCalendar({ username: fresh.username });
   });
 
-  // Custom status text under the display name + "Сменить статус" button.
   const paintStatusLine = () => {
     import('./status.js?v=20251028').then(({ getStatus }) => {
       const node = body.querySelector('[data-status-line]');
@@ -785,7 +762,6 @@ export async function render(root) {
     openStatusEditor(() => render(root));
   });
 
-  // Daily challenges — count badge + sheet.
   import('./challenges.js?v=20251028').then(({ todayCompletedCount, todayTotal }) => {
     const node = body.querySelector('[data-challenges-count]');
     if (node) node.textContent = `${todayCompletedCount()}/${todayTotal()}`;
@@ -793,14 +769,12 @@ export async function render(root) {
   body.querySelector('[data-challenges]')?.addEventListener('click', async () => {
     const { openChallenges } = await import('./challenges.js?v=20251028');
     await openChallenges();
-    // Refresh the count badge after closing.
     import('./challenges.js?v=20251028').then(({ todayCompletedCount, todayTotal }) => {
       const node = body.querySelector('[data-challenges-count]');
       if (node) node.textContent = `${todayCompletedCount()}/${todayTotal()}`;
     }).catch(() => {});
   });
 
-  // Profile visitors (local-only) — count badge + sheet.
   import('./visitors.js?v=20251028').then(({ visitorsCount }) => {
     const node = body.querySelector('[data-visitors-count]');
     if (node) node.textContent = String(visitorsCount());
@@ -828,7 +802,6 @@ export async function render(root) {
         if (node) node.textContent = Array.isArray(list) ? list.length : 0;
       } catch {}
     }).catch(() => {});
-    // Render pinned achievement badges near the user's name.
     pinnedAchievements().then((items) => {
       const host = body.querySelector('[data-pinned-achv]');
       if (!host) return;
@@ -1310,9 +1283,6 @@ function openEditor(done) {
     redraw();
   });
 
-  // Bio formatting toolbar: wraps the selected text in **...**, *...*, or
-  // inserts a newline at the cursor. Pure-text helpers — the formatter
-  // in `formatBio` interprets them when the bio is rendered.
   const bioField = body.querySelector('[data-bio]');
   const wrap = (open, close = open) => {
     const start = bioField.selectionStart;
@@ -1661,7 +1631,6 @@ export async function openProfile(username) {
     if (api.recordProfileView && user?.id && state.user?.id !== user.id) {
       api.recordProfileView(user.id).catch(() => {});
     }
-    // Local-only profile visitors log (no server involved).
     if (user?.id && state.user?.id !== user.id) {
       import('./visitors.js?v=20251028').then(({ recordVisit }) => {
         recordVisit(user.id, user.username, user.displayName);
@@ -1736,8 +1705,6 @@ export async function openProfile(username) {
       drawShelf(body, user, false);
     }
 
-    // Profile music widget — read-only. We show their track if the
-    // profile data carries a `music` field; otherwise nothing renders.
     {
       const musicHost = body.querySelector('[data-music-host]');
       if (musicHost) {

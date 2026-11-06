@@ -87,7 +87,6 @@ const REQUIRED_SW_VERSION = 'spokum-v100-halloween';
 
 async function purgeStaleWorker() {
   if (!('serviceWorker' in navigator)) return;
-  // Always unregister — no "once per session" gate. SW caches were breaking updates.
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const reg of registrations) {
@@ -314,16 +313,12 @@ async function boot() {
   applyAppearance(null);
   await detectLogo();
   root.innerHTML = `<div class="auth-wrap"><div class="auth-logo">${logoMark(38)}</div></div>`;
-  // Service Worker disabled — it was caching stale JS files and users couldn't see updates.
   purgeStaleWorker();
-  // Nuclear option: aggressively nuke any AI chat button that might appear from stale cache.
-  // This runs continuously and removes [data-ai-chat] from the DOM if it ever shows up.
   const nukeAI = () => {
     document.querySelectorAll('[data-ai-chat]').forEach((el) => el.remove());
   };
   nukeAI();
   setInterval(nukeAI, 1000);
-  // Also nuke when DOM changes
   new MutationObserver(nukeAI).observe(document.body, { childList: true, subtree: true });
   watchNetwork();
   watchSwipes();
@@ -334,12 +329,7 @@ async function boot() {
     setInterval(() => module.applyNight?.(), 300000);
   }).catch(() => {});
   await waitForBackend();
-  // If remote server is unreachable, fall back to local mode silently instead
-  // of showing "База не отвечает" — the app works fully offline.
-  // Only show the error screen if we're truly stuck (no local mode either).
   if (remoteConfigured() && navigator.onLine && api.mode === 'local') {
-    // Server unreachable but local mode is active — continue to auth/feed.
-    // Don't block the user with an error screen.
   }
   let fromCache = false;
   try {
@@ -386,15 +376,12 @@ async function boot() {
   start();
   announcePremium(state.user);
   checkPixelBattle();
-  // Уведомление о письмах из прошлого, чей срок открыть наступил.
   import('./views/future-letter.js?v=20251028')
     .then(({ notifyFutureLetters }) => notifyFutureLetters())
     .catch(() => {});
 }
 
 function checkPixelBattle() {
-  // Pixel battle is a beta feature — only show the banner to beta testers
-  // (@silver, @ulquiorra_cifer, admin-flagged isBeta users).
   if (!isBeta(state.user)) return;
   if (!api.activePixelBattle) return;
   api.activePixelBattle().then((battle) => {
@@ -605,8 +592,6 @@ function connectSocket() {
   };
 }
 
-// In-app update bar removed for RuStore compliance (policy 8.5).
-// Updates are delivered through the store, not in-app.
 
 document.addEventListener('click', (event) => {
   const badge = event.target.closest?.('[data-badge]');
@@ -634,7 +619,6 @@ document.addEventListener('click', async (event) => {
 window.addEventListener('spokum:message', (event) => {
   unreadAt = Date.now();
   refreshUnread();
-  // Native notification on Android
   try {
     if (window.SpokumHost?.showNotification && document.hidden) {
       const msg = event.detail;
@@ -651,7 +635,6 @@ window.addEventListener('spokum:notify', async (event) => {
   const item = event.detail || {};
   if (!bell.markShown(item.id)) return;
   bell.bumpBell();
-  // Native notification on Android
   try {
     if (window.SpokumHost?.showNotification) {
       window.SpokumHost.showNotification(item.title || 'СпокУм', item.body || '');

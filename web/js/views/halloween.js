@@ -22,8 +22,6 @@ const KEYS = {
   bestBrew: 'spokum.halloween.best.witchBrew'
 };
 
-// Apply pending admin grants for the current user (queued by admins in localStorage).
-// Called when the Halloween view opens so granted rewards show up immediately.
 function applyHalloweenPending() {
   try {
     const pending = JSON.parse(localStorage.getItem('spokum.halloween.pending') || '{}');
@@ -58,7 +56,6 @@ function applyHalloweenPending() {
     delete pending['self'];
     localStorage.setItem('spokum.halloween.pending', JSON.stringify(pending));
     if (granted.length) {
-      // Defer toast so the UI is ready
       setTimeout(() => {
         try {
           import('../ui.js?v=20251028').then(({ toast }) =>
@@ -259,11 +256,9 @@ function pumpkinCatch(canvas, report) {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, cw, ch);
 
-        // stars
         ctx.fillStyle = 'rgba(255,200,140,.45)';
         for (const st of stars) ctx.fillRect(st.x * cw, (st.y * ch) % ch, st.s, st.s);
 
-        // moon
         ctx.fillStyle = 'rgba(255,180,90,.18)';
         ctx.beginPath(); ctx.arc(cw - 36, 40, 26, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#ffcf80';
@@ -273,7 +268,6 @@ function pumpkinCatch(canvas, report) {
         ctx.save();
         ctx.translate(shakeX, 0);
 
-        // falling pumpkins
         for (const it of s.items) {
           const px = it.x * cw, py = it.y * ch, r = it.r * cw;
           ctx.save();
@@ -286,7 +280,6 @@ function pumpkinCatch(canvas, report) {
           ctx.beginPath(); ctx.ellipse(r * 0.4, 0, r * 0.35, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = '#2c7a3c';
           ctx.fillRect(-1.5, -r * 0.95, 3, r * 0.4);
-          // glowing eyes/mouth
           ctx.fillStyle = '#fff3a0';
           ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.1, r * 0.12, 0, Math.PI * 2); ctx.fill();
           ctx.beginPath(); ctx.arc(r * 0.3, -r * 0.1, r * 0.12, 0, Math.PI * 2); ctx.fill();
@@ -300,7 +293,6 @@ function pumpkinCatch(canvas, report) {
           ctx.restore();
         }
 
-        // sparks
         for (const p of s.sparks) {
           ctx.globalAlpha = Math.max(0, p.life * 2);
           ctx.fillStyle = p.color;
@@ -308,7 +300,6 @@ function pumpkinCatch(canvas, report) {
         }
         ctx.globalAlpha = 1;
 
-        // basket
         const bx = s.x * cw, by = 0.86 * ch;
         ctx.fillStyle = '#8b5a2b';
         ctx.beginPath();
@@ -326,7 +317,6 @@ function pumpkinCatch(canvas, report) {
 
         ctx.restore();
 
-        // HUD
         ctx.fillStyle = 'rgba(255,200,120,.92)';
         ctx.font = '600 15px Inter, system-ui, sans-serif';
         ctx.textAlign = 'left';
@@ -334,7 +324,6 @@ function pumpkinCatch(canvas, report) {
         ctx.fillStyle = s.miss >= 2 ? '#ff6060' : 'rgba(255,200,120,.7)';
         ctx.fillText(`Промахи: ${s.miss}/3`, 14, 48);
 
-        // lives hearts
         for (let i = 0; i < 3; i++) {
           ctx.fillStyle = i < (3 - s.miss) ? '#ff6b3d' : 'rgba(255,107,61,.25)';
           ctx.beginPath();
@@ -402,7 +391,6 @@ function ghostHunt(canvas, report) {
             return true;
           });
           if (!hit) {
-            // miss puff
             for (let i = 0; i < 6; i++) s.sparkles.push({ x: x * width, y: y * height, vx: (Math.random() - 0.5) * 100, vy: (Math.random() - 0.5) * 100, life: 0.3, color: 'rgba(180,180,200,.6)' });
           }
         });
@@ -436,7 +424,6 @@ function ghostHunt(canvas, report) {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, cw, ch);
 
-        // twinkling stars
         const t = performance.now() / 1000;
         for (const st of stars) {
           const a = 0.3 + Math.sin(t * 2 + st.b * 6) * 0.3;
@@ -444,15 +431,12 @@ function ghostHunt(canvas, report) {
           ctx.fillRect(st.x * cw, st.y * ch, st.s, st.s);
         }
 
-        // ghosts
         for (const g of s.ghosts) {
           const gx = g.x * cw, gy = g.y * ch, r = g.r * cw;
           const alpha = Math.min(1, g.life) * (g.life < 0.5 ? g.life * 2 : 1);
           ctx.globalAlpha = alpha;
-          // glow
           ctx.fillStyle = g.color + '33';
           ctx.beginPath(); ctx.arc(gx, gy, r * 1.6, 0, Math.PI * 2); ctx.fill();
-          // body
           ctx.fillStyle = g.color;
           ctx.beginPath();
           ctx.arc(gx, gy - r * 0.3, r, Math.PI, 0);
@@ -462,14 +446,12 @@ function ghostHunt(canvas, report) {
           }
           ctx.closePath();
           ctx.fill();
-          // eyes
           ctx.fillStyle = '#1a0a1f';
           ctx.beginPath(); ctx.arc(gx - r * 0.3, gy - r * 0.3, r * 0.13, 0, Math.PI * 2); ctx.fill();
           ctx.beginPath(); ctx.arc(gx + r * 0.3, gy - r * 0.3, r * 0.13, 0, Math.PI * 2); ctx.fill();
           ctx.globalAlpha = 1;
         }
 
-        // sparkles
         for (const p of s.sparkles) {
           ctx.globalAlpha = Math.max(0, p.life * 2);
           ctx.fillStyle = p.color;
@@ -477,13 +459,11 @@ function ghostHunt(canvas, report) {
         }
         ctx.globalAlpha = 1;
 
-        // HUD
         ctx.fillStyle = 'rgba(220,200,255,.92)';
         ctx.font = '600 15px Inter, system-ui, sans-serif';
         ctx.textAlign = 'left';
         ctx.fillText(`Призраков: ${s.score}`, 14, 26);
 
-        // timer bar
         const barW = cw - 28;
         ctx.fillStyle = 'rgba(255,255,255,.12)';
         ctx.fillRect(14, 38, barW, 6);
@@ -553,10 +533,8 @@ function witchBrew(canvas, report) {
           const p = e.touches?.[0] || e;
           const x = (p.clientX - r.left) / r.width;
           const y = (p.clientY - r.top) / r.height;
-          // 2x2 grid of cauldrons
           const col = x < 0.5 ? 0 : 1;
           const row = y < 0.55 ? 0 : 1;
-          // only count if inside grid area
           if (y < 0.42 || y > 0.92) return;
           const idx = row * 2 + col;
           s.flash = idx;
@@ -605,7 +583,6 @@ function witchBrew(canvas, report) {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, cw, ch);
 
-        // title area
         ctx.fillStyle = 'rgba(220,180,255,.85)';
         ctx.font = '700 16px Inter, system-ui, sans-serif';
         ctx.textAlign = 'center';
@@ -614,7 +591,6 @@ function witchBrew(canvas, report) {
         ctx.fillStyle = 'rgba(220,180,255,.55)';
         ctx.fillText(`Раунд ${s.round}`, cw / 2, 52);
 
-        // 2x2 grid of cauldrons (top: 0.42 - 0.92)
         const cellW = cw / 2;
         const cellH = (ch * 0.5) / 2;
         for (let i = 0; i < 4; i++) {
@@ -624,28 +600,22 @@ function witchBrew(canvas, report) {
           const cy = ch * 0.42 + row * cellH + cellH / 2;
           const lit = s.flash === i;
           const r = Math.min(cellW, cellH) * 0.32;
-          // glow
           if (lit) {
             ctx.fillStyle = POTS[i].color + '44';
             ctx.beginPath(); ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2); ctx.fill();
           }
-          // cauldron body
           ctx.fillStyle = '#1a1020';
           ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.4, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
-          // brew liquid
           ctx.fillStyle = lit ? POTS[i].color : POTS[i].color + '88';
           ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.85, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-          // rim
           ctx.strokeStyle = lit ? '#fff' : 'rgba(255,255,255,.3)';
           ctx.lineWidth = lit ? 3 : 1.5;
           ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.85, r * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
-          // legs
           ctx.fillStyle = '#1a1020';
           ctx.fillRect(cx - r * 0.6, cy + r * 0.6, 4, r * 0.4);
           ctx.fillRect(cx + r * 0.6 - 4, cy + r * 0.6, 4, r * 0.4);
         }
 
-        // bubbles
         for (const b of s.bubble) {
           ctx.globalAlpha = Math.max(0, b.life);
           ctx.fillStyle = b.color;
@@ -653,7 +623,6 @@ function witchBrew(canvas, report) {
         }
         ctx.globalAlpha = 1;
 
-        // sequence progress dots
         if (!s.showing && s.seq.length) {
           const total = s.seq.length;
           const done = s.input.length;
@@ -734,7 +703,6 @@ function paintStats(view) {
       <div class="hw-stat-num" data-num style="color:${st.color}">${st.value}</div>
       <div class="hw-stat-label">${esc(st.label)}</div>
     </div>`).join('');
-  // animated count-up
   box.querySelectorAll('[data-num]').forEach((node, i) => {
     const target = stats[i].value;
     if (target <= 0) return;
@@ -769,7 +737,6 @@ function paintReward(view) {
     btn.classList.remove('hw-claimed');
     btn.innerHTML = `${icon('pumpkin', 26)} Получить награду`;
   }
-  // countdown to next midnight
   const update = () => {
     if (!view.isConnected) return;
     count.textContent = 'Следующая через ' + fmtHMS(msToMidnight());
@@ -872,7 +839,6 @@ function paintShop(view) {
       const id = btn.dataset.buy;
       const item = SHOP.find((x) => x.id === id);
       if (!item) return;
-      // Re-read owned & candies fresh — they may have changed since render.
       const ownedNow = readArr(KEYS.owned);
       if (ownedNow.includes(id)) {
         toast('Уже куплено', 'err');
@@ -884,20 +850,17 @@ function paintShop(view) {
         toast('Не хватает конфет', 'err');
         return;
       }
-      // Deduct candies and grant the item.
       writeNum(KEYS.candies, candiesNow - item.price);
       ownedNow.push(id);
       writeArr(KEYS.owned, ownedNow);
       toast('Куплено: ' + item.name);
       confettiBurst(view);
-      // Re-render shop + stats + owned items list.
       paintShop(view);
       paintStats(view);
       paintReward(view);
       paintOwned(view);
     };
   });
-  // Also refresh the owned-items list whenever the shop is repainted.
   paintOwned(view);
 }
 
@@ -973,7 +936,6 @@ function paintGames(view) {
       let handle = null;
       let granted = -1; // last score we already paid out, to avoid double-granting
 
-      // inline play: mount directly on the embedded canvas
       btn.disabled = true;
       btn.innerHTML = `${icon('pause', 16)} В игре`;
       card.classList.add('playing');
@@ -985,7 +947,6 @@ function paintGames(view) {
           if (bestBox) bestBox.textContent = best;
           toast('Новый рекорд: ' + best);
         }
-        // only pay once per score value (game-over reports, then stop may re-report)
         if (score <= 0 || score === granted) return;
         granted = score;
         const r = g.reward(score);
@@ -998,22 +959,16 @@ function paintGames(view) {
         if (force) { /* reserved for future use */ }
       };
 
-      // stop any existing handle (shouldn't happen — card is re-rendered on stop)
       if (handle) handle.stop();
-      // canvas size is handled by fitCanvas() inside runner() — it reads
-      // the CSS dimensions (width:100%; height:400px from .hw-canvas)
       handle = g.mount(canvas, report);
 
-      // change button to stop
       btn.innerHTML = `${icon('close', 16)} Завершить`;
       btn.disabled = false;
       btn.onclick = () => {
         const sc = handle ? handle.score() : 0;
         handle?.stop();
         handle = null;
-        // pay out the current score if the game didn't already (e.g. user stopped mid-game)
         if (sc > 0) report(sc);
-        // re-render game card (reset)
         paintGames(view);
         paintStats(view);
         paintLeaderboard(view);
@@ -1054,11 +1009,8 @@ function openLocked(reason) {
 export function openHalloween() {
   const user = state.user;
   if (!user) return openLocked('Нужен вход для участия. Войдите, чтобы открыть ивент.');
-  // Halloween is currently in beta — only @silver, @ulquiorra_cifer, and admin-flagged
-  // beta users can open it.
   if (!isBeta(user)) return openLocked('Ивент пока открыт только бета-тестерам. Скоро будет у всех.');
 
-  // Apply any pending admin grants before showing the event
   applyHalloweenPending();
 
   const view = el(`
@@ -1139,7 +1091,6 @@ export function openHalloween() {
   document.body.style.overflow = 'hidden';
   spawnFloatingDecor(view);
 
-  // back button
   const close = () => {
     if (view._rewardTimer) clearInterval(view._rewardTimer);
     view.remove();
@@ -1147,7 +1098,6 @@ export function openHalloween() {
   };
   view.querySelector('[data-back]').onclick = close;
 
-  // render all sections
   paintStats(view);
   paintReward(view);
   paintGames(view);
@@ -1156,7 +1106,6 @@ export function openHalloween() {
   paintShop(view);
   paintOwned(view);
 
-  // Trick-or-Treat claim
   const claimBtn = view.querySelector('[data-claim]');
   claimBtn.onclick = () => {
     const last = Number(localStorage.getItem(KEYS.lastReward) || 0);

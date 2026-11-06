@@ -15,8 +15,6 @@ import { openSheet, emptyState } from '../ui.js';
 
 const MOOD_KEYS = Object.keys(MOODS);
 
-// Псевдослучайный, но детерминированный сдвиг точки внутри сектора, чтобы
-// точки не накладывались друг на друга и не прыгали при перерисовке.
 function seedOffset(seed) {
   const a = Math.sin(seed * 9301 + 49297) * 233280;
   const b = Math.sin(seed * 12345 + 67890) * 198491;
@@ -55,7 +53,6 @@ function drawMap(canvas, users, hoverId) {
   const radius = Math.min(cx, cy) - 28;
   const innerRadius = radius * 0.42;
 
-  // Разметка секторов и радиальных линий
   ctx.strokeStyle = 'rgba(255,255,255,.07)';
   ctx.lineWidth = 1;
   for (let i = 0; i < MOOD_KEYS.length; i++) {
@@ -65,18 +62,15 @@ function drawMap(canvas, users, hoverId) {
     ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
     ctx.stroke();
   }
-  // Внешний круг
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,.12)';
   ctx.stroke();
-  // Внутренний круг
   ctx.beginPath();
   ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,.08)';
   ctx.stroke();
 
-  // Метки настроений по кругу
   ctx.font = '600 10px Inter, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -89,13 +83,11 @@ function drawMap(canvas, users, hoverId) {
     ctx.fillText(mood.label, lx, ly);
   }
 
-  // Точки пользователей
   const points = [];
   users.forEach((u, index) => {
     const moodKey = u?.mood && MOODS[u.mood] ? u.mood : 'calm';
     const moodIndex = MOOD_KEYS.indexOf(moodKey);
     const baseAngle = (moodIndex / MOOD_KEYS.length) * Math.PI * 2 - Math.PI / 2;
-    // Сектор занимает 1/n круга; распределяем точки внутри сектора
     const sectorWidth = (Math.PI * 2) / MOOD_KEYS.length;
     const [offA, offR] = seedOffset(Number(u.id) || index + 1);
     const angle = baseAngle + offA * sectorWidth * 0.8;
@@ -108,14 +100,12 @@ function drawMap(canvas, users, hoverId) {
     const dotR = isHover ? baseR + 2 : baseR;
     const mood = MOODS[moodKey];
 
-    // Подсветка под точкой при наведении
     if (isHover) {
       ctx.beginPath();
       ctx.arc(x, y, dotR + 5, 0, Math.PI * 2);
       ctx.fillStyle = mood.ink + '33';
       ctx.fill();
     }
-    // Сама точка
     ctx.beginPath();
     ctx.arc(x, y, dotR, 0, Math.PI * 2);
     ctx.fillStyle = mood.ink;
@@ -130,10 +120,8 @@ function drawMap(canvas, users, hoverId) {
     points.push({ id: u.id, x, y, r: dotR + 4, user: u });
   });
 
-  // Центр — преобладающее настроение
   const dom = dominantMood(users);
   const domMood = MOODS[dom.mood];
-  // Маленький кружок-пульс
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerRadius);
   grad.addColorStop(0, domMood.ink + 'cc');
   grad.addColorStop(1, domMood.ink + '00');
@@ -141,7 +129,6 @@ function drawMap(canvas, users, hoverId) {
   ctx.beginPath();
   ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2);
   ctx.fill();
-  // Текст в центре
   ctx.fillStyle = '#ffffff';
   ctx.font = '600 11px Inter, system-ui, sans-serif';
   ctx.fillText('СЕТЬ', cx, cy - 16);
@@ -168,7 +155,6 @@ function legendHtml() {
 }
 
 async function fetchUsers() {
-  // Сначала пробуем админский список (полный), затем поиск (до 40).
   try {
     if (api.adminUsers && state.user?.isAdmin) {
       const result = await api.adminUsers('');
@@ -221,15 +207,12 @@ export async function openMoodMap() {
     const canvas = body.querySelector('[data-canvas]');
     const tip = body.querySelector('[data-tip]');
 
-    // Подбираем высоту canvas под ширину (квадрат)
     const resize = () => {
       const w = canvas.clientWidth || 300;
       canvas.style.height = w + 'px';
       draw();
     };
     resize();
-    // На случай, когда layout ещё не устоялся в момент вставки (sheet
-    // анимируется), перерисуем на следующем кадре.
     requestAnimationFrame(resize);
     resizeHandler = resize;
     window.addEventListener('resize', resize);

@@ -3,10 +3,6 @@ import { el, esc, debounce } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, emptyState, avatar } from '../ui.js';
 
-// Friends sheet — tabs "Друзья" / "Заявки", a search bar to find new people,
-// and the per-row actions ("Написать" / "Удалить из друзей" / "Принять" / "Отклонить"
-// / "Добавить в друзья"). Backed by api.listFriends / friendRequest / acceptFriend
-// / declineFriend / removeFriend (added to both local.js and remote-db.js).
 
 const TAB_FRIENDS = 'friends';
 const TAB_REQUESTS = 'requests';
@@ -150,7 +146,6 @@ export async function openFriends() {
         b.onclick = () => { tab = b.dataset.tab; host.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('on', x === b)); paintPane(); };
       });
 
-      // Search-to-add flow: debounced lookup, rows offer "Добавить в друзья".
       const findInput = host.querySelector('[data-find]');
       const findResults = host.querySelector('[data-find-results]');
       const drawResults = async () => {

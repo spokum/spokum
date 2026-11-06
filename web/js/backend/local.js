@@ -70,8 +70,6 @@ function save() {
   }
 }
 
-// Groups live in their own localStorage key so they survive main DB resets
-// and stay lightweight. Each group: { id, name, hue, ownerId, memberIds: [] }.
 function loadGroups() {
   try {
     const raw = localStorage.getItem(GROUPS_KEY);
@@ -89,15 +87,6 @@ function saveGroups(list) {
   } catch {}
 }
 
-// Friends + per-message emoji reactions live in their own localStorage keys
-// (per spec) so they persist independently of the main spokum.db.v3 blob.
-// Friends store shape:
-//   {
-//     byUser: { [userId]: { friends: [userId], requests: [userId], outgoing: [userId] } },
-//     inbox:  { [toUserId]: [fromUserId, ...] }  // cross-user delivery in same browser
-//   }
-// The per-user shape (`{ friends, requests }`) follows the spec; the outer
-// byUser/inbox wrapping lets multiple local-mode accounts share one browser.
 const FRIENDS_KEY = 'spokum.friends';
 const MSG_REACT_KEY = 'spokum.messageReactions';
 
@@ -128,7 +117,6 @@ function userFriendsEntry(data, userId) {
 }
 
 function syncFriendInbox(data, userId) {
-  // Pull pending incoming requests from the inbox into `requests` (deduped).
   const entry = userFriendsEntry(data, userId);
   const incoming = data.inbox[String(userId)] || [];
   const merged = Array.from(new Set([...entry.requests, ...incoming].map(String)));
@@ -236,10 +224,6 @@ function normalizePins(value) {
     .slice(0, 4);
 }
 
-// Social links on a profile: Telegram, TikTok, VK. Stored as a small map
-// of platform -> handle/URL. We keep the value as the user typed it (a
-// bare @handle, a URL, or a phone number for Telegram) and let the UI
-// decide how to render the link.
 function normalizeSocialLinks(value) {
   if (!value || typeof value !== 'object') return null;
   const out = {};
@@ -295,11 +279,9 @@ export const GIFT_TYPES = [
   { id: 'maple', title: 'Кленовый лист', price: 130, rarity: 'rare', art: 'maple', hue: 18, season: 'autumn' },
   { id: 'plaid', title: 'Тёплый плед', price: 260, rarity: 'epic', art: 'plaid', hue: 8, season: 'autumn' },
   { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' },
-  // Новые лимитированные подарки (чистые версии — заменяют "LIMITED: ..." из удалённой БД)
   { id: 'phoenix', title: 'Феникс', price: 2500, rarity: 'legend', art: 'phoenix', hue: 18, isLimited: true },
   { id: 'dragon', title: 'Дракон', price: 2200, rarity: 'legend', art: 'dragon', hue: 280, isLimited: true },
   { id: 'unicorn', title: 'Единорог', price: 1800, rarity: 'legend', art: 'unicorn', hue: 320, isLimited: true },
-  // Новые подарки (не дублируют remote)
   { id: 'rose', title: 'Алая роза', price: 650, rarity: 'epic', art: 'rose', hue: 350, isLimited: true },
   { id: 'trophy', title: 'Кубок', price: 1000, rarity: 'legend', art: 'trophy', hue: 45 },
   { id: 'hourglass', title: 'Песочные часы', price: 550, rarity: 'epic', art: 'hourglass', hue: 40 },
@@ -307,12 +289,10 @@ export const GIFT_TYPES = [
   { id: 'cat', title: 'Котик', price: 240, rarity: 'rare', art: 'cat', hue: 30 },
   { id: 'candy', title: 'Конфета', price: 50, rarity: 'common', art: 'candy', hue: 320 },
   { id: 'heart_hands', title: 'Руки с сердцем', price: 340, rarity: 'rare', art: 'heart_hands', hue: 350, isLimited: true },
-  // Новые LIMITED зимние подарки
   { id: 'icicle', title: 'Сосулька', price: 800, rarity: 'legend', art: 'crystal', hue: 190, isLimited: true },
   { id: 'snow_queen', title: 'Снежная королева', price: 1500, rarity: 'legend', art: 'crown', hue: 200, isLimited: true },
   { id: 'frost_dragon', title: 'Морозный дракон', price: 2000, rarity: 'legend', art: 'dragon', hue: 180, isLimited: true },
   { id: 'winter_rose', title: 'Зимняя роза', price: 700, rarity: 'epic', art: 'rose', hue: 340, isLimited: true },
-  // Сезонные зимние подарки (видны только зимой)
   { id: 'snowball', title: 'Снежок', price: 30, rarity: 'common', art: 'star', hue: 200, season: 'winter' },
   { id: 'hot_cocoa', title: 'Горячий какао', price: 80, rarity: 'common', art: 'cup', hue: 26, season: 'winter' },
   { id: 'mitten', title: 'Варежка', price: 120, rarity: 'rare', art: 'heart_hands', hue: 350, season: 'winter' },
@@ -841,8 +821,6 @@ export const local = {
     if (patch.statusIcon !== undefined) user.statusIcon = patch.statusIcon;
     if (patch.socialLinks !== undefined) user.socialLinks = normalizeSocialLinks(patch.socialLinks);
     if (patch.music !== undefined) {
-      // Profile music: { url, name } | null. Stored on the user so other
-      // people who open the profile can hear it too.
       if (patch.music == null) user.music = null;
       else if (typeof patch.music === 'object' && patch.music.url) {
         user.music = { url: String(patch.music.url).slice(0, 2000), name: String(patch.music.name || 'Без названия').slice(0, 80) };
@@ -986,10 +964,6 @@ export const local = {
     };
   },
 
-  // Channels are chats with kind='channel'. We search by title (case-
-  // insensitive substring). Returns up to 30 matches with member counts
-  // and a `joined` flag for the current viewer so the UI can render the
-  // right follow button.
   async searchChannels(query) {
     const q = String(query || '').toLowerCase().trim();
     const viewer = me();
@@ -1018,9 +992,6 @@ export const local = {
     return { channels };
   },
 
-  // Recommended channels for the Chats view "Каналы" section. Returns the
-  // top 10 channels by member count (so the user sees the busiest rooms
-  // first). The viewer's joined channels come first.
   async recommendedChannels() {
     const viewer = me();
     const viewerId = viewer?.id || null;
@@ -1047,8 +1018,6 @@ export const local = {
     return { channels };
   },
 
-  // Subscribe / unsubscribe to a channel. In local mode this is the same
-  // as joining/leaving the underlying chat.
   async followChannel(id) {
     const user = need();
     const chat = state.chats.find((c) => c.id === id && c.kind === 'channel');
@@ -2176,10 +2145,6 @@ export const local = {
     return { ok: true, coins: target.coins };
   },
 
-  // ── Halloween admin grants ──────────────────────────────────────────────
-  // Halloween stats are stored per-user in localStorage on their device.
-  // Admin can grant to themselves (local mode) — for other users, we record
-  // a pending grant that gets applied when they next load the app.
   async adminGrantHalloween(userId, kind, amount) {
     needAdmin();
     if (!['pumpkins', 'candies', 'ghosts'].includes(kind)) fail('Неизвестный тип награды');
@@ -2209,10 +2174,6 @@ export const local = {
     return { ok: true };
   },
 
-  // ── Winter admin grants ────────────────────────────────────────────────
-  // Same shape as Halloween grants, but for `spokum.winter.*` keys. The
-  // Winter event view (js/views/winter.js) reads `spokum.winter.pending`
-  // and applies grants to the current user on next load.
   async adminGrantWinter(userId, kind, amount) {
     needAdmin();
     if (!['snowflakes', 'coins', 'stars'].includes(kind)) fail('Неизвестный тип награды');
@@ -2777,7 +2738,6 @@ export const local = {
       out[row.messageId] = out[row.messageId] || [];
       out[row.messageId].push({ glyph: row.glyph, user: row.userId });
     });
-    // Merge new emoji-based reactions stored in `spokum.messageReactions` (per spec).
     const emojiMap = loadMsgReactions();
     Object.entries(emojiMap).forEach(([mid, users]) => {
       const numId = Number(mid);
@@ -2855,7 +2815,6 @@ export const local = {
     return { post: shapePost(post, viewer?.id) };
   },
 
-  // --- Friends (spec: spokum.friends localStorage) ---
 
   async friendRequest(userId) {
     const user = need();
@@ -2868,7 +2827,6 @@ export const local = {
     if (entry.friends.some((id) => String(id) === String(userId))) fail('Уже в друзьях');
     if (entry.outgoing.some((id) => String(id) === String(userId))) fail('Заявка уже отправлена');
     entry.outgoing.push(Number(userId));
-    // Cross-user delivery in the same browser: drop a request in the target's inbox.
     const tid = String(userId);
     data.inbox[tid] = data.inbox[tid] || [];
     if (!data.inbox[tid].some((id) => String(id) === String(user.id))) {
@@ -2890,7 +2848,6 @@ export const local = {
     data.inbox[String(user.id)] = (data.inbox[String(user.id)] || []).filter(
       (id) => String(id) !== String(userId)
     );
-    // Mirror on the other side so the requester sees them as a friend too.
     const other = userFriendsEntry(data, userId);
     if (!other.friends.some((id) => String(id) === String(user.id))) {
       other.friends.push(user.id);
@@ -2909,7 +2866,6 @@ export const local = {
     data.inbox[String(user.id)] = (data.inbox[String(user.id)] || []).filter(
       (id) => String(id) !== String(userId)
     );
-    // Let the requester send a fresh request later if they want to.
     const other = userFriendsEntry(data, userId);
     other.outgoing = other.outgoing.filter((id) => String(id) !== String(user.id));
     saveFriendsStore(data);
@@ -2921,7 +2877,6 @@ export const local = {
     const data = loadFriendsStore();
     const entry = userFriendsEntry(data, user.id);
     entry.friends = entry.friends.filter((id) => String(id) !== String(userId));
-    // Mirror on the other side too.
     const other = userFriendsEntry(data, userId);
     other.friends = other.friends.filter((id) => String(id) !== String(user.id));
     saveFriendsStore(data);
@@ -3337,7 +3292,6 @@ export const local = {
   },
 
   async grantPremium(id, days, reason) {
-    // Allow self-grant for daily rewards (day 7 bonus)
     const user = need();
     const isAdmin = user.isAdmin;
     const isSelf = String(id) === String(user.id);
@@ -3345,7 +3299,6 @@ export const local = {
     const target = state.users.find((u) => u.id === id);
     if (!target) fail('Пользователь не найден');
     if (!days || days < 1 || days > 365) fail('Срок от 1 до 365 дней');
-    // Non-admins can only grant 1 day to themselves (daily reward)
     if (!isAdmin && (days > 1 || !isSelf)) fail('Нет прав');
     const base = Math.max(target.premiumUntil || 0, Date.now());
     target.premiumUntil = base + days * 86400000;

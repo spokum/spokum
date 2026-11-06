@@ -124,8 +124,6 @@ export function pinnedAchievementIds() {
   return readPins();
 }
 
-// Toggle pin for an achievement. Returns the new pin list.
-// Only unlocked achievements can be pinned; max MAX_PINS.
 export async function toggleAchievementPin(id) {
   if (!id) return readPins();
   const list = readPins();
@@ -135,7 +133,6 @@ export async function toggleAchievementPin(id) {
     writePins(list);
     return list;
   }
-  // Need to verify it's unlocked before pinning.
   const all = achievementsList();
   const item = all.find((a) => a.id === String(id));
   if (!item) return list;
@@ -156,7 +153,6 @@ export async function toggleAchievementPin(id) {
   return list;
 }
 
-// Returns the achievement objects for currently-pinned IDs (only those still unlocked).
 export async function pinnedAchievements() {
   const ids = readPins();
   if (!ids.length) return [];

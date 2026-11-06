@@ -2,10 +2,6 @@ import { el, esc, uid, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, emptyState, confirmSheet } from '../ui.js';
 
-// Письмо в будущее — пишете себе письмо, «запечатываете» его на срок,
-// и оно открывается только когда придёт время. Письма хранятся
-// локально в localStorage.spokum.futureLetters.
-// Формат записи: { id, text, createdAt, openAt, opened }
 
 const KEY = 'spokum.futureLetters';
 const NOTIFIED_KEY = 'spokum.futureLetters.notified';
@@ -48,15 +44,11 @@ function pluralRu(n, one, few, many) {
   return many;
 }
 
-// Проверяет, есть ли «доставленные» письма, которые ещё не показывали.
-// Возвращает массив id писем, готовых к прочтению.
 export function pendingLetters() {
   const now = Date.now();
   return load().filter((l) => !l.opened && l.openAt <= now);
 }
 
-// Вызывается из app.js / профиля при загрузке — показывает тост-уведомление
-// если есть доставленные, но ещё не показанные письма.
 export function notifyFutureLetters() {
   try {
     const ready = pendingLetters();
@@ -184,7 +176,6 @@ function openLetter(letter, done) {
     <button class="btn btn-primary" data-ok>${icon('check', 16)} Хорошо</button>
   </div>`);
   const sheet = openSheet('Письмо из прошлого', body);
-  // Пометить как прочитанное.
   const list = load();
   const idx = list.findIndex((l) => l.id === letter.id);
   if (idx >= 0) { list[idx].opened = true; save(list); }

@@ -2,9 +2,6 @@ import { el, esc, uid, fullDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, openSheet, emptyState, confirmSheet } from '../ui.js';
 
-// Private notes — purely local, never synced to the backend.
-// Shape: { id, text, color, createdAt, updatedAt }
-// Stored in `spokum.notes`.
 
 const KEY = 'spokum.notes';
 
@@ -59,7 +56,6 @@ export function openNotes() {
     if (!filtered.length) {
       list.innerHTML = emptyState('edit', query ? 'Ничего не нашли' : 'Заметок пока нет', query ? 'Попробуйте другой запрос' : 'Нажмите «Новая», чтобы записать мысль');
     } else {
-      // Newest first.
       [...filtered]
         .sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
         .forEach((note) => {
@@ -93,7 +89,6 @@ export function openNotes() {
 
     body.querySelector('[data-query]').addEventListener('input', (event) => {
       query = event.target.value;
-      // Only re-render the list, keep focus in the search box.
       const list2 = body.querySelector('[data-list]');
       const filtered2 = query
         ? load().filter((n) => (n.text || '').toLowerCase().includes(query.toLowerCase()))

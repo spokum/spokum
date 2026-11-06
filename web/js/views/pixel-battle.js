@@ -167,15 +167,10 @@ export async function openPixelBattle() {
 
   setTimeout(() => {
     resizeCanvas();
-    // Choose an initial zoom that gives at least 24px touch targets per cell.
-    // At zoom=1, cs = canvas.width / battle.width (whole battle fits across).
-    // We want cs >= 24, so zoom >= 24 / cs_at_zoom_1.
     const csAtZoom1 = canvas.width / battle.width;
     const minCellPx = isMobile ? 28 : 20; // touch target on mobile, smaller on desktop
     const fitZoomX = minCellPx / csAtZoom1;
-    // Also fit vertically so the whole battle is visible if possible.
     const fitZoomY = (canvas.height / battle.height);
-    // On mobile prefer larger cells (pan around); on desktop try to fit all.
     zoom = isMobile ? fitZoomX : Math.max(1, Math.min(fitZoomX, fitZoomY));
     zoom = Math.max(0.5, Math.min(8, zoom));
     const totalW = battle.width * csAtZoom1 * zoom;

@@ -40,7 +40,6 @@ export function getStatus() {
 export function setStatus(text) {
   const t = String(text || '').slice(0, MAX);
   try { localStorage.setItem(KEY, t); } catch {}
-  // Best-effort server-side persistence (no-op on current backends).
   try {
     import('../store.js?v=20251028').then(({ api }) => {
       if (api && typeof api.updateMe === 'function') {
