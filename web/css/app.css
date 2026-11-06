@@ -3301,3 +3301,51 @@ body.still *::after {
 .bad-ui .auth-logo {
   margin-bottom: 10px;
 }
+.bad-ui [data-call],
+.bad-ui [data-video-call],
+.bad-ui [data-emoji-sticker],
+.bad-ui [data-stickers],
+.bad-ui [data-voice],
+.bad-ui [data-image],
+.bad-ui [data-random-chat],
+.bad-ui .call-btn,
+.bad-ui .chat-call,
+.bad-ui [data-ai-mod],
+.bad-ui [data-rules],
+.bad-ui [data-pin],
+.bad-ui [data-poll],
+.bad-ui .post-poll,
+.bad-ui [data-reactions],
+.bad-ui .react-strip,
+.bad-ui [data-share],
+.bad-ui [data-more-actions],
+.bad-ui .post-menu,
+.bad-ui [data-gift],
+.bad-ui [data-wishlist],
+.bad-ui .hw-view,
+.bad-ui .update-bar,
+.bad-ui #version-stamp {
+  display: none !important;
+}
+.bad-ui .chat-foot {
+  padding: 4px !important;
+}
+.bad-ui .chat-foot .row {
+  gap: 4px !important;
+}
+.bad-ui .chat-input {
+  height: 32px !important;
+  font-size: 13px !important;
+}
+.bad-ui .bubble {
+  font-size: 13px !important;
+  padding: 6px 10px !important;
+  max-width: 80% !important;
+}
+.bad-ui nav {
+  background: #111 !important;
+  border-top: 1px solid #333 !important;
+}
+.bad-ui nav button {
+  font-size: 11px !important;
+}
