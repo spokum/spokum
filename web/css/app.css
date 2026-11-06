@@ -3219,3 +3219,85 @@ body.still *::after {
   .chat-tg .chat-tg-send { width: 38px; height: 38px; }
   .chat-tg .chat-foot .btn-icon { width: 36px; height: 36px; border-radius: 12px; }
 }
+
+.bad-ui * {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+.bad-ui .card {
+  border: 1px solid #444 !important;
+  background: #1a1a1a !important;
+  padding: 10px !important;
+}
+.bad-ui .btn {
+  background: #333 !important;
+  color: #ccc !important;
+  border: 1px solid #555 !important;
+  border-radius: 2px !important;
+}
+.bad-ui .btn-primary {
+  background: #2a5a3a !important;
+  color: #ddd !important;
+}
+.bad-ui .input {
+  background: #111 !important;
+  border: 1px solid #444 !important;
+  border-radius: 2px !important;
+  color: #ccc !important;
+}
+.bad-ui .avatar {
+  border-radius: 2px !important;
+}
+.bad-ui .topbar h1 {
+  font-size: 16px !important;
+}
+.bad-ui .game-card,
+.bad-ui .hw-profile-btn,
+.bad-ui [data-achv],
+.bad-ui [data-challenges],
+.bad-ui [data-moodcal],
+.bad-ui [data-status],
+.bad-ui [data-visitors],
+.bad-ui [data-quiet-hours],
+.bad-ui [data-sounds],
+.bad-ui [data-compliments],
+.bad-ui [data-gratitude],
+.bad-ui [data-daily],
+.bad-ui [data-cards],
+.bad-ui [data-bookmarks],
+.bad-ui [data-future-letter],
+.bad-ui [data-network-mood],
+.bad-ui [data-radio],
+.bad-ui [data-mood-map],
+.bad-ui [data-daily-quote],
+.bad-ui [data-time-capsule],
+.bad-ui [data-voice-rooms],
+.bad-ui [data-mood-chats],
+.bad-ui [data-pnotes],
+.bad-ui [data-gallery],
+.bad-ui [data-profile-music],
+.bad-ui [data-feedback],
+.bad-ui .post-react-row,
+.bad-ui [data-bookmark],
+.bad-ui [data-repost],
+.bad-ui [data-mention],
+.bad-ui .mention-list {
+  display: none !important;
+}
+.bad-ui .post-actions {
+  gap: 8px;
+}
+.bad-ui .post-actions > *:not([data-like]):not([data-comment]) {
+  display: none !important;
+}
+.bad-ui body {
+  font-family: monospace !important;
+}
+.bad-ui .auth-wrap {
+  padding: 20px;
+}
+.bad-ui .auth-logo {
+  margin-bottom: 10px;
+}
