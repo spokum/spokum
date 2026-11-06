@@ -3349,3 +3349,120 @@ body.still *::after {
 .bad-ui nav button {
   font-size: 11px !important;
 }
+
+.bad-ui .card.list-item[data-letters],
+.bad-ui .card.list-item[data-capsule],
+.bad-ui .card.list-item[data-time-capsule],
+.bad-ui .card.list-item[data-future-letter],
+.bad-ui .card.list-item[data-gratitude],
+.bad-ui .card.list-item[data-quests],
+.bad-ui .card.list-item[data-daily],
+.bad-ui .card.list-item[data-tournaments],
+.bad-ui .card.list-item[data-confessions],
+.bad-ui .card.list-item[data-wishlist],
+.bad-ui .card.list-item[data-viewers],
+.bad-ui .card.list-item[data-friends],
+.bad-ui .card.list-item[data-groups],
+.bad-ui .card.list-item[data-wheel],
+.bad-ui .card.list-item[data-leaderboard],
+.bad-ui .card.list-item[data-events],
+.bad-ui .card.list-item[data-pixel],
+.bad-ui .card.list-item[data-widgets],
+.bad-ui .card.list-item[data-shop],
+.bad-ui .card.list-item[data-recap],
+.bad-ui .card.list-item[data-card],
+.bad-ui .card.list-item[data-cards],
+.bad-ui .card.list-item[data-bookmarks],
+.bad-ui .card.list-item[data-appeals],
+.bad-ui .card.list-item[data-invite],
+.bad-ui .card.list-item[data-mood-map],
+.bad-ui .card.list-item[data-network-mood],
+.bad-ui .card.list-item[data-radio],
+.bad-ui .card.list-item[data-daily-quote],
+.bad-ui .card.list-item[data-pnotes],
+.bad-ui .card.list-item[data-gallery],
+.bad-ui .card.list-item[data-profile-music],
+.bad-ui .card.list-item[data-voice-rooms],
+.bad-ui .card.list-item[data-mood-chats],
+.bad-ui .btn[data-mood],
+.bad-ui .btn[data-safe],
+.bad-ui .btn[data-journal],
+.bad-ui .btn[data-moodcal],
+.bad-ui .btn[data-status],
+.bad-ui .btn[data-challenges],
+.bad-ui .btn[data-visitors],
+.bad-ui .btn[data-story],
+.bad-ui .btn[data-my-story],
+.bad-ui .btn[data-friends],
+.bad-ui .btn[data-groups],
+.bad-ui .btn[data-share],
+.bad-ui .hw-profile-btn {
+  display: none !important;
+}
+
+.bad-ui .card.list-item[data-admin],
+.bad-ui .card.list-item[data-mod],
+.bad-ui .card.list-item[data-gifts],
+.bad-ui .card.list-item[data-wallet],
+.bad-ui .card.list-item[data-feedback],
+.bad-ui .card.list-item[data-friends] {
+  display: flex !important;
+}
+
+.bad-ui .btn[data-edit-2] {
+  display: inline-flex !important;
+}
+
+.bad-ui body {
+  font-family: 'Courier New', monospace !important;
+  background: #0a0a0a !important;
+  color: #888 !important;
+}
+.bad-ui .card {
+  background: #111 !important;
+  border: 1px solid #2a2a2a !important;
+}
+.bad-ui .strong {
+  color: #aaa !important;
+}
+.bad-ui h1 {
+  color: #777 !important;
+  font-size: 15px !important;
+}
+.bad-ui .topbar {
+  border-bottom: 1px solid #222 !important;
+}
+.bad-ui nav {
+  background: #0a0a0a !important;
+  border-top: 1px solid #222 !important;
+}
+.bad-ui nav button {
+  color: #555 !important;
+}
+.bad-ui nav button.active {
+  color: #888 !important;
+}
+.bad-ui .input {
+  background: #0a0a0a !important;
+  border: 1px solid #333 !important;
+  color: #777 !important;
+}
+.bad-ui .btn {
+  background: #1a1a1a !important;
+  color: #666 !important;
+  border: 1px solid #333 !important;
+}
+.bad-ui .btn-primary {
+  background: #1a2a1a !important;
+  color: #6a8a6a !important;
+  border: 1px solid #2a4a2a !important;
+}
+.bad-ui .bubble {
+  background: #141414 !important;
+  border: 1px solid #222 !important;
+  color: #777 !important;
+}
+.bad-ui .avatar {
+  border-radius: 0 !important;
+  filter: grayscale(50%) !important;
+}
