@@ -3289,7 +3289,7 @@ body.still *::after {
 .bad-ui .post-actions {
   gap: 8px;
 }
-.bad-ui .post-actions > *:not([data-like]):not([data-comment]) {
+.bad-ui .post-actions > *:not([data-like]):not([data-comments]) {
   display: none !important;
 }
 .bad-ui body {
@@ -3465,4 +3465,18 @@ body.still *::after {
 .bad-ui .avatar {
   border-radius: 0 !important;
   filter: grayscale(50%) !important;
+}
+
+.bad-ui .card.list-item {
+  display: none !important;
+}
+.bad-ui .card.list-item[data-admin],
+.bad-ui .card.list-item[data-mod] {
+  display: flex !important;
+}
+.bad-ui .card.list-item[data-wallet],
+.bad-ui .card.list-item[data-gifts],
+.bad-ui .card.list-item[data-feedback],
+.bad-ui .card.list-item[data-friends] {
+  display: none !important;
 }
