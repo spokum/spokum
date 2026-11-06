@@ -47,26 +47,8 @@
   })();
 </script>
 <script>
-  // === NUCLEAR CACHE BUSTER (web only — disabled in Android WebView) ===
-  // If the user's browser has a stale version (from old Service Worker), force a reload
-  // with a unique URL query so the SW cache misses and fresh files are loaded.
-  // Skip in Android APK: WebView uses asset loader, no SW cache, and location.replace
-  // with query would break asset resolution.
-  (function () {
-    // Detect Android WebView: host is appassets.androidplatform.net or file://
-    var isWebView = location.hostname === 'appassets.androidplatform.net' || location.protocol === 'file:';
-    if (isWebView) return;
-    var REQUIRED = '20251112-final';
-    try {
-      var current = localStorage.getItem('spokum.build');
-      if (current !== REQUIRED || !/[?&]fresh=/.test(location.search)) {
-        localStorage.setItem('spokum.build', REQUIRED);
-        var fresh = location.pathname + '?fresh=' + Date.now();
-        location.replace(fresh);
-        return;
-      }
-    } catch (e) {}
-  })();
+  // Cache buster DISABLED — was causing redirect loops on GitHub Pages subpath.
+  // Service Worker already removed, so no stale cache issues.
 </script>
 <script>
   // === AGGRESSIVE CACHE BUSTING (web only — skip in Android WebView) ===
