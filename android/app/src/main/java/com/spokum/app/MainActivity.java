@@ -90,7 +90,6 @@ public class MainActivity extends AppCompatActivity {
     webView.setBackgroundColor(0xFF101318);
     webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
-    // Auto-subscribe to FCM topic so push notifications reach this device
     try {
       com.google.firebase.messaging.FirebaseMessaging.getInstance()
         .subscribeToTopic("spokum_all")
@@ -105,8 +104,6 @@ public class MainActivity extends AppCompatActivity {
       android.util.Log.w("Spokum", "FCM subscribe error: " + e.getMessage());
     }
 
-    // Load exclusively from bundled assets. No in-app updates (RuStore policy 8.5).
-    // Clear any previously-downloaded update folder so it never overrides assets.
     File legacyUpdates = new File(getFilesDir(), "web");
     if (legacyUpdates.exists()) {
       deleteTree(legacyUpdates);
@@ -143,8 +140,6 @@ public class MainActivity extends AppCompatActivity {
       public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
         Uri url = request.getUrl();
         String path = url.getPath();
-        // Internal HTML pages (privacy, offer, consent) — load with /www/ prefix
-        // because assets are in assets/www/ but links point to /privacy.html etc.
         if (path != null && (path.endsWith("privacy.html") || path.endsWith("offer.html") || path.endsWith("consent.html"))) {
           String newUrl = "https://appassets.androidplatform.net/www" + path;
           webView.loadUrl(newUrl);
@@ -153,7 +148,6 @@ public class MainActivity extends AppCompatActivity {
         if ("appassets.androidplatform.net".equals(url.getHost())) {
           return false;
         }
-        // External links — open in browser
         try {
           startActivity(new Intent(Intent.ACTION_VIEW, url));
         } catch (Exception ignored) {
@@ -233,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
                 .build();
             mgr.notify((int) System.currentTimeMillis(), n);
           } catch (Exception e) {
-            // ignore
           }
         });
       }
@@ -310,9 +303,6 @@ public class MainActivity extends AppCompatActivity {
       webView.loadUrl("https://appassets.androidplatform.net/www/index.html");
     }
 
-    // No auto-update mechanism. The app loads exclusively from bundled assets.
-    // Updates are delivered through RuStore (new APK versions), not in-app.
-    // This complies with RuStore moderation policy 8.5.
   }
 
   private void deleteTree(File file) {

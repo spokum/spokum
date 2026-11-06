@@ -36,7 +36,6 @@ public class SpokumMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onNewToken(String token) {
-        // Token is sent to web app via JavascriptInterface
     }
 
     private void sendNotification(String title, String body) {

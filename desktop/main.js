@@ -22,7 +22,6 @@ function createWindow() {
 
   mainWindow.loadURL('https://spokum.ru/');
 
-  // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.includes('spokum.ru') || url.includes('api.spokum.ru')) {
       return { action: 'allow' };
@@ -36,7 +35,6 @@ function createWindow() {
   });
 }
 
-// Native notifications from web
 const { ipcMain } = require('electron');
 ipcMain.on('show-notification', (event, { title, body }) => {
   if (Notification.isSupported()) {
@@ -49,7 +47,6 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 });
 
 app.whenReady().then(() => {
-  // Set app user model id for Windows notifications
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.spokum.app');
   }

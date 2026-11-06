@@ -1,6 +1,3 @@
-// Push notification sender for SpokУm
-// Usage: node push.js "Title" "Body"
-// Sends to all Android APK users via FCM topic "spokum_all"
 
 const PROJECT_ID = "spokum";
 const SERVER_KEY = process.env.FCM_SERVER_KEY || "";

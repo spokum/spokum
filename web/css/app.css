@@ -2549,7 +2549,7 @@ body.still *::after {
   --glow-1: rgba(255,154,176,.07); --glow-2: rgba(220,120,150,.07); --glow: .55;
 }
 
-/* ── New light themes ──────────────────────────────────────────────── */
+
 
 [data-theme='cloud'] {
   --bg: #f5f7fa; --bg-2: #ffffff; --bg-3: #eaeef3;
@@ -2596,7 +2596,7 @@ body.still *::after {
   --glow-1: rgba(120,170,220,.22); --glow-2: rgba(170,200,230,.2); --glow: .7;
 }
 
-/* ── New dark themes ───────────────────────────────────────────────── */
+
 
 [data-theme='deep_space'] {
   --bg: #03051a; --bg-2: #070b25; --bg-3: #0d1230;
@@ -2643,7 +2643,7 @@ body.still *::after {
   --glow-1: rgba(200,150,90,.08); --glow-2: rgba(220,180,130,.07); --glow: .65;
 }
 
-/* ── Winter Event (Ранняя зима) — beta only ──────────────────────────── */
+
 
 .hw-bg {
   background: radial-gradient(120% 80% at 50% 0%, #0d2540 0%, transparent 60%),
@@ -2680,7 +2680,7 @@ body.still *::after {
   position: relative;
 }
 
-/* floating decor */
+
 .hw-decor { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
 .hw-float {
   position: absolute; bottom: -40px;
@@ -2697,7 +2697,7 @@ body.still *::after {
   100% { transform: translateY(-110vh) rotate(-4deg); opacity: 0; }
 }
 
-/* hero / jack-o-lantern */
+
 .hw-hero {
   text-align: center; padding: 16px 0 22px;
   position: relative; z-index: 1;
@@ -2736,7 +2736,7 @@ body.still *::after {
   100% { background-position: 0% 50%; }
 }
 
-/* sections */
+
 .hw-section { margin-top: 22px; position: relative; z-index: 1; }
 .hw-section-title {
   display: flex; align-items: center; gap: 8px;
@@ -2746,7 +2746,7 @@ body.still *::after {
 }
 .hw-section-title svg { color: #ff6b3d; }
 
-/* stats */
+
 .hw-stats {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
 }
@@ -2764,7 +2764,7 @@ body.still *::after {
 .hw-stat-num { font-size: 22px; font-weight: 800; line-height: 1; }
 .hw-stat-label { font-size: 11px; color: rgba(244,232,216,.6); margin-top: 3px; }
 
-/* cards */
+
 .hw-card {
   background: linear-gradient(160deg, rgba(255,140,40,.08), rgba(20,8,12,.6));
   border: 1px solid rgba(255,140,40,.22);
@@ -2772,7 +2772,7 @@ body.still *::after {
   box-shadow: 0 0 22px rgba(255,107,61,.08), inset 0 0 22px rgba(0,0,0,.35);
 }
 
-/* trick or treat */
+
 .hw-treat { text-align: center; }
 .hw-claim-btn {
   display: inline-flex; align-items: center; gap: 10px;
@@ -2795,7 +2795,7 @@ body.still *::after {
   color: rgba(244,232,216,.55); font-variant-numeric: tabular-nums;
 }
 
-/* games */
+
 .hw-games { display: flex; flex-direction: column; gap: 14px; }
 .hw-game-card {
   background: linear-gradient(160deg, rgba(40,16,8,.7), rgba(12,4,8,.85));
@@ -2830,7 +2830,7 @@ body.still *::after {
   box-shadow: 0 0 16px rgba(255,140,40,.4);
 }
 
-/* leaderboard */
+
 .hw-leader-row {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 0; border-bottom: 1px solid rgba(255,140,40,.1);
@@ -2838,7 +2838,7 @@ body.still *::after {
 .hw-leader-row:last-child { border-bottom: none; }
 .hw-leader-icon { color: #ff6b3d; }
 
-/* mood */
+
 .hw-mood-today {
   display: flex; align-items: center; gap: 14px;
   padding-bottom: 14px; border-bottom: 1px solid rgba(255,140,40,.15);
@@ -2874,7 +2874,7 @@ body.still *::after {
 .hw-mood-pick-icon { color: var(--mc); }
 .hw-mood-pick-label { font-size: 12px; font-weight: 600; }
 
-/* shop */
+
 .hw-shop { display: flex; flex-direction: column; gap: 10px; }
 .hw-shop-item {
   display: flex; align-items: center; gap: 12px;
@@ -2902,7 +2902,7 @@ body.still *::after {
 .hw-buy-btn:disabled { background: rgba(255,255,255,.08) !important; color: rgba(244,232,216,.4) !important; }
 .hw-owned-btn { color: #50d878 !important; border-color: rgba(80,216,120,.4) !important; }
 
-/* owned-items list */
+
 .hw-owned-item {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 4px;
@@ -2911,7 +2911,7 @@ body.still *::after {
 .hw-owned-item:last-child { border-bottom: none; }
 .hw-owned-item .hw-shop-icon { width: 36px; height: 36px; }
 
-/* footer / bat */
+
 .hw-foot { margin-top: 26px; padding: 14px 0 4px; position: relative; overflow: hidden; }
 .hw-bat-line {
   position: relative; height: 22px; margin-bottom: 6px; overflow: hidden;
@@ -2929,7 +2929,7 @@ body.still *::after {
   100% { left: 110%; top: 0; transform: rotate(-8deg); }
 }
 
-/* small bat that flies across hero on load */
+
 .hw-bat {
   position: fixed; top: 80px; left: -40px; z-index: 5;
   color: #c9b6ff; opacity: .5; pointer-events: none;
@@ -2937,7 +2937,7 @@ body.still *::after {
   animation-delay: 1.2s;
 }
 
-/* locked screen */
+
 .hw-locked {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
@@ -2957,7 +2957,7 @@ body.still *::after {
   border: 1px solid rgba(255,140,40,.4);
 }
 
-/* confetti */
+
 .hw-confetti-layer {
   position: fixed; inset: 0; z-index: 90; pointer-events: none;
   overflow: hidden;
@@ -2972,17 +2972,17 @@ body.still *::after {
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
 }
 
-/* game stage override (when launched full-screen via launchGame) */
+
 .hw-stage header { color: #ffae42; }
 
-/* responsive tweaks */
+
 @media (max-width: 360px) {
   .hw-title { font-size: 24px; }
   .hw-canvas { height: 340px; }
   .hw-stat-num { font-size: 18px; }
 }
 
-/* Halloween button on the silver user's profile */
+
 .hw-profile-btn {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 14px 16px; margin: 0 0 12px;
@@ -3004,7 +3004,7 @@ body.still *::after {
 .hw-profile-btn .grow { display: flex; flex-direction: column; }
 .hw-profile-btn .tiny.muted { color: rgba(26,10,0,.7) !important; }
 
-/* ---------- Daily Rewards strip ---------- */
+
 .rewards-strip {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -3063,7 +3063,7 @@ body.still *::after {
   50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 26px var(--accent); }
 }
 
-/* ---------- Sticker pack grid (default emoji pack) ---------- */
+
 .sticker-pack-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -3083,7 +3083,7 @@ body.still *::after {
 .sticker-pack-item:hover { background: var(--surface-2); transform: scale(1.06); }
 .sticker-pack-item:active { transform: scale(.94); }
 
-/* Emoji stickers in chat bubbles */
+
 .bubble .sticker-emoji {
   display: block;
   font-size: 48px;
@@ -3092,7 +3092,7 @@ body.still *::after {
   padding: 4px 2px;
 }
 
-/* ---------- Greeting cards ---------- */
+
 .greet-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -3117,11 +3117,11 @@ body.still *::after {
 .greet-card .greet-card-title { font-size: 13px; font-weight: 700; opacity: .85; }
 .greet-card .greet-card-quote { font-size: 15px; font-weight: 600; line-height: 1.35; }
 
-/* ---------- Bookmark icon button (SVG, no longer an emoji) ---------- */
+
 .icon-btn[data-bookmark].on { color: #87b7a3; background: rgba(135,183,163,.14); }
 .icon-btn[data-bookmark].on svg { fill: currentColor; }
 
-/* Keep the chat-foot usable when the emoji-sticker button joins the row */
+
 @media (max-width: 420px) {
   .chat-foot { gap: 4px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
   .chat-foot .btn-icon { width: 34px; height: 34px; border-radius: 11px; }
@@ -3129,7 +3129,7 @@ body.still *::after {
   .chat-foot .input { padding: 9px 11px; }
 }
 
-/* ── Gallery grid (profile → gallery sheet) ───────────────────────── */
+
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
@@ -3153,7 +3153,7 @@ body.still *::after {
   display: block;
 }
 
-/* ── Channels list (chats view → Каналы section) ──────────────────── */
+
 .channel-card {
   display: flex;
   align-items: center;
@@ -3169,8 +3169,8 @@ body.still *::after {
   font-weight: 700; color: #fff; flex-shrink: 0;
 }
 
-/* ── Telegram-inspired chat redesign (Feature 4) ───────────────────── */
-/* Larger avatars for the chat list rows. */
+
+
 .avatar-52 { width: 52px; height: 52px; font-size: 18px; }
 
 /* Chat-list rows: spacious, single-line preview, small muted time,
@@ -3188,7 +3188,7 @@ body.still *::after {
   flex: none;
 }
 
-/* Open chat: bigger bubble padding, larger font, more gap, accent corners. */
+
 .chat-tg .chat-body { gap: 8px; padding: 16px 14px; }
 .chat-tg .bubble {
   padding: 12px 16px; font-size: 15px; line-height: 1.45;
@@ -3199,7 +3199,7 @@ body.still *::after {
 }
 .chat-tg .bubble-meta { font-size: 10.5px; opacity: .6; }
 
-/* Chat input: taller, rounder, circular accent send button. */
+
 .chat-tg .chat-foot { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); gap: 8px; }
 .chat-tg .chat-tg-input {
   border-radius: 22px; padding: 11px 18px; min-height: 44px;
@@ -3210,7 +3210,7 @@ body.still *::after {
   flex: none;
 }
 
-/* Header: name + "online" status below. */
+
 .chat-tg .chat-head { gap: 12px; }
 .chat-tg .chat-tg-status { font-size: 11.5px; opacity: .8; }
 
