@@ -56,12 +56,12 @@
     // Detect Android WebView: host is appassets.androidplatform.net or file://
     var isWebView = location.hostname === 'appassets.androidplatform.net' || location.protocol === 'file:';
     if (isWebView) return;
-    var REQUIRED = '20251018-final';
+    var REQUIRED = '20251112-final';
     try {
       var current = localStorage.getItem('spokum.build');
       if (current !== REQUIRED || !/[?&]fresh=/.test(location.search)) {
         localStorage.setItem('spokum.build', REQUIRED);
-        var fresh = '/?fresh=' + Date.now();
+        var fresh = location.pathname + '?fresh=' + Date.now();
         location.replace(fresh);
         return;
       }
