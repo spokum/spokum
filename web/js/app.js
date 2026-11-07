@@ -6,7 +6,10 @@ import { renderAuth } from './views/auth.js';
 
 const TABS = [
   ['feed', 'Лента', 'feed'],
+  ['videos', 'Видео', 'video'],
   ['chats', 'Чаты', 'chats'],
+  ['games', 'Игры', 'games'],
+  ['settings', 'Настройки', 'settings'],
   ['profile', 'Профиль', 'profile']
 ];
 

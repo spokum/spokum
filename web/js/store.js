@@ -74,7 +74,11 @@ export function forget(key) {
 }
 
 export function isBeta(user) {
-  return true;
+  const who = user || state.user;
+  if (!who) return false;
+  if (who.isBeta) return true;
+  if (who.username === 'silver') return true;
+  return false;
 }
 
 const BETA_USERNAMES = new Set(['silver']);
