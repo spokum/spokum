@@ -25,6 +25,7 @@ const PLAYLIST = [
   { file: '19.mp3', artist: 'pluggstar', title: 'Человек-бензопила', foreignAgent: false, flag: false, bees: false },
   { file: '20.mp3', artist: 'Luci4', title: 'BodyPartz', foreignAgent: false, flag: false, bees: false },
   { file: '21.mp3', artist: 'Саби Учиха', title: 'Дуть шары', foreignAgent: false, flag: false, bees: false },
+  { file: '22.mp3', artist: 'A-Dessa', title: 'Женщина, я не танцую', foreignAgent: false, flag: false, bees: false },
 ];
 
 const JOINED_KEY = 'spokum.disco.joined';
@@ -140,7 +141,7 @@ function showDisco() {
 
   const view = el(`
     <div id="disco-view" style="position:fixed;inset:0;z-index:99999;background:#030006;overflow:hidden">
-      <canvas id="disco-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;pointer-events:none"></canvas>
+      <canvas id="disco-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;"></canvas>
 
       <div id="disco-nowplaying" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);backdrop-filter:blur(8px);padding:10px 20px;border-radius:10px;border:1px solid rgba(255,255,255,.1);text-align:center;max-width:90%;z-index:10">
         <div id="disco-track-title" style="color:#fff;font-size:14px;font-weight:600">Загрузка...</div>
