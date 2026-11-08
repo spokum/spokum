@@ -524,11 +524,11 @@ export async function render(root) {
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-disco style="background:linear-gradient(135deg,#1a0033,#330066)">
+    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-disco style="background:linear-gradient(135deg,#1a0033,#330066);color:#fff">
       <span class="hw-profile-icon">${icon('star', 24)}</span>
       <span class="grow" style="text-align:left">
-        <span class="strong small">Возращение СпокУм! <span class="tiny muted">· бета</span></span>
-        <span class="tiny muted">Присоединяйтесь к дискотеке! Всеми любимые песни там</span>
+        <span class="strong small" style="color:#fff">Возращение СпокУм! <span class="tiny" style="color:#aaa">· бета</span></span>
+        <span class="tiny" style="color:#ccc">Присоединяйтесь к дискотеке! Всеми любимые песни там</span>
       </span>
       ${icon('forward', 18)}
     </button>` : ''}

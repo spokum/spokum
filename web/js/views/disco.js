@@ -141,7 +141,7 @@ function showDisco() {
     <div id="disco-view" style="position:fixed;inset:0;z-index:99999;background:#030006;overflow:hidden">
       <canvas id="disco-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;pointer-events:none"></canvas>
 
-      <div id="disco-nowplaying" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);pointer-events:auto;:rgba(0,0,0,.6);backdrop-filter:blur(8px);padding:10px 20px;border-radius:10px;border:1px solid rgba(255,255,255,.1);text-align:center;max-width:90%;z-index:10">
+      <div id="disco-nowplaying" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);backdrop-filter:blur(8px);padding:10px 20px;border-radius:10px;border:1px solid rgba(255,255,255,.1);text-align:center;max-width:90%;z-index:10">
         <div id="disco-track-title" style="color:#fff;font-size:14px;font-weight:600">Загрузка...</div>
         <div id="disco-track-artist" style="color:#888;font-size:11px;margin-top:2px"></div>
       </div>
@@ -157,9 +157,9 @@ function showDisco() {
       </div>
 
       <div id="disco-controls" style="position:absolute;bottom:20px;right:12px;display:flex;gap:8px;z-index:10;pointer-events:auto">
-        <button id="disco-prev" style="background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:14px"><<</button>
-        <button id="disco-play" style="background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:14px">||</button>
-        <button id="disco-next" style="background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:14px">>></button>
+        <button id="disco-prev" style="background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:10px;cursor:pointer;font-size:18px;z-index:20">PREV</button>
+        <button id="disco-play" style="background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:10px;cursor:pointer;font-size:16px;z-index:20">PAUSE</button>
+        <button id="disco-next" style="background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:10px;cursor:pointer;font-size:18px;z-index:20">NEXT</button>
       </div>
 
       <audio id="disco-audio" style="display:none"></audio>
@@ -741,10 +741,10 @@ function showDisco() {
     if (isPlaying) {
       audio.pause();
       isPlaying = false;
-      view.querySelector('#disco-play').textContent = '>';
+      view.querySelector('#disco-play').textContent = 'PLAY';
     } else {
       playTrack();
-      view.querySelector('#disco-play').textContent = '||';
+      view.querySelector('#disco-play').textContent = 'PAUSE';
     }
   });
   view.querySelector("#disco-prev").addEventListener("click", () => {
