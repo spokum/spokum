@@ -4,16 +4,17 @@ import { icon } from '../icons.js';
 import { toast } from '../ui.js';
 
 const PLAYLIST = [
-  { file: '1.mp3', artist: 'HOFMANNITA, Brick Bazuka', title: 'Сердце', foreignAgent: false, flag: false },
-  { file: '2.mp3', artist: 'Madk1d, VILLIAN', title: 'Династия', foreignAgent: false, flag: false },
-  { file: '3.mp3', artist: 'Madk1d', title: 'питер паркер', foreignAgent: false, flag: false },
-  { file: '4.mp3', artist: 'Мэйби Бэйби', title: 'Любимая школа', foreignAgent: false, flag: false },
-  { file: '5.mp3', artist: 'Noize MC, Монеточка', title: 'Люди с автоматами', foreignAgent: true, flag: false, available: false },
-  { file: '6.mp3', artist: 'SLAVA MARLOW, Toly Summer, Кобяков, GAZAN, Вова Солодков', title: 'Ты горишь как огонь 2', foreignAgent: false, flag: false },
-  { file: '7.mp3', artist: 'MORGENSHTERN', title: 'ICE', foreignAgent: true, flag: false },
-  { file: '8.mp3', artist: '17 Seventeen', title: 'Конфетка', foreignAgent: false, flag: false },
-  { file: '9.mp3', artist: 'SHAMAN', title: 'Россия Мама', foreignAgent: false, flag: true },
-  { file: '10.mp3', artist: 'VILLIAN', title: 'Случайно Наступил На Шприц', foreignAgent: false, flag: false },
+  { file: '1.mp3', artist: 'HOFMANNITA, Brick Bazuka', title: 'Сердце', foreignAgent: false, flag: false, bees: false },
+  { file: '2.mp3', artist: 'Madk1d, VILLIAN', title: 'Династия', foreignAgent: false, flag: false, bees: false },
+  { file: '3.mp3', artist: 'Madk1d', title: 'питер паркер', foreignAgent: false, flag: false, bees: false },
+  { file: '4.mp3', artist: 'Мэйби Бэйби', title: 'Любимая школа', foreignAgent: false, flag: false, bees: false },
+  { file: '5.mp3', artist: 'Noize MC, Монеточка', title: 'Люди с автоматами', foreignAgent: true, flag: false, bees: false, available: false },
+  { file: '6.mp3', artist: 'SLAVA MARLOW, Toly Summer, Кобяков, GAZAN, Вова Солодков', title: 'Ты горишь как огонь 2', foreignAgent: false, flag: false, bees: false },
+  { file: '7.mp3', artist: 'MORGENSHTERN', title: 'ICE', foreignAgent: true, flag: false, bees: false },
+  { file: '8.mp3', artist: '17 Seventeen', title: 'Конфетка', foreignAgent: false, flag: false, bees: false },
+  { file: '9.mp3', artist: 'SHAMAN', title: 'Россия Мама', foreignAgent: false, flag: true, bees: false },
+  { file: '10.mp3', artist: 'VILLIAN', title: 'Случайно Наступил На Шприц', foreignAgent: false, flag: false, bees: false },
+  { file: '11.mp3', artist: 'Сыновья России', title: 'Кто пчёлок уважает', foreignAgent: false, flag: false, bees: true },
 ];
 
 const JOINED_KEY = 'spokum.disco.joined';
@@ -129,9 +130,9 @@ function showDisco() {
 
   const view = el(`
     <div id="disco-view" style="position:fixed;inset:0;z-index:99999;background:#030006;overflow:hidden">
-      <canvas id="disco-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent"></canvas>
+      <canvas id="disco-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;pointer-events:none"></canvas>
 
-      <div id="disco-nowplaying" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);backdrop-filter:blur(8px);padding:10px 20px;border-radius:10px;border:1px solid rgba(255,255,255,.1);text-align:center;max-width:90%;z-index:10">
+      <div id="disco-nowplaying" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);pointer-events:auto;:rgba(0,0,0,.6);backdrop-filter:blur(8px);padding:10px 20px;border-radius:10px;border:1px solid rgba(255,255,255,.1);text-align:center;max-width:90%;z-index:10">
         <div id="disco-track-title" style="color:#fff;font-size:14px;font-weight:600">Загрузка...</div>
         <div id="disco-track-artist" style="color:#888;font-size:11px;margin-top:2px"></div>
       </div>
@@ -140,13 +141,13 @@ function showDisco() {
         Данная песня создана при участии иноагента
       </div>
 
-      <button id="disco-exit" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;z-index:10;font-size:18px">X</button>
+      <button id="disco-exit" style="position:absolute;top:12px;right:12px;pointer-events:auto;background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;z-index:10;font-size:18px">X</button>
 
-      <div id="disco-join-area" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10">
+      <div id="disco-join-area" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:auto">
         ${!hasJoined ? `<button id="disco-join" style="padding:14px 36px;border-radius:10px;background:linear-gradient(135deg,#ff00ff,#00ffff);border:none;color:#fff;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 0 30px rgba(255,0,255,.4)">Присоединиться</button>` : ''}
       </div>
 
-      <div id="disco-controls" style="position:absolute;bottom:20px;right:12px;display:flex;gap:8px;z-index:10">
+      <div id="disco-controls" style="position:absolute;bottom:20px;right:12px;display:flex;gap:8px;z-index:10;pointer-events:auto">
         <button id="disco-prev" style="background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:14px"><<</button>
         <button id="disco-play" style="background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:14px">||</button>
         <button id="disco-next" style="background:rgba(0,0,0,.5);border:1px solid #333;color:#888;width:36px;height:36px;border-radius:8px;cursor:pointer;font-size:14px">>></button>
@@ -557,6 +558,59 @@ function showDisco() {
   }
   resize();
 
+  let beeList = [];
+  function initBees() {
+    beeList = Array.from({ length: 12 }, (_, i) => ({
+      x: 200 + Math.random() * 1200,
+      y: 300 + Math.random() * 300,
+      vx: (Math.random() - 0.5) * 80,
+      vy: (Math.random() - 0.5) * 60,
+      phase: Math.random() * Math.PI * 2,
+      wing: 0,
+    }));
+  }
+  initBees();
+
+  function bees() {
+    const track = PLAYLIST[currentTrack];
+    if (!track || !track.bees) return;
+    beeList.forEach(b => {
+      b.phase += 0.02;
+      b.wing += 0.3;
+      b.x += Math.sin(b.phase) * 2 + b.vx * 0.01;
+      b.y += Math.cos(b.phase * 1.3) * 1.5 + b.vy * 0.01;
+      b.vx += (Math.random() - 0.5) * 5;
+      b.vy += (Math.random() - 0.5) * 5;
+      b.vx = Math.max(-120, Math.min(120, b.vx));
+      b.vy = Math.max(-90, Math.min(90, b.vy));
+      if (b.x < 150) { b.x = 150; b.vx = Math.abs(b.vx); }
+      if (b.x > 1450) { b.x = 1450; b.vx = -Math.abs(b.vx); }
+      if (b.y < 250) { b.y = 250; b.vy = Math.abs(b.vy); }
+      if (b.y > 700) { b.y = 700; b.vy = -Math.abs(b.vy); }
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      const ws = Math.abs(Math.sin(b.wing)) * 6 + 3;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      ctx.ellipse(-4, -2, ws, 4, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(4, -2, ws, 4, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f6e86c';
+      ctx.fillRect(-5, -3, 3, 2);
+      ctx.fillRect(2, -1, 3, 2);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(-2, -4, 2, 1);
+      ctx.fillRect(0, -4, 2, 1);
+      ctx.restore();
+    });
+  }
+
   function render(now) {
     const dt = Math.min((now - last) / 1000, .05);
     last = now;
@@ -566,7 +620,7 @@ function showDisco() {
     ctx.fillRect(0, 0, cw, ch);
     ctx.translate(ox, oy);
     ctx.scale(scale, scale);
-    background(); curtains(); truss(); screen(); lights(); stage(); speakers(); band(); haze(); strobes(); seats(); flag(); foreground();
+    background(); curtains(); truss(); screen(); lights(); stage(); speakers(); band(); haze(); strobes(); seats(); flag(); bees(); foreground();
     animFrame = requestAnimationFrame(render);
   }
 
@@ -674,7 +728,7 @@ function showDisco() {
     }
   });
 
-  view.querySelector('#disco-play').onclick = () => {
+  view.querySelector("#disco-play").addEventListener("click", () => {
     if (isPlaying) {
       audio.pause();
       isPlaying = false;
@@ -683,17 +737,17 @@ function showDisco() {
       playTrack();
       view.querySelector('#disco-play').textContent = '||';
     }
-  };
-  view.querySelector('#disco-prev').onclick = () => {
+  });
+  view.querySelector("#disco-prev").addEventListener("click", () => {
     currentTrack = (currentTrack - 1 + PLAYLIST.length) % PLAYLIST.length;
     loadTrack(currentTrack);
     playTrack();
-  };
-  view.querySelector('#disco-next').onclick = () => {
+  });
+  view.querySelector("#disco-next").addEventListener("click", () => {
     currentTrack = (currentTrack + 1) % PLAYLIST.length;
     loadTrack(currentTrack);
     playTrack();
-  };
+  });
 
   loadTrack(currentTrack);
   animFrame = requestAnimationFrame(render);
