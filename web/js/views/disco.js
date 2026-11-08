@@ -158,12 +158,6 @@ function showDisco() {
         ${!hasJoined ? `<button id="disco-join" style="padding:14px 36px;border-radius:10px;background:linear-gradient(135deg,#ff00ff,#00ffff);border:none;color:#fff;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 0 30px rgba(255,0,255,.4)">Присоединиться</button>` : ''}
       </div>
 
-      <div id="disco-controls" style="position:absolute;bottom:20px;right:12px;display:flex;gap:8px;z-index:10;pointer-events:auto">
-        <button id="disco-prev" style="background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:10px;cursor:pointer;font-size:18px;z-index:20">PREV</button>
-        <button id="disco-play" style="background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:10px;cursor:pointer;font-size:16px;z-index:20">PAUSE</button>
-        <button id="disco-next" style="background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:44px;height:44px;border-radius:10px;cursor:pointer;font-size:18px;z-index:20">NEXT</button>
-      </div>
-
       <audio id="disco-audio" style="display:none"></audio>
     </div>
   `);
@@ -737,27 +731,6 @@ function showDisco() {
     } else {
       toast('Вы присоединились к дискотеке');
     }
-  });
-
-  view.querySelector("#disco-play").addEventListener("click", () => {
-    if (isPlaying) {
-      audio.pause();
-      isPlaying = false;
-      view.querySelector('#disco-play').textContent = 'PLAY';
-    } else {
-      playTrack();
-      view.querySelector('#disco-play').textContent = 'PAUSE';
-    }
-  });
-  view.querySelector("#disco-prev").addEventListener("click", () => {
-    currentTrack = (currentTrack - 1 + PLAYLIST.length) % PLAYLIST.length;
-    loadTrack(currentTrack);
-    playTrack();
-  });
-  view.querySelector("#disco-next").addEventListener("click", () => {
-    currentTrack = (currentTrack + 1) % PLAYLIST.length;
-    loadTrack(currentTrack);
-    playTrack();
   });
 
   loadTrack(currentTrack);
