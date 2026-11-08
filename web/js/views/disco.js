@@ -67,10 +67,6 @@ function markRewarded(userId) {
 }
 
 export function openDisco() {
-  if (!isBeta(state.user)) {
-    toast('Ивент пока только для @silver', 'err');
-    return;
-  }
   if (!state.user) {
     toast('Нужен вход', 'err');
     return;
