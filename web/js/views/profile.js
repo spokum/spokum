@@ -524,11 +524,11 @@ export async function render(root) {
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-halloween style="background:linear-gradient(135deg,#1a2a4a,#2a4a7a)">
+    ${isBeta(fresh) ? `<button class="hw-profile-btn" data-disco style="background:linear-gradient(135deg,#1a0033,#330066)">
       <span class="hw-profile-icon">${icon('star', 24)}</span>
       <span class="grow" style="text-align:left">
-        <span class="strong small">Ранняя зима <span class="tiny muted">· бета</span></span>
-        <span class="tiny muted">Зимний сезон · до 31 декабря</span>
+        <span class="strong small">Возращение СпокУм! <span class="tiny muted">· бета</span></span>
+        <span class="tiny muted">Присоединяйтесь к дискотеке! Всеми любимые песни там</span>
       </span>
       ${icon('forward', 18)}
     </button>` : ''}
@@ -708,9 +708,9 @@ export async function render(root) {
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
-  body.querySelector('[data-halloween]')?.addEventListener('click', async () => {
-    const { openWinter } = await import('./winter.js?v=20251101');
-    openWinter();
+  body.querySelector('[data-disco]')?.addEventListener('click', async () => {
+    const { openDisco } = await import('./disco.js?v=20251115');
+    openDisco();
   });
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
