@@ -8,7 +8,7 @@ const PLAYLIST = [
   { file: '2.mp3', artist: 'Madk1d, VILLIAN', title: 'Династия', foreignAgent: false, flag: false, bees: false },
   { file: '3.mp3', artist: 'Madk1d', title: 'питер паркер', foreignAgent: false, flag: false, bees: false },
   { file: '4.mp3', artist: 'Мэйби Бэйби', title: 'Любимая школа', foreignAgent: false, flag: false, bees: false },
-  { file: '5.mp3', artist: 'Noize MC, Монеточка', title: 'Люди с автоматами', foreignAgent: true, flag: false, bees: false, available: false },
+  { file: '5.mp3', artist: 'Noize MC, Монеточка', title: 'Люди с автоматами', foreignAgent: true, flag: false, bees: false },
   { file: '6.mp3', artist: 'SLAVA MARLOW, Toly Summer, Кобяков, GAZAN, Вова Солодков', title: 'Ты горишь как огонь 2', foreignAgent: false, flag: false, bees: false },
   { file: '7.mp3', artist: 'MORGENSHTERN', title: 'ICE', foreignAgent: true, flag: false, bees: false },
   { file: '8.mp3', artist: '17 Seventeen', title: 'Конфетка', foreignAgent: false, flag: false, bees: false },
