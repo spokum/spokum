@@ -158,6 +158,20 @@ function showDisco() {
         ${!hasJoined ? `<button id="disco-join" style="padding:14px 36px;border-radius:10px;background:linear-gradient(135deg,#ff00ff,#00ffff);border:none;color:#fff;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 0 30px rgba(255,0,255,.4)">Присоединиться</button>` : ''}
       </div>
 
+      <button id="disco-chat-btn" style="position:absolute;bottom:20px;left:12px;background:rgba(0,0,0,.7);border:1px solid #555;color:#fff;width:48px;height:48px;border-radius:12px;cursor:pointer;z-index:15;font-size:20px;display:flex;align-items:center;justify-content:center">CHAT</button>
+
+      <div id="disco-chat" style="position:absolute;bottom:76px;left:12px;width:300px;max-height:400px;background:rgba(10,10,15,.95);border:1px solid #333;border-radius:12px;z-index:15;display:none;flex-direction:column;overflow:hidden">
+        <div style="padding:10px 14px;border-bottom:1px solid #222;color:#888;font-size:12px;font-weight:600;display:flex;justify-content:space-between;align-items:center">
+          <span>Чат дискотеки</span>
+          <button id="disco-chat-close" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px">X</button>
+        </div>
+        <div id="disco-chat-msgs" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px;max-height:300px"></div>
+        <div style="padding:8px;border-top:1px solid #222;display:flex;gap:6px">
+          <input id="disco-chat-input" placeholder="Сообщение..." maxlength="200" style="flex:1;background:#0a0a0f;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#ddd;font-size:13px;outline:none">
+          <button id="disco-chat-send" style="background:#1a3a5a;border:1px solid #2a5a8a;color:#6ab;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px">OK</button>
+        </div>
+      </div>
+
       <audio id="disco-audio" style="display:none"></audio>
     </div>
   `);
@@ -732,6 +746,73 @@ function showDisco() {
       toast('Вы присоединились к дискотеке');
     }
   });
+
+  const CHAT_KEY = 'spokum.disco.chat';
+  const chatBtn = view.querySelector('#disco-chat-btn');
+  const chatPanel = view.querySelector('#disco-chat');
+  const chatClose = view.querySelector('#disco-chat-close');
+  const chatMsgs = view.querySelector('#disco-chat-msgs');
+  const chatInput = view.querySelector('#disco-chat-input');
+  const chatSend = view.querySelector('#disco-chat-send');
+
+  function getChatMsgs() {
+    try { return JSON.parse(localStorage.getItem(CHAT_KEY) || '[]') || []; } catch { return []; }
+  }
+  function saveChatMsgs(msgs) {
+    try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-100))); } catch {}
+  }
+  function renderChat() {
+    const msgs = getChatMsgs();
+    if (!msgs.length) {
+      chatMsgs.innerHTML = '<div style="color:#555;font-size:12px;text-align:center;padding:20px 0">Пока тихо. Напишите первым!</div>';
+      return;
+    }
+    chatMsgs.innerHTML = msgs.map(m => {
+      const time = new Date(m.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const name = esc(m.name || 'анон');
+      const text = esc(m.text || '');
+      const hue = m.hue || 220;
+      return `<div style="display:flex;gap:6px;align-items:flex-start">
+        <div style="min-width:24px;height:24px;border-radius:50%;background:hsl(${hue},40%,30%);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${esc((name||'?')[0].toUpperCase())}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:6px;align-items:baseline">
+            <span style="color:hsl(${hue},60%,65%);font-size:11px;font-weight:600">${name}</span>
+            <span style="color:#444;font-size:9px">${time}</span>
+          </div>
+          <div style="color:#ccc;font-size:12px;line-height:1.4;word-break:break-word">${text}</div>
+        </div>
+      </div>`;
+    }).join('');
+    chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  }
+  function sendChat() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    const me = state.user;
+    const msg = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 5), name: me?.displayName || me?.username || 'анон', text: text.slice(0, 200), ts: Date.now(), hue: me?.hue || 220 };
+    const msgs = getChatMsgs();
+    msgs.push(msg);
+    saveChatMsgs(msgs);
+    chatInput.value = '';
+    renderChat();
+  }
+
+  chatBtn.addEventListener('click', () => {
+    if (chatPanel.style.display === 'none' || !chatPanel.style.display) {
+      chatPanel.style.display = 'flex';
+      renderChat();
+      chatInput.focus();
+    } else {
+      chatPanel.style.display = 'none';
+    }
+  });
+  chatClose.addEventListener('click', () => { chatPanel.style.display = 'none'; });
+  chatSend.addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
+
+  setInterval(() => {
+    if (chatPanel.style.display === 'flex') renderChat();
+  }, 3000);
 
   loadTrack(currentTrack);
   animFrame = requestAnimationFrame(render);
