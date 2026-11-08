@@ -720,7 +720,10 @@ function showDisco() {
   view.querySelector('#disco-exit').onclick = () => {
     if (animFrame) cancelAnimationFrame(animFrame);
     audio.pause();
-    audio.src = '';
+    audio.onended = null;
+    audio.onerror = null;
+    audio.removeAttribute('src');
+    audio.load();
     window.removeEventListener('resize', onResize);
     window.removeEventListener('orientationchange', onOrientation);
     document.removeEventListener('visibilitychange', onVisibility);
