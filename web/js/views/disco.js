@@ -15,6 +15,15 @@ const PLAYLIST = [
   { file: '9.mp3', artist: 'SHAMAN', title: 'Россия Мама', foreignAgent: false, flag: true, bees: false },
   { file: '10.mp3', artist: 'VILLIAN', title: 'Случайно Наступил На Шприц', foreignAgent: false, flag: false, bees: false },
   { file: '11.mp3', artist: 'Сыновья России', title: 'Кто пчёлок уважает', foreignAgent: false, flag: false, bees: true },
+  { file: '12.mp3', artist: 'whitek3d', title: 'Катюха', foreignAgent: false, flag: false, bees: false },
+  { file: '13.mp3', artist: 'FACE', title: 'Юморист', foreignAgent: true, flag: false, bees: false },
+  { file: '14.mp3', artist: 'Миша Каштан', title: 'Ни пера, ни пуха!', foreignAgent: false, flag: false, bees: false },
+  { file: '15.mp3', artist: 'dabbackwood', title: 'Назад в кресты', foreignAgent: false, flag: false, bees: false },
+  { file: '16.mp3', artist: 'VILLIAN, Aarne', title: 'Общество Мертвых Поэтов', foreignAgent: false, flag: false, bees: false },
+  { file: '17.mp3', artist: 'ONDA ANDAR', title: 'type london', foreignAgent: false, flag: false, bees: false, available: false },
+  { file: '18.mp3', artist: 'FACE', title: 'Мой Калашников', foreignAgent: true, flag: false, bees: false },
+  { file: '19.mp3', artist: 'pluggstar', title: 'Человек-бензопила', foreignAgent: false, flag: false, bees: false, available: false },
+  { file: '20.mp3', artist: 'Luci4', title: 'BodyPartz', foreignAgent: false, flag: false, bees: false },
 ];
 
 const JOINED_KEY = 'spokum.disco.joined';
