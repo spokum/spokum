@@ -24,6 +24,7 @@ const PLAYLIST = [
   { file: '18.mp3', artist: 'FACE', title: 'Мой Калашников', foreignAgent: true, flag: false, bees: false },
   { file: '19.mp3', artist: 'pluggstar', title: 'Человек-бензопила', foreignAgent: false, flag: false, bees: false },
   { file: '20.mp3', artist: 'Luci4', title: 'BodyPartz', foreignAgent: false, flag: false, bees: false },
+  { file: '21.mp3', artist: 'Саби Учиха', title: 'Дуть шары', foreignAgent: false, flag: false, bees: false },
 ];
 
 const JOINED_KEY = 'spokum.disco.joined';
