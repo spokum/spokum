@@ -20,9 +20,9 @@ const PLAYLIST = [
   { file: '14.mp3', artist: 'Миша Каштан', title: 'Ни пера, ни пуха!', foreignAgent: false, flag: false, bees: false },
   { file: '15.mp3', artist: 'dabbackwood', title: 'Назад в кресты', foreignAgent: false, flag: false, bees: false },
   { file: '16.mp3', artist: 'VILLIAN, Aarne', title: 'Общество Мертвых Поэтов', foreignAgent: false, flag: false, bees: false },
-  { file: '17.mp3', artist: 'ONDA ANDAR', title: 'type london', foreignAgent: false, flag: false, bees: false, available: false },
+  { file: '17.mp3', artist: 'ONDA ANDAR', title: 'type london', foreignAgent: false, flag: false, bees: false },
   { file: '18.mp3', artist: 'FACE', title: 'Мой Калашников', foreignAgent: true, flag: false, bees: false },
-  { file: '19.mp3', artist: 'pluggstar', title: 'Человек-бензопила', foreignAgent: false, flag: false, bees: false, available: false },
+  { file: '19.mp3', artist: 'pluggstar', title: 'Человек-бензопила', foreignAgent: false, flag: false, bees: false },
   { file: '20.mp3', artist: 'Luci4', title: 'BodyPartz', foreignAgent: false, flag: false, bees: false },
 ];
 
