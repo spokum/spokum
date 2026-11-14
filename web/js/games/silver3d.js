@@ -238,11 +238,11 @@ export function mount(canvas, report) {
 
   const pointerDown = (event) => {
     event.preventDefault();
+    paused = false;
     if (state.over) {
       reset();
       return;
     }
-    paused = false;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -275,7 +275,10 @@ export function mount(canvas, report) {
   bind(canvas, 'pointercancel', pointerUp);
   bind(window, 'keydown', (event) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
-    if (state.over && event.key === ' ') reset();
+    if (state.over && event.key === ' ') {
+      reset();
+      paused = false;
+    }
     if (event.key === 'Escape') paused = !paused;
     keys.add(event.key.toLowerCase());
   });
