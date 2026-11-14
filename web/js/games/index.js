@@ -1,3 +1,5 @@
+import { mount as silverCrystal3D } from './silver3d.js';
+
 function fit(canvas) {
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
   const rect = canvas.getBoundingClientRect();
@@ -6782,7 +6784,8 @@ export const GAMES = [
   { id: 'gravity_well', title: 'Гравитация', desc: 'Управляй гравитацией, веди корабль', tint: ['#0a0a1a', '#1a1a3a'], mount: gravityWell },
   { id: 'rhythm_grid', title: 'Ритм-сетка', desc: 'Запомни и повтори узор', tint: ['#1a0a1a', '#3a1a3a'], mount: rhythmGrid },
   { id: 'paint_fill', title: 'Заливка', desc: 'Залей всё одним цветом', tint: ['#0a1a0a', '#1a3a1a'], mount: paintFill },
-  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror }
+  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror },
+  { id: 'silver_crystal_3d', title: 'Кристальная шахта 3D', desc: 'Соберите кристаллы в текстурированном лабиринте', tint: ['#102d2a', '#3e9278'], silverOnly: true, mount: silverCrystal3D }
 ];
 
 function colorMatch(canvas, report) {
