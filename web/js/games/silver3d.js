@@ -101,7 +101,7 @@ function textures() {
   crystal.ctx.fillStyle = 'rgba(255,255,255,.24)';
   crystal.ctx.fill();
 
-  return { wall: wall.canvas, floor: floor.canvas, crystal: crystal.canvas };
+  return { wall: wall.canvas, floor: floor.canvas, floorData: floor.ctx.getImageData(0, 0, 64, 64).data, crystal: crystal.canvas };
 }
 
 function makeMaze() {
@@ -349,7 +349,7 @@ export function mount(canvas, report) {
         const ty = ((Math.floor(worldY * 12) % 64) + 64) % 64;
         const pixel = (ty * 64 + tx) * 4;
         const out = (y * fw + x) * 4;
-        data[out] = tex.floor[pixel] * darkness;
+        data[out] = tex.floorData[pixel] * darkness;
         data[out + 1] = tex.floor[pixel + 1] * darkness;
         data[out + 2] = tex.floor[pixel + 2] * darkness;
         data[out + 3] = 255;
