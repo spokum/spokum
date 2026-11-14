@@ -1510,13 +1510,18 @@ async function drawFeedback(body) {
 }
 
 async function drawAiMod(body) {
-  const mod = await import('./ai-moderation.js?v=20251108');
-  const { isAiModerationEnabled, setAiModerationEnabled, getAiReports, removeReport, clearAiReports } = mod;
+  const mod = await import('./ai-moderation.js?v=20261113');
+  const { setAiModerationEnabled, getAiReports, resolveReport, clearAiReports } = mod;
 
-  const paint = () => {
-    const enabled = isAiModerationEnabled();
-    const reports = getAiReports() || [];
-    const total = reports.length;
+  const paint = async () => {
+    body.innerHTML = '<div class="small muted center" style="padding:20px">Загружаем состояние модерации…</div>';
+    try {
+      const [{ enabled, failOpen }, reports] = await Promise.all([
+        api.aiModerationState(),
+        getAiReports()
+      ]);
+      const open = reports.filter((report) => !report.resolved).length;
+      const total = reports.length;
 
     body.innerHTML = `
       <div class="card" style="padding:14px">
@@ -1524,17 +1529,17 @@ async function drawAiMod(body) {
           <span style="flex:0 0 auto;opacity:.6">${icon('shield', 18)}</span>
           <div class="grow" style="min-width:0">
             <div class="strong small">ИИ-модерация контента</div>
-            <div class="tiny muted">Проверяет посты, комментарии и сообщения через gpt-6.1-terra</div>
+            <div class="tiny muted">Серверная проверка постов, комментариев, сообщений и репостов</div>
           </div>
           <span class="pill ${enabled ? 'good' : 'bad'}" data-status style="margin-right:6px">${enabled ? 'ВКЛ' : 'ВЫКЛ'}</span>
           <button class="btn btn-sm ${enabled ? 'btn-danger' : 'btn-primary'}" data-toggle>${enabled ? 'Выключить' : 'Включить'}</button>
         </div>
-        <div class="tiny muted" style="margin-top:10px;line-height:1.5">Когда включено, каждый пост, комментарий и текстовое сообщение проверяются перед отправкой. Нарушения снимаются, а запись попадает в список ниже. Сбой сети не блокирует публикацию.</div>
+        <div class="tiny muted" style="margin-top:10px;line-height:1.5">Текст проверяется перед записью в базу, а одноразовый серверный токен не даёт обойти проверку прямым запросом. При сбое ИИ публикация ${failOpen ? 'разрешается' : 'блокируется до повторной попытки'}.</div>
       </div>
 
       <div class="card" style="padding:14px;margin-top:12px">
         <div class="row between" style="gap:8px">
-          <div class="strong small">Отчёты · ${total}</div>
+          <div class="strong small">Отчёты · ${open} новых из ${total}</div>
           ${total ? `<button class="btn btn-sm btn-ghost" data-clear style="color:#c98b8b">${icon('trash', 14)} Очистить все</button>` : ''}
         </div>
         <div class="col" data-list style="gap:10px;margin-top:10px"></div>
@@ -1545,7 +1550,7 @@ async function drawAiMod(body) {
       list.innerHTML = emptyState('shield', 'Пусто', 'ИИ-модерация ещё ничего не сняла');
     } else {
       reports.forEach((r) => {
-        const ctx = r.context || 'контент';
+        const ctx = ({ post: 'пост', comment: 'комментарий', message: 'сообщение', repost: 'репост', share: 'пересылка' })[r.context] || r.context || 'контент';
         const preview = (r.text || '').slice(0, 140);
         const row = el(`<div class="card" style="padding:12px">
           <div class="row between" style="gap:8px;align-items:flex-start">
@@ -1556,34 +1561,47 @@ async function drawAiMod(body) {
             <span class="tiny muted">${esc(timeAgo(r.timestamp))}</span>
           </div>
           <p class="small" style="margin:8px 0 0;white-space:pre-wrap;line-height:1.5;color:var(--muted)">${esc(preview)}${(r.text || '').length > 140 ? '…' : ''}</p>
+          <div class="tiny muted" style="margin-top:8px">@${esc(r.username || 'неизвестно')} · предупреждений: ${Number(r.strikes) || 0}${r.resolved ? ' · разобрано' : ''}</div>
           <div class="row between" style="margin-top:10px;align-items:center">
             <span class="tiny muted">${esc(new Date(r.timestamp).toLocaleString('ru-RU'))}</span>
-            <button class="btn btn-sm" data-restore>Восстановить</button>
+            <button class="btn btn-sm" data-restore>${r.resolved ? 'Вернуть в новые' : 'Отметить разобранным'}</button>
           </div>
         </div>`);
-        row.querySelector('[data-restore]').onclick = () => {
-          removeReport(r.id);
-          toast('Запись удалена из списка');
-          paint();
+        row.querySelector('[data-restore]').onclick = async () => {
+          try {
+            await resolveReport(r.id, !r.resolved);
+            toast(r.resolved ? 'Отчёт снова в новых' : 'Отчёт отмечен разобранным');
+            await paint();
+          } catch (error) { toast(error.message, 'err'); }
         };
         list.appendChild(row);
       });
     }
 
-    body.querySelector('[data-toggle]').onclick = () => {
-      const next = !isAiModerationEnabled();
-      setAiModerationEnabled(next);
-      toast(next ? 'ИИ-модерация включена' : 'ИИ-модерация выключена');
-      paint();
+    body.querySelector('[data-toggle]').onclick = async (event) => {
+      event.currentTarget.disabled = true;
+      try {
+        const next = await setAiModerationEnabled(!enabled);
+        toast(next?.enabled ? 'ИИ-модерация включена' : 'ИИ-модерация выключена');
+        await paint();
+      } catch (error) {
+        event.currentTarget.disabled = false;
+        toast(error.message, 'err');
+      }
     };
 
     body.querySelector('[data-clear]')?.addEventListener('click', async () => {
       if (!await confirmSheet({ title: 'Очистить все отчёты?', text: 'Список снятых записей станет пустым.', confirm: 'Очистить', danger: true })) return;
-      clearAiReports();
-      toast('Отчёты очищены');
-      paint();
+      try {
+        await clearAiReports();
+        toast('Отчёты очищены');
+        await paint();
+      } catch (error) { toast(error.message, 'err'); }
     });
+    } catch (error) {
+      body.innerHTML = emptyState('warn', 'ИИ-модерация недоступна', error.message);
+    }
   };
 
-  paint();
+  await paint();
 }

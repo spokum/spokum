@@ -1474,6 +1474,38 @@ export const local = {
     return { ok: true };
   },
 
+  async moderateContent() {
+    return {
+      enabled: false, allowed: true, removed: false, reason: '', rule: '', punishment: '',
+      muted: false, muteUntil: 0, verified: false, approvalToken: null
+    };
+  },
+
+  async aiModerationState() {
+    needAdmin();
+    return { enabled: false, failOpen: true, reports: 0 };
+  },
+
+  async setAiModerationEnabled() {
+    needAdmin();
+    return { enabled: false, failOpen: true, reports: 0 };
+  },
+
+  async aiModerationReports() {
+    needAdmin();
+    return { reports: [] };
+  },
+
+  async resolveAiModerationReport() {
+    needAdmin();
+    return { ok: true };
+  },
+
+  async clearAiModerationReports() {
+    needAdmin();
+    return { ok: true };
+  },
+
   async modQueue() {
     const user = needMod();
     return {

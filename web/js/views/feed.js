@@ -478,20 +478,6 @@ function renderComposer(root) {
     const label = button.querySelector('span');
     const previous = label ? label.textContent : '';
     try {
-      const postText = draft.text || '';
-      if (postText.trim() && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
-        if (label) label.textContent = 'Проверяем';
-        try {
-          const { moderatePost } = await import('./ai-moderation.js?v=20251108');
-          const verdict = await moderatePost(postText, { id: state.user?.id, username: state.user?.username });
-          if (verdict?.removed) {
-            toast('Пост снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
-            return;
-          }
-        } catch (modErr) {
-          console.warn('AI moderation failed (post):', modErr);
-        }
-      }
       let image = draft.media[0] || null;
       if (image && api.uploadMedia && api.mode === 'supabase') {
         if (label) label.textContent = 'Загружаем';
@@ -1408,19 +1394,6 @@ export async function openComments(post, refresh) {
     input.disabled = true;
     if (button) button.disabled = true;
     try {
-      if (localStorage.getItem('spokum.aiModeration.enabled') === '1') {
-        try {
-          const { moderateComment } = await import('./ai-moderation.js?v=20251108');
-          const verdict = await moderateComment(text, { id: state.user?.id, username: state.user?.username });
-          if (verdict?.removed) {
-            toast('Комментарий снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
-            input.value = text;
-            return;
-          }
-        } catch (modErr) {
-          console.warn('AI moderation failed (comment):', modErr);
-        }
-      }
       const replyTo = replyTarget ? { commentId: replyTarget.id, userId: replyTarget.author?.id } : null;
       await api.addComment(post.id, text, replyTo);
       post.comments += 1;

@@ -196,7 +196,7 @@ export async function render(root) {
           <span class="tiny muted" style="display:block;margin-top:2px;line-height:1.5">Автоматически проверяет посты, комментарии и сообщения. Только для админов.</span>
           <span class="tiny" data-ai-mod-status style="display:block;margin-top:4px"></span>
         </span>
-        <input type="checkbox" data-ai-mod ${localStorage.getItem('spokum.aiModeration.enabled') === '1' ? 'checked' : ''}>
+        <input type="checkbox" data-ai-mod disabled>
       </label>` : `<div class="tiny muted" style="padding:8px 0;line-height:1.5">Контент в СпокУме модерируется автоматически. Нарушения снимаются, нарушители получают предупреждения и мут.</div>`}
       <button class="list-item" data-rules>${icon('feed', 18)}<div class="grow"><div class="small strong">Правила СпокУма</div><div class="tiny muted">Что можно, что нельзя и что за это бывает</div></div>${icon('forward', 15)}</button>
       <button class="list-item" data-feedback>${icon('mail', 18)}<div class="grow"><div class="small strong">Идеи и баги</div><div class="tiny muted">Поделитесь идеей или сообщите о баге</div></div>${icon('forward', 15)}</button>
@@ -378,25 +378,32 @@ export async function render(root) {
   const paintAiModStatus = async () => {
     if (!aiModStatus) return;
     try {
-      const { isAiModerationEnabled, getAiReports } = await import('./ai-moderation.js?v=20251108');
-      const on = isAiModerationEnabled();
-      const count = (getAiReports() || []).length;
+      const { isAiModerationEnabled } = await import('./ai-moderation.js?v=20261113');
+      const on = await isAiModerationEnabled();
+      const { reports } = await api.aiModerationState();
+      if (aiModBox) aiModBox.checked = on;
       aiModStatus.textContent = on
-        ? `Включено · снято записей: ${count}`
-        : 'Выключено';
+        ? `Включено · открытых отчётов: ${reports || 0}`
+        : api.mode === 'local' ? 'Доступно только с сервером СпокУм' : 'Выключено';
       aiModStatus.style.color = on ? 'var(--accent, #87b7a3)' : 'var(--muted)';
-    } catch {}
+    } catch (error) {
+      aiModStatus.textContent = error.message || 'Статус недоступен';
+    } finally {
+      if (aiModBox) aiModBox.disabled = false;
+    }
   };
   paintAiModStatus();
   aiModBox?.addEventListener('change', async (event) => {
     const on = event.target.checked;
+    event.target.disabled = true;
     try {
-      const { setAiModerationEnabled } = await import('./ai-moderation.js?v=20251108');
-      setAiModerationEnabled(on);
-      toast(on ? 'ИИ-модерация включена' : 'ИИ-модерация выключена');
-      paintAiModStatus();
+      const { setAiModerationEnabled } = await import('./ai-moderation.js?v=20261113');
+      const next = await setAiModerationEnabled(on);
+      toast(next?.enabled ? 'ИИ-модерация включена' : on ? 'В локальном режиме ИИ-модерация недоступна' : 'ИИ-модерация выключена');
+      await paintAiModStatus();
     } catch (error) {
       event.target.checked = !on;
+      event.target.disabled = false;
       toast(error.message, 'err');
     }
   });

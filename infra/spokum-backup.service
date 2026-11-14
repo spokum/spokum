@@ -1,0 +1,11 @@
+[Unit]
+Description=Create and verify a SpokUm database and Storage backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/spokum/bin/backup-spokum.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

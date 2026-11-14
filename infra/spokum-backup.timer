@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the SpokUm backup every day
+
+[Timer]
+OnCalendar=*-*-* 03:47:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=spokum-backup.service
+
+[Install]
+WantedBy=timers.target

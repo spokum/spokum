@@ -165,6 +165,29 @@ function withTimeout(promise, ms, fallback) {
   ]);
 }
 
+async function invokeModeration(sb, text, context) {
+  const { data, error } = await sb.functions.invoke('moderate', { body: { text, context } });
+  if (error) {
+    let details = {};
+    try { details = await error.context?.json() || {}; } catch {}
+    const failure = new Error(details.reason || details.error || error.message || 'Ошибка ИИ-модерации');
+    Object.assign(failure, details);
+    throw failure;
+  }
+  return data;
+}
+
+async function moderationToken(sb, text, context) {
+  if (!String(text || '').trim()) return null;
+  const verdict = await invokeModeration(sb, text, context);
+  if (!verdict?.allowed) {
+    const failure = new Error(verdict?.reason || 'Текст не прошёл ИИ-модерацию');
+    Object.assign(failure, verdict || {});
+    throw failure;
+  }
+  return verdict.approvalToken || null;
+}
+
 async function loadFactory() {
   if (window.supabase?.createClient) return window.supabase.createClient;
   const module = await import(CLIENT_URL);
@@ -757,6 +780,30 @@ export async function createBackend(url, key) {
       return { users: [...found.values()].map((row) => shapeProfile(row)) };
     },
 
+    async searchChannels(query) {
+      const { data, error } = await sb.rpc('search_channels', { p_query: String(query || '') });
+      guard(error);
+      return data || { channels: [] };
+    },
+
+    async recommendedChannels() {
+      const { data, error } = await sb.rpc('recommended_channels');
+      guard(error);
+      return data || { channels: [] };
+    },
+
+    async followChannel(id) {
+      const { data, error } = await sb.rpc('follow_channel', { p_channel_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async unfollowChannel(id) {
+      const { data, error } = await sb.rpc('unfollow_channel', { p_channel_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
     async saveSession() {
       const { data } = await sb.auth.getSession();
       if (!data?.session) return null;
@@ -1031,6 +1078,8 @@ export async function createBackend(url, key) {
       };
       if (publishAt && publishAt > Date.now()) payload.publish_at = new Date(publishAt).toISOString();
       if (isDraft) payload.is_draft = true;
+      const approval = await moderationToken(sb, body, 'post');
+      if (approval) payload.moderation_token = approval;
       const shed = [['publish_at'], ['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
       let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
       for (const keys of shed) {
@@ -1105,6 +1154,8 @@ export async function createBackend(url, key) {
         .limit(1);
       if (!recent.data?.length) {
         const payload = { post_id: id, author_id: me, body };
+        const approval = await moderationToken(sb, body, 'comment');
+        if (approval) payload.moderation_token = approval;
         if (replyTo && typeof replyTo === 'object') {
           if (replyTo.commentId) payload.reply_to_id = replyTo.commentId;
           if (replyTo.userId) payload.reply_to_user = replyTo.userId;
@@ -1246,6 +1297,10 @@ export async function createBackend(url, key) {
         duration: payload.duration || 0
       };
       if (payload.replyToId) msgPayload.reply_to_id = payload.replyToId;
+      if (msgPayload.kind === 'text') {
+        const approval = await moderationToken(sb, msgPayload.body, 'message');
+        if (approval) msgPayload.moderation_token = approval;
+      }
       const { data, error } = await sb
         .from('messages')
         .insert(msgPayload)
@@ -1371,6 +1426,40 @@ export async function createBackend(url, key) {
       const { error } = await sb.rpc('mod_close_report', { target: id, new_status: status || 'closed' });
       guard(error);
       return { ok: true };
+    },
+
+    async moderateContent(text, context) {
+      return invokeModeration(sb, String(text || ''), context);
+    },
+
+    async aiModerationState() {
+      const { data, error } = await sb.rpc('ai_moderation_state');
+      guard(error);
+      return data || { enabled: false, failOpen: true, reports: 0 };
+    },
+
+    async setAiModerationEnabled(on) {
+      const { data, error } = await sb.rpc('ai_moderation_set_enabled', { p_enabled: !!on });
+      guard(error);
+      return data;
+    },
+
+    async aiModerationReports() {
+      const { data, error } = await sb.rpc('ai_moderation_reports');
+      guard(error);
+      return data || { reports: [] };
+    },
+
+    async resolveAiModerationReport(id, resolved = true) {
+      const { data, error } = await sb.rpc('ai_moderation_resolve_report', { p_id: id, p_resolved: resolved });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async clearAiModerationReports() {
+      const { data, error } = await sb.rpc('ai_moderation_clear_reports');
+      guard(error);
+      return data || { ok: true };
     },
 
     async modQueue() {
@@ -1630,13 +1719,17 @@ export async function createBackend(url, key) {
     },
 
     async repost(id, note) {
-      const { data, error } = await sb.rpc('repost', { target: id, note: note || '' });
+      const body = String(note || '').slice(0, 500);
+      const approval = await moderationToken(sb, body, 'repost');
+      const { data, error } = await sb.rpc('repost', { target: id, note: body, approval });
       guard(error);
       return data;
     },
 
     async sendPost(chatId, postId, note) {
-      const { data, error } = await sb.rpc('send_post', { chat: chatId, target: postId, note: note || '' });
+      const body = String(note || '').slice(0, 500);
+      const approval = await moderationToken(sb, body, 'share');
+      const { data, error } = await sb.rpc('send_post', { chat: chatId, target: postId, note: body, approval });
       guard(error);
       return data;
     },
@@ -1756,9 +1849,11 @@ export async function createBackend(url, key) {
     },
 
     async pinPost(id, on) {
-      const { error } = await sb.rpc('pin_post', { target: id, on_top: !!on });
+      const { data, error } = on === undefined
+        ? await sb.rpc('pin_post', { p_post_id: id })
+        : await sb.rpc('pin_post', { target: id, on_top: !!on });
       guard(error);
-      return { ok: true };
+      return data || { ok: true };
     },
 
     async follow(id, on) {
@@ -2576,11 +2671,6 @@ export async function createBackend(url, key) {
       return { quests: data || [] };
     },
 
-    async touchStreak() {
-      const { data, error } = await sb.rpc('touch_streak');
-      guard(error);
-      return data || { ok: true };
-    },
 
     async todayQuote() {
       const { data, error } = await sb.rpc('today_quote');
@@ -2614,11 +2704,6 @@ export async function createBackend(url, key) {
       guard(error);
       return data || { ok: true };
     },
-    async pinPost(id) {
-      const { data, error } = await sb.rpc('pin_post', { p_post_id: id });
-      guard(error);
-      return data || { ok: true };
-    },
     async sendFriendRequest(targetId) {
       const { data, error } = await sb.rpc('send_friend_request', { p_target: targetId });
       guard(error);
@@ -2649,17 +2734,7 @@ export async function createBackend(url, key) {
       guard(error);
       return data || { ok: true };
     },
-    async acceptFriend(userId) {
-      const { data, error } = await sb.rpc('accept_friend', { p_requester: userId });
-      guard(error);
-      return data || { ok: true };
-    },
     async declineFriend(userId) {
-      const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
-      guard(error);
-      return data || { ok: true };
-    },
-    async removeFriend(userId) {
       const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
       guard(error);
       return data || { ok: true };
