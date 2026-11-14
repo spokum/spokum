@@ -1,5 +1,5 @@
 import { api, state, isPremium, isBeta } from '../store.js';
-import { GAMES } from '../games/index.js';
+import { GAMES } from '../games/index.js?v=20261114';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, emptyState } from '../ui.js';
