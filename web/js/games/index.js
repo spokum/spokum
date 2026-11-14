@@ -1,4 +1,4 @@
-import { mount as silverCrystal3D } from './silver3d.js';
+import { mount as silverCrystal3D } from './silver3d.js?v=20261114';
 
 function fit(canvas) {
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
