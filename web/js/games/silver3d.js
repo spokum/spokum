@@ -353,8 +353,8 @@ export function mount(canvas, report) {
         const pixel = (ty * 64 + tx) * 4;
         const out = (y * fw + x) * 4;
         data[out] = tex.floorData[pixel] * darkness;
-        data[out + 1] = tex.floor[pixel + 1] * darkness;
-        data[out + 2] = tex.floor[pixel + 2] * darkness;
+        data[out + 1] = tex.floorData[pixel + 1] * darkness;
+        data[out + 2] = tex.floorData[pixel + 2] * darkness;
         data[out + 3] = 255;
       }
     }
