@@ -17,7 +17,7 @@ const views = {
   feed: () => import('./views/feed.js?v=20251028'),
   videos: () => import('./views/videos.js?v=20251028'),
   chats: () => import('./views/chats.js?v=20251028'),
-  games: () => import('./views/games.js?v=20251028'),
+  games: () => import('./views/games.js?v=20261114'),
   settings: () => import('./views/settings.js?v=20251028'),
   profile: () => import('./views/profile.js?v=20251028')
 };
