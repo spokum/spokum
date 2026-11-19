@@ -11,15 +11,19 @@ const RARITY = {
 };
 
 export function giftArt(gift, size = 44) {
-  return `<span class="gift-art gift-${esc(gift.rarity || 'common')}" style="--h:${Number(gift.hue) || 220};width:${size}px;height:${size}px">${icon(gift.art || 'spark', Math.round(size * 0.5))}</span>`;
+  const silverModel = document.documentElement.dataset.silverUi === 'on' ? ' silver-model' : '';
+  return `<span class="gift-art gift-${esc(gift.rarity || 'common')}${silverModel}" style="--h:${Number(gift.hue) || 220};width:${size}px;height:${size}px">${icon(gift.art || 'spark', Math.round(size * 0.5))}</span>`;
 }
 
 export function giftShelf(gifts) {
   const all = gifts || [];
   if (!all.length) return '';
-  const pinned = all.filter((row) => row.pinned);
-  const shown = (pinned.length ? pinned : all).slice(0, 6);
-  const rest = all.length - shown.length;
+  const isSilver = String(state.user?.username || '').toLowerCase() === 'silver';
+  const visibleGifts = all.filter((gift) => !gift.silverOnly || isSilver);
+  const visiblePinned = visibleGifts.filter((row) => row.pinned);
+  const shown = (visiblePinned.length ? visiblePinned : visibleGifts).slice(0, 6);
+  if (!shown.length) return '';
+  const rest = visibleGifts.length - shown.length;
   return `<div class="gift-shelf">${shown
     .map((gift) => `<span class="gift-slot" title="${esc(gift.title)}${gift.from ? ' от ' + esc(gift.from.displayName) : ''}">${giftArt(gift, 38)}</span>`)
     .join('')}${rest > 0 ? `<span class="gift-more">+${rest}</span>` : ''}</div>`;
@@ -97,11 +101,12 @@ export async function openGiftShop(target, done) {
     spring:    '<span class="gift-season" style="background:#9ccc65;color:#0a1a00">весна</span>',
     summer:    '<span class="gift-season" style="background:#ffb74d;color:#1a0a00">лето</span>'
   };
+  const isSilver = String(state.user?.username || '').toLowerCase() === 'silver';
   types
-    .filter((kind) => kind.price > 0 && (!kind.season || kind.season === season || (isHalloween && kind.season === 'halloween') || kind.isLimited))
+    .filter((kind) => (!kind.silverOnly || isSilver) && kind.price > 0 && (!kind.season || kind.season === season || (isHalloween && kind.season === 'halloween') || kind.isLimited || (kind.silverOnly && isSilver)))
     .forEach((kind) => {
     const card = el(`<button class="gift-card ${purse < kind.price ? 'poor' : ''}">
-      ${kind.season ? (SEASON_BADGE[kind.season] || '<span class="gift-season">сезон</span>') : ''}
+      ${kind.season && kind.season !== 'silver' ? (SEASON_BADGE[kind.season] || '<span class="gift-season">сезон</span>') : ''}
       ${kind.isLimited ? '<span class="gift-season" style="background:#c93030;color:#fff">LIMITED</span>' : ''}
       ${giftArt(kind, 52)}
       <span class="strong tiny" style="margin-top:7px">${esc(kind.title)}</span>
@@ -110,6 +115,7 @@ export async function openGiftShop(target, done) {
     </button>`);
     card.onclick = async () => {
       if (!(kind.price > 0)) return toast('Такой подарок не продаётся', 'err');
+      if (kind.silverOnly && !forMe) return toast('Пока этот подарок можно оставить только себе', 'err');
       const have = state.user?.coins || 0;
       if (have < kind.price) return toast(`Не хватает ${kind.price - have} монет`, 'err');
 
@@ -123,7 +129,7 @@ export async function openGiftShop(target, done) {
         });
         if (!sure) return;
         try {
-          await api.buyGift(kind.id, me, '');
+          await api.buyGift(kind.purchaseId || kind.id, me, '');
           await refreshCoins();
           sheet.close();
           toast('Подарок у вас на витрине', 'ok');
@@ -137,7 +143,7 @@ export async function openGiftShop(target, done) {
       const note = await askNote(kind);
       if (note === null) return;
       try {
-        await api.buyGift(kind.id, target.id, note);
+        await api.buyGift(kind.purchaseId || kind.id, target.id, note);
         await refreshCoins();
         sheet.close();
         toast('Подарок отправлен');
@@ -159,7 +165,7 @@ export async function openMyGifts(userId, editable) {
     let gifts = [];
     try {
       const result = await api.gifts(userId);
-      gifts = result.gifts || [];
+      gifts = (result.gifts || []).filter((gift) => !gift.silverOnly || String(state.user?.username || '').toLowerCase() === 'silver');
     } catch (error) {
       body.innerHTML = emptyState('warn', 'Не загрузилось', error.message);
       return;
@@ -249,3 +255,4 @@ export async function openWallet() {
   });
   return sheet;
 }
+

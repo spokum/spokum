@@ -124,6 +124,11 @@ export async function render(root) {
         <div><div class="small strong">Новый интерфейс (v2.0)</div><div class="tiny muted">Крупнее карточки, мягче тени</div></div>
         <label class="switch"><input type="checkbox" data-ui-v2 ${localStorage.getItem('spokum.ui') === 'v2' ? 'checked' : ''}><span></span></label>
       </div>` : ''}
+      ${String(state.user?.username || '').toLowerCase() === 'silver' ? `<div class="divider"></div>
+      <div class="row between silver-interface-setting" style="padding:8px 0">
+        <div><div class="small strong">СпокУм: новый облик</div><div class="tiny muted">Экспериментальный интерфейс. Можно вернуть прежний здесь.</div></div>
+        <label class="switch"><input type="checkbox" data-silver-interface ${localStorage.getItem('spokum.silver.ui') !== 'legacy' ? 'checked' : ''}><span></span></label>
+      </div>` : ''}
     </div>
 
     ${premiumCard()}
@@ -543,6 +548,12 @@ export async function render(root) {
     localStorage.setItem('spokum.ui', v);
     document.documentElement.dataset.ui = v;
     toast(v === 'v2' ? 'Включён новый интерфейс' : 'Старый интерфейс');
+  });
+  root.querySelector('[data-silver-interface]')?.addEventListener('change', (e) => {
+    const enabled = e.target.checked;
+    localStorage.setItem('spokum.silver.ui', enabled ? 'v3' : 'legacy');
+    document.documentElement.dataset.silverUi = enabled ? 'on' : 'off';
+    toast(enabled ? 'Включён новый облик СпокУма' : 'Возвращён прежний интерфейс');
   });
   root.querySelector('[data-reset]')?.addEventListener('click', async () => {
     if (!(await confirmSheet({ title: 'Стереть данные', text: 'Все локальные аккаунты, посты и чаты будут удалены', confirm: 'Стереть', danger: true }))) return;
@@ -1007,3 +1018,4 @@ async function openPromo(done) {
   code.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e); } });
   setTimeout(() => code.focus(), 100);
 }
+

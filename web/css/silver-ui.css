@@ -1,0 +1,156 @@
+/* Silver's private visual refresh. The application sets this only for @silver. */
+html[data-silver-ui='on'] {
+  color-scheme: dark;
+  --bg: #080d13;
+  --bg-2: #101821;
+  --surface: rgba(17, 28, 37, .86);
+  --surface-2: #17232c;
+  --line: rgba(155, 208, 196, .12);
+  --line-strong: rgba(155, 208, 196, .22);
+  --text: #ecf6f2;
+  --muted: #8da39f;
+  --accent: #7de2c0;
+  --accent-soft: rgba(125, 226, 192, .14);
+  --accent-ink: #082018;
+  --shadow: 0 18px 60px rgba(0, 0, 0, .32);
+  --r-lg: 24px;
+}
+html[data-silver-ui='on'] body {
+  background: radial-gradient(ellipse at 80% -15%, rgba(71, 170, 143, .17), transparent 42%),
+    radial-gradient(ellipse at 5% 35%, rgba(67, 91, 158, .11), transparent 35%), var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+}
+html[data-silver-ui='on'] #app { min-height: 100vh; }
+html[data-silver-ui='on'] .shell {
+  width: min(1180px, 100%);
+  max-width: none;
+  padding: 28px 38px 72px 148px;
+}
+html[data-silver-ui='on'] .topbar {
+  padding: 12px 0 22px;
+  background: linear-gradient(var(--bg) 72%, transparent);
+}
+html[data-silver-ui='on'] .topbar h1 {
+  font-size: clamp(25px, 3vw, 34px);
+  letter-spacing: -.045em;
+  font-weight: 750;
+}
+html[data-silver-ui='on'] .topbar .sub { font-size: 13px; color: #99b4ad; }
+html[data-silver-ui='on'] .card {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(24, 39, 48, .92), rgba(14, 23, 31, .9));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .19);
+}
+html[data-silver-ui='on'] .nav {
+  left: 22px;
+  top: 50%;
+  bottom: auto;
+  width: 96px;
+  transform: translateY(-50%);
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  padding: 10px;
+  border-radius: 26px;
+  background: rgba(11, 18, 24, .83);
+  border-color: rgba(167, 222, 207, .17);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, .42);
+}
+html[data-silver-ui='on'] .nav-item {
+  height: 62px;
+  gap: 6px;
+  border-radius: 18px;
+  font-size: 10px;
+  letter-spacing: .01em;
+}
+html[data-silver-ui='on'] .nav-item.active { box-shadow: 0 8px 22px rgba(83, 207, 165, .19); }
+html[data-silver-ui='on'] .btn { border-radius: 14px; }
+html[data-silver-ui='on'] .btn-primary { box-shadow: 0 8px 24px rgba(93, 206, 164, .2); }
+html[data-silver-ui='on'] .input,
+html[data-silver-ui='on'] .select { border-radius: 14px; background-color: rgba(5, 10, 14, .5); }
+html[data-silver-ui='on'] .game-card {
+  border-radius: 21px;
+  border-color: rgba(170, 224, 210, .13);
+  background: linear-gradient(160deg, rgba(24, 39, 48, .92), rgba(11, 18, 25, .96));
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .22);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+html[data-silver-ui='on'] .game-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(125, 226, 192, .55);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, .34), 0 0 24px rgba(82, 207, 164, .1);
+}
+html[data-silver-ui='on'] .game-card .art:first-child { border-radius: 16px; }
+html[data-silver-ui='on'] .gift-card { border-radius: 20px; background: rgba(18, 29, 37, .82); }
+html[data-silver-ui='on'] .gift-card:hover { transform: translateY(-3px); }
+html[data-silver-ui='on'] .gift-art.silver-model {
+  position: relative;
+  overflow: visible;
+  isolation: isolate;
+  border-radius: 27% 27% 32% 32%;
+  background: linear-gradient(145deg, hsl(var(--h) 85% 67%), hsl(var(--h) 70% 29%));
+  color: #fff;
+  border: 1px solid hsl(var(--h) 90% 82% / .75);
+  box-shadow: inset -7px -8px 12px rgba(0,0,0,.3), inset 3px 3px 8px rgba(255,255,255,.4), 0 10px 22px hsl(var(--h) 70% 42% / .32);
+  transform: perspective(180px) rotateY(-12deg) rotateX(8deg);
+}
+html[data-silver-ui='on'] .gift-art.silver-model::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 76%;
+  height: 17%;
+  top: -8%;
+  left: 12%;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(90deg, hsl(var(--h) 80% 48%), hsl(var(--h) 80% 74%), hsl(var(--h) 80% 46%));
+  border: 1px solid hsl(var(--h) 75% 82% / .72);
+  transform: skewY(-9deg);
+}
+html[data-silver-ui='on'] .gift-art.silver-model::after {
+  content: '';
+  position: absolute;
+  inset: 0 42%;
+  z-index: 0;
+  background: linear-gradient(90deg, hsl(var(--h) 85% 48%), hsl(var(--h) 85% 78%), hsl(var(--h) 75% 43%));
+  opacity: .88;
+  box-shadow: 0 0 8px hsl(var(--h) 80% 70% / .32);
+}
+html[data-silver-ui='on'] .gift-art.silver-model svg { z-index: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.38)); }
+html[data-silver-ui='on'] .gift-art.silver-model.gift-legend {
+  animation: silver-gift-float 3.8s ease-in-out infinite;
+}
+@keyframes silver-gift-float { 50% { transform: perspective(180px) rotateY(12deg) rotateX(3deg) translateY(-4px); } }
+html[data-silver-ui='on'] .silver-interface-setting {
+  margin: 0 -8px;
+  padding: 12px 10px !important;
+  border-radius: 14px;
+  background: linear-gradient(100deg, rgba(96, 210, 171, .12), rgba(95, 137, 201, .08));
+}
+@media (max-width: 760px) {
+  html[data-silver-ui='on'] .shell { width: 100%; padding: 12px 14px calc(122px + env(safe-area-inset-bottom)); }
+  html[data-silver-ui='on'] .nav {
+    left: 50%; top: auto; bottom: 14px; width: min(460px, calc(100vw - 24px));
+    transform: translateX(-50%); grid-auto-flow: column; grid-auto-columns: 1fr;
+    grid-template-columns: none; gap: 3px; padding: 6px;
+  }
+  html[data-silver-ui='on'] .nav-item { height: 52px; border-radius: 16px; font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-silver-ui='on'] .gift-art.silver-model.gift-legend { animation: none; }
+}
+
+html[data-silver-ui='on'] .silver-daily {
+  border-color: rgba(125, 226, 192, .24);
+  background: radial-gradient(ellipse at right, rgba(120, 148, 255, .14), transparent 55%), linear-gradient(110deg, rgba(36, 77, 69, .65), rgba(18, 27, 37, .94));
+}
+html[data-silver-ui='on'] .silver-daily-glyph {
+  width: 46px; height: 46px; display: grid; place-items: center; flex: none;
+  border-radius: 16px; color: #adffe4; background: rgba(99, 217, 176, .17);
+  box-shadow: inset 0 0 18px rgba(126, 245, 205, .1), 0 8px 24px rgba(0, 0, 0, .18);
+}
+html[data-silver-ui='on'] .silver-daily .tiny:first-child { letter-spacing: .12em; font-weight: 700; color: #8bd9c1; }
+

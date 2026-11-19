@@ -1,7 +1,7 @@
 const CLIENT_URL = 'https://esm.sh/@supabase/supabase-js@2.45.4';
 const EMAIL_DOMAIN = 'spokum.app';
 
-import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js';
+import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js?v=20261119';
 
 const ms = (value) => (value ? Date.parse(value) : 0);
 const emailFor = (username) => `${username}@${EMAIL_DOMAIN}`;
@@ -1551,8 +1551,24 @@ export async function createBackend(url, key) {
     async giftTypes() {
       const { data, error } = await sb.from('gift_types').select('*').order('sort');
       guard(error);
-      const rawRemote = data || [];
-      const remote = rawRemote.filter((g) => !/^LIMITED\s*:/i.test(g.title || ''));
+      const definitions = new Map(LOCAL_GIFT_TYPES.map((g) => [g.id, g]));
+      const remote = (data || []).map((row) => {
+        const canonicalId = /^l_(phoenix|dragon|unicorn)$/.test(row.id) ? row.id.slice(2) : row.id;
+        const definition = definitions.get(canonicalId) || {};
+        return {
+          ...row,
+          ...definition,
+          id: canonicalId,
+          purchaseId: row.id,
+          title: String(row.title || definition.title || canonicalId).replace(/^LIMITED\s*:\s*/i, ''),
+          price: Number(row.price ?? definition.price ?? 0),
+          rarity: definition.rarity || (row.rarity === 'legendary' ? 'legend' : row.rarity),
+          art: row.art || definition.art || 'spark',
+          hue: row.hue ?? definition.hue ?? 220,
+          isLimited: !!row.is_limited || !!definition.isLimited,
+          silverOnly: !!definition.silverOnly
+        };
+      });
       const seenIds = new Set(remote.map((g) => g.id));
       const seenTitles = new Set(remote.map((g) => (g.title || '').toLowerCase().trim()));
       const localOnly = LOCAL_GIFT_TYPES.filter((g) =>
@@ -1573,11 +1589,12 @@ export async function createBackend(url, key) {
         gifts: (data || []).map((row) => ({
           id: row.id,
           typeId: row.type_id,
-          title: row.type?.title || row.type_id,
+          title: String(row.type?.title || row.type_id).replace(/^LIMITED\s*:\s*/i, ''),
           price: row.type?.price || 0,
-          rarity: row.type?.rarity || 'common',
+          rarity: row.type?.rarity === 'legendary' ? 'legend' : (row.type?.rarity || 'common'),
           art: row.type?.art || 'spark',
           hue: row.type?.hue ?? 220,
+          silverOnly: !!LOCAL_GIFT_TYPES.find((gift) => gift.id === row.type_id)?.silverOnly,
           note: row.note || '',
           pinned: !!row.pinned,
           createdAt: ms(row.created_at),
@@ -2806,3 +2823,4 @@ export async function createBackend(url, key) {
     }
   };
 }
+

@@ -1,5 +1,5 @@
-import { api, state, isPremium, isBeta } from '../store.js';
-import { GAMES } from '../games/index.js';
+import { api, state, isPremium, isBeta, setUser } from '../store.js';
+import { GAMES } from '../games/index.js?v=20261119';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, emptyState } from '../ui.js';
@@ -7,26 +7,36 @@ import { avatar, toast, emptyState } from '../ui.js';
 const bestKey = (id) => `spokum.best.${id}`;
 
 export async function render(root) {
+  const isSilver = String(state.user?.username || '').toLowerCase() === 'silver';
+  const availableGames = GAMES.filter((game) => !game.silverOnly || isSilver);
   root.innerHTML = `
     <div class="topbar">
       <div><h1>Игры</h1><p class="sub">Разгрузить голову на пять минут</p></div>
     </div>
+    ${isSilver ? `<div class="silver-daily card" style="display:flex;align-items:center;gap:14px;margin:8px 0 16px;padding:16px">
+      <div class="silver-daily-glyph">${icon('spark', 23)}</div>
+      <div class="grow"><div class="tiny muted">ИСПЫТАНИЕ ДНЯ</div><div class="strong small">Собери 5 осколков в «Городском спуске 3D»</div><div class="tiny muted">Награда — 20 монет, один раз в день</div></div>
+      <button class="btn btn-primary btn-sm" data-daily>${icon('play', 14)} Играть</button>
+    </div>` : ''}
     <div class="game-grid" data-grid></div>
     <div class="row between" style="margin:22px 2px 10px">
       <div class="strong small">Таблица лидеров</div>
       <div class="row" style="gap:8px">
         <button class="btn btn-sm" data-game-achv title="Игровые достижения">${icon('trophy', 14)} Достижения</button>
         <select class="select" data-game style="width:auto;padding:6px 10px;font-size:12px">
-          ${GAMES.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
+          ${availableGames.map((g) => `<option value="${g.id}">${esc(g.title)}</option>`).join('')}
         </select>
       </div>
     </div>
     <div class="card" data-board></div>`;
 
   const grid = root.querySelector('[data-grid]');
+  const dailyGame = availableGames.find((game) => game.id === 'silver_rail_3d');
+  const dailyButton = root.querySelector('[data-daily]');
+  if (dailyGame && dailyButton) dailyButton.onclick = () => launch(dailyGame, () => render(root));
   const paid = isPremium(state.user);
   const beta = isBeta(state.user);
-  const shown = [...GAMES].sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
+  const shown = [...availableGames].sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
   shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
     const locked = !!game.premium && !paid && !beta;
@@ -82,6 +92,10 @@ export async function render(root) {
 }
 
 function launch(game, done) {
+  if (game.silverOnly && String(state.user?.username || '').toLowerCase() !== 'silver') {
+    toast('Эта игра доступна только пользователю silver', 'err');
+    return;
+  }
   try {
     const current = Number(localStorage.getItem('spokum.gamesPlayed')) || 0;
     localStorage.setItem('spokum.gamesPlayed', String(current + 1));
@@ -124,6 +138,20 @@ function launch(game, done) {
       localStorage.setItem(bestKey(game.id), String(score));
       bestBox.textContent = `Рекорд ${best}`;
       toast(`Новый рекорд ${score}`);
+    }
+    if (String(state.user?.username || '').toLowerCase() === 'silver' && game.id === 'silver_rail_3d' && score >= 125) {
+      const day = new Date().toISOString().slice(0, 10);
+      const dailyKey = `spokum.silver.daily.${state.user.id}.${day}`;
+      if (localStorage.getItem(dailyKey) !== 'done') {
+        localStorage.setItem(dailyKey, 'pending');
+        try {
+          const reward = await api.grantCoins?.(20, 'Испытание дня');
+          localStorage.setItem(dailyKey, 'done');
+          if (reward?.added > 0) toast('Испытание выполнено: +20 монет');
+          const { user } = await api.me();
+          if (user) setUser(user);
+        } catch { localStorage.removeItem(dailyKey); }
+      }
     }
     if (!recorded) {
       recorded = true;
@@ -171,6 +199,9 @@ function launch(game, done) {
    seconds of a session. Covers the six premium games and a generic
    fallback for the rest. */
 const HINTS = {
+  silver_crystal_3d: 'Найдите 6 кристаллов и вернитесь к порталу. WASD или стрелки — движение, перетаскивание экрана — обзор; на телефоне используйте джойстик.',
+  silver_rail_3d: 'Свайпайте влево и вправо, чтобы менять дорожки. Собирайте осколки и избегайте блоков. Три столкновения завершают заезд.',
+  silver_nebula_3d: 'Свайпайте между тремя дорожками, собирайте осколки и не врезайтесь в блоки. Это премиальный маршрут с ускорением.',
   sky: 'Веди палец по экрану, чтобы поворачивать. Лети сквозь кольца, уворачивайся от скал. Чем дольше летишь — тем быстрее.',
   roll: 'Веди палец, чтобы наклонять поле. Докати шар до светящегося кольца наверху. Не падай в дыры — у тебя 5 жизней.',
   space: 'Води влево-вправо, чтобы двигать корабль. Тап — выстрел. Сбивай астероиды, не дай им коснуться корабля.',
@@ -182,3 +213,4 @@ const HINTS = {
 function hintFor(id) {
   return esc(HINTS[id] || 'Управление зависит от игры. Тап — действие, свайп — движение.');
 }
+
