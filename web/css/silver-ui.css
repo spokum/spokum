@@ -154,3 +154,69 @@ html[data-silver-ui='on'] .silver-daily-glyph {
 }
 html[data-silver-ui='on'] .silver-daily .tiny:first-child { letter-spacing: .12em; font-weight: 700; color: #8bd9c1; }
 
+
+/* Silver's new private workspace: editorial home, horizontal product navigation, airy cards. */
+html[data-silver-ui='on'] {
+  color-scheme: light;
+  --bg: #f1f3ee; --bg-2: #fff; --surface: #fff; --surface-2: #e9ede5;
+  --line: rgba(24, 57, 47, .1); --line-strong: rgba(24, 57, 47, .2);
+  --text: #18392f; --muted: #738078; --accent: #c9f16a; --accent-soft: #e3f3c3;
+  --accent-ink: #18392f; --shadow: 0 12px 36px rgba(28, 52, 42, .08);
+}
+html[data-silver-ui='on'] body {
+  background: radial-gradient(ellipse at 80% 0%, rgba(201,241,106,.22), transparent 33%), #f1f3ee;
+  color: var(--text); font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+html[data-silver-ui='on'] .shell { width: min(1240px, 100%); max-width: 1240px; padding: 126px 34px 72px; }
+html[data-silver-ui='on'] .nav {
+  inset: 0 0 auto; width: 100%; height: 76px; transform: none; border: 0;
+  border-bottom: 1px solid rgba(24,57,47,.1); border-radius: 0; padding: 0 max(26px, calc((100vw - 1240px)/2));
+  display: flex; align-items: center; justify-content: flex-end; gap: 7px; background: rgba(250,251,248,.92);
+  box-shadow: 0 5px 25px rgba(28,52,42,.045); backdrop-filter: blur(20px);
+}
+html[data-silver-ui='on'] .nav::before { content: 'СпокУм'; margin-right: auto; color: #173b31; font-size: 22px; font-weight: 850; letter-spacing: -.06em; }
+html[data-silver-ui='on'] .nav::after { content: '@silver'; margin-left: 13px; padding: 10px 14px; color: #173b31; background: #e7f4cb; border-radius: 999px; font-size: 12px; font-weight: 750; }
+html[data-silver-ui='on'] .nav-item { width: auto; min-width: 78px; height: 42px; padding: 0 14px; flex-direction: row; gap: 8px; border-radius: 14px; color: #68756e; font-size: 12px; }
+html[data-silver-ui='on'] .nav-item.active { background: #18392f; color: #f7f9f3; box-shadow: none; }
+html[data-silver-ui='on'] .nav-item:not(.active):hover { background: #edf0e9; color: #18392f; }
+html[data-silver-ui='on'] .topbar { padding: 22px 0 18px; background: transparent; }
+html[data-silver-ui='on'] .topbar h1 { font-size: clamp(30px, 4vw, 46px); color: #18392f; }
+html[data-silver-ui='on'] .topbar .sub { color: #7a877e; font-size: 14px; }
+html[data-silver-ui='on'] .card, html[data-silver-ui='on'] .game-card, html[data-silver-ui='on'] .gift-card {
+  color: #18392f; border: 1px solid rgba(24,57,47,.09); border-radius: 24px;
+  background: rgba(255,255,255,.88); box-shadow: 0 10px 32px rgba(28,52,42,.055);
+}
+html[data-silver-ui='on'] .game-grid { grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 16px; }
+html[data-silver-ui='on'] .game-card { min-height: 225px; padding: 17px; }
+html[data-silver-ui='on'] .game-card .label { font-size: 17px; }
+html[data-silver-ui='on'] .silver-daily { min-height: 118px; padding: 24px !important; border: 0; background: linear-gradient(105deg,#173d32,#27594a 60%,#385f45); color: white; box-shadow: 0 18px 40px rgba(24,57,47,.18); }
+html[data-silver-ui='on'] .silver-daily .muted, html[data-silver-ui='on'] .silver-daily .tiny { color: rgba(255,255,255,.72) !important; }
+html[data-silver-ui='on'] .silver-daily .strong { color: white; font-size: 16px; }
+html[data-silver-ui='on'] .silver-daily-glyph { color: #18392f; background: #c9f16a; }
+html[data-silver-ui='on'] .gift-grid { grid-template-columns: repeat(auto-fill,minmax(132px,1fr)); gap: 14px; }
+html[data-silver-ui='on'] .gift-card { min-height: 168px; padding: 16px 12px; transition: transform .2s, box-shadow .2s; }
+html[data-silver-ui='on'] .gift-card:hover { transform: translateY(-5px); box-shadow: 0 18px 36px rgba(28,52,42,.12); }
+html[data-silver-ui='on'] .gift-art.silver-model { overflow: visible; transform: perspective(360px) rotateX(9deg) rotateY(-14deg); border-radius: 24px 24px 19px 19px; }
+html[data-silver-ui='on'] .gift-art.silver-model img { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 2; filter: drop-shadow(0 9px 9px rgba(30,50,42,.2)); }
+html[data-silver-ui='on'] .gift-art.silver-model.gift-art-heart, html[data-silver-ui='on'] .gift-art.silver-model.gift-art-rose { border-radius: 50% 50% 38% 38%; transform: perspective(240px) rotateY(-18deg) rotateZ(-8deg); }
+html[data-silver-ui='on'] .gift-art.silver-model.gift-art-crystal, html[data-silver-ui='on'] .gift-art.silver-model.gift-art-star, html[data-silver-ui='on'] .gift-art.silver-model.gift-art-comet { border-radius: 30% 60% 30% 60%; clip-path: polygon(50% 0,92% 28%,82% 82%,48% 100%,12% 73%,4% 28%); }
+html[data-silver-ui='on'] .gift-art.silver-model.gift-art-cup, html[data-silver-ui='on'] .gift-art.silver-model.gift-art-cocoa { border-radius: 12px 12px 28px 28px; }
+html[data-silver-ui='on'] .gift-art.silver-model.gift-art-cat, html[data-silver-ui='on'] .gift-art.silver-model.gift-art-dragon { border-radius: 50%; transform: perspective(220px) rotateY(-14deg) translateY(-2px); }
+html[data-silver-ui='on'] .gift-art.silver-model.gift-legend { animation: silver-gift-float 4s ease-in-out infinite; }
+@media (max-width:760px) {
+  html[data-silver-ui='on'] .shell { width: 100%; padding: 94px 15px calc(116px + env(safe-area-inset-bottom)); }
+  html[data-silver-ui='on'] .nav { inset: auto 12px 12px; width: auto; height: auto; min-height: 61px; padding: 6px; border: 1px solid var(--line); border-radius: 22px; justify-content: space-around; }
+  html[data-silver-ui='on'] .nav::before, html[data-silver-ui='on'] .nav::after { display: none; }
+  html[data-silver-ui='on'] .nav-item { min-width: 0; flex: 1; height: 50px; padding: 0 3px; flex-direction: column; gap: 3px; font-size: 9px; }
+  html[data-silver-ui='on'] .game-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  html[data-silver-ui='on'] .game-card { min-height: 190px; padding: 13px; }
+}
+html[data-silver-ui='on'] .silver-game-tools { display:flex; gap:10px; margin: 4px 0 18px; }
+html[data-silver-ui='on'] .silver-game-tools .input { flex:1; min-width:0; background:#fff; border:1px solid var(--line); border-radius:14px; color:var(--text); }
+html[data-silver-ui='on'] .silver-game-tools .select { width:auto; min-width:150px; background:#fff; color:var(--text); border:1px solid var(--line); border-radius:14px; }
+html[data-silver-ui='on'] .game-favorite { margin-left:8px; font-size:20px; line-height:1; color:#87948b; cursor:pointer; }
+html[data-silver-ui='on'] .game-favorite.selected { color:#d28a28; }
+html[data-silver-ui='on'] .game-card[hidden] { display:none; }
+html[data-silver-ui='on'] .gift-art.silver-model { box-shadow: inset -9px -10px 15px rgba(0,0,0,.2), inset 3px 3px 9px rgba(255,255,255,.58), 0 12px 24px hsl(var(--h) 66% 44% / .23); }
+html[data-silver-ui='on'] .silver-daily .btn-primary { background:#c9f16a; color:#18392f; border:0; }
+@media (max-width:760px) { html[data-silver-ui='on'] .silver-game-tools { flex-direction:column; } html[data-silver-ui='on'] .silver-game-tools .select { width:100%; } }

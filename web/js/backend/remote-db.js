@@ -1,7 +1,7 @@
 const CLIENT_URL = 'https://esm.sh/@supabase/supabase-js@2.45.4';
 const EMAIL_DOMAIN = 'spokum.app';
 
-import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js?v=20261119';
+import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js?v=20261120';
 
 const ms = (value) => (value ? Date.parse(value) : 0);
 const emailFor = (username) => `${username}@${EMAIL_DOMAIN}`;
