@@ -1,5 +1,5 @@
 import { api, state, isPremium, isBeta, setUser } from '../store.js';
-import { GAMES } from '../games/index.js?v=20261119';
+import { GAMES } from '../games/index.js?v=20261120';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, emptyState } from '../ui.js';
@@ -8,7 +8,12 @@ const bestKey = (id) => `spokum.best.${id}`;
 
 export async function render(root) {
   const isSilver = String(state.user?.username || '').toLowerCase() === 'silver';
-  const availableGames = GAMES.filter((game) => !game.silverOnly || isSilver);
+  let silverGames = [];
+  if (isSilver) {
+    try { ({ SILVER_EXTRA_GAMES: silverGames } = await import('../games/silver-extras.js?v=20261120')); } catch {}
+  }
+  const catalog = isSilver ? [...GAMES, ...silverGames] : GAMES;
+  const availableGames = catalog.filter((game) => !game.silverOnly || isSilver);
   root.innerHTML = `
     <div class="topbar">
       <div><h1>Игры</h1><p class="sub">Разгрузить голову на пять минут</p></div>
@@ -237,6 +242,8 @@ const HINTS = {
   silver_crystal_3d: 'Найдите 6 кристаллов и вернитесь к порталу. WASD или стрелки — движение, перетаскивание экрана — обзор; на телефоне используйте джойстик.',
   silver_rail_3d: 'Свайпайте влево и вправо, чтобы менять дорожки. Собирайте осколки и избегайте блоков. Три столкновения завершают заезд.',
   silver_nebula_3d: 'Свайпайте между тремя дорожками, собирайте осколки и не врезайтесь в блоки. Это премиальный маршрут с ускорением.',
+  silver_prism_3d: 'Смотрите на подсвеченные панели и повторяйте маршрут касаниями. С каждой серией последовательность становится длиннее.',
+  silver_orbit_3d: 'Касайтесь экрана, чтобы менять орбиту. Перехватывайте звёзды и обходите метеоры: три столкновения завершают полёт.',
   sky: 'Веди палец по экрану, чтобы поворачивать. Лети сквозь кольца, уворачивайся от скал. Чем дольше летишь — тем быстрее.',
   roll: 'Веди палец, чтобы наклонять поле. Докати шар до светящегося кольца наверху. Не падай в дыры — у тебя 5 жизней.',
   space: 'Води влево-вправо, чтобы двигать корабль. Тап — выстрел. Сбивай астероиды, не дай им коснуться корабля.',
