@@ -34,10 +34,10 @@ VALUES
   ('christmas_tree', 'Ёлка', 400, 'epic', 'star', 140, 80, 'winter', false),
   ('snowman', 'Снеговик', 250, 'rare', 'star', 200, 81, 'winter', false),
   ('warm_scarf', 'Тёплый шарф', 180, 'rare', 'heart_hands', 10, 82, 'winter', false),
-  ('silver_orbit', 'Орбита в ладонях', 1400, 'epic', 'comet', 190, 83, '', false),
-  ('silver_moonship', 'Лунный корабль', 2200, 'legend', 'moon', 225, 84, '', false),
-  ('silver_nova', 'Мини-сверхновая', 1800, 'epic', 'spark', 285, 85, '', false),
-  ('silver_tesseract', 'Тессеракт', 3200, 'legend', 'crystal', 165, 86, '', false)
+  ('silver_orbit', 'Орбита в ладонях', 1400, 'epic', 'comet', 190, 83, 'silver', false),
+  ('silver_moonship', 'Лунный корабль', 2200, 'legend', 'moon', 225, 84, 'silver', false),
+  ('silver_nova', 'Мини-сверхновая', 1800, 'epic', 'spark', 285, 85, 'silver', false),
+  ('silver_tesseract', 'Тессеракт', 3200, 'legend', 'crystal', 165, 86, 'silver', false)
 ON CONFLICT (id) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION public.guard_silver_gift_catalog()
