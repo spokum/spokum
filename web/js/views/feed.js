@@ -181,7 +181,7 @@ async function loadSeason(root) {
     host.innerHTML = '';
   };
   host.querySelector('[data-open-season]').onclick = async () => {
-    const { openGiftShop } = await import('./gifts.js?v=20251028');
+    const { openGiftShop } = await import('./gifts.js?v=20261119');
     openGiftShop();
   };
 }
@@ -1500,3 +1500,4 @@ function wirePostReactions(card, post) {
 
   load();
 }
+

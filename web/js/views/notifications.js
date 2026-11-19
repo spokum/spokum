@@ -252,7 +252,7 @@ async function jump(item, sheet) {
     return;
   }
   if (item.kind === 'gift') {
-    const { openMyGifts } = await import('./gifts.js?v=20251028');
+    const { openMyGifts } = await import('./gifts.js?v=20261119');
     openMyGifts(state.user.id, true);
     return;
   }
@@ -358,3 +358,4 @@ export async function openNotifications() {
   await draw();
   return sheet;
 }
+

@@ -1,4 +1,4 @@
-import { api, state, setUser, applyAppearance, subscribe, initBackend, emit, isBeta } from './store.js';
+import { api, state, applyAppearance, subscribe, initBackend, emit, isBeta, setUser as setStoreUser } from './store.js';
 import { el, esc, plural } from './util.js';
 import { icon, logoMark, setLogoSource, solidIcon } from './icons.js';
 import { toast, openSheet } from './ui.js';
@@ -14,15 +14,23 @@ const TABS = [
 ];
 
 const views = {
-  feed: () => import('./views/feed.js?v=20251028'),
+  feed: () => import('./views/feed.js?v=20261119'),
   videos: () => import('./views/videos.js?v=20251028'),
   chats: () => import('./views/chats.js?v=20251028'),
-  games: () => import('./views/games.js?v=20251028'),
-  settings: () => import('./views/settings.js?v=20251028'),
-  profile: () => import('./views/profile.js?v=20251028')
+  games: () => import('./views/games.js?v=20261119'),
+  settings: () => import('./views/settings.js?v=20261119'),
+  profile: () => import('./views/profile.js?v=20261119')
 };
 
 const root = document.getElementById('app');
+const SILVER_UI_KEY = 'spokum.silver.ui';
+function setUser(user) {
+  setStoreUser(user);
+  const isSilver = String(user?.username || '').toLowerCase() === 'silver';
+  let enabled = isSilver;
+  try { enabled = isSilver && localStorage.getItem(SILVER_UI_KEY) !== 'legacy'; } catch {}
+  document.documentElement.dataset.silverUi = enabled ? 'on' : 'off';
+}
 let shell = null;
 let socket = null;
 
@@ -323,7 +331,7 @@ async function boot() {
   watchNetwork();
   watchSwipes();
   guardHistory();
-  import('./views/settings.js?v=20251028').then((module) => {
+  import('./views/settings.js?v=20261119').then((module) => {
     module.applyNight?.();
     module.applyComfort?.();
     setInterval(() => module.applyNight?.(), 300000);
@@ -419,13 +427,14 @@ async function handOverSession() {
 }
 
 function start() {
+  setUser(state.user);
   window.__spokum = { openTab };
   buildShell();
   openTab(state.tab || 'feed');
   connectSocket();
   askJournal();
   import('./call.js?v=20251028').then((module) => module.initCalls()).catch(() => {});
-  import('./views/notifications.js?v=20251028').then((module) => {
+  import('./views/notifications.js?v=20261119').then((module) => {
     module.refreshBell();
     setTimeout(() => module.offerNotifications?.(), 4000);
   }).catch(() => {});
@@ -536,7 +545,7 @@ async function openTab(tab) {
     host.innerHTML = `<div class="empty">${error.message}</div>`;
   }
   try {
-    const bell = await import('./views/notifications.js?v=20251028');
+    const bell = await import('./views/notifications.js?v=20261119');
     bell.mountBell(host, tab);
     if (Date.now() - bellAt > 20000) {
       bellAt = Date.now();
@@ -660,7 +669,7 @@ async function pullNews() {
     } catch {}
   }
   try {
-    const bell = await import('./views/notifications.js?v=20251028');
+    const bell = await import('./views/notifications.js?v=20261119');
     await bell.pullNotifications();
   } catch {}
   if (Date.now() - unreadAt > 45000) {
@@ -693,3 +702,4 @@ subscribe((event) => {
 });
 
 boot();
+

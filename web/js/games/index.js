@@ -1,3 +1,6 @@
+import { mount as silverCrystal3D } from './silver3d.js?v=20261119';
+import { mountSkyRail3D, mountNebulaTrack3D } from './voxel3d.js?v=20261119';
+
 function fit(canvas) {
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
   const rect = canvas.getBoundingClientRect();
@@ -89,7 +92,7 @@ function pauseOverlay(ctx, size) {
 
 function capture(node, event) {
   try {
-    capture(node, event);
+    if (node?.setPointerCapture && event?.pointerId != null) node.setPointerCapture(event.pointerId);
   } catch {}
 }
 
@@ -6782,7 +6785,10 @@ export const GAMES = [
   { id: 'gravity_well', title: 'Гравитация', desc: 'Управляй гравитацией, веди корабль', tint: ['#0a0a1a', '#1a1a3a'], mount: gravityWell },
   { id: 'rhythm_grid', title: 'Ритм-сетка', desc: 'Запомни и повтори узор', tint: ['#1a0a1a', '#3a1a3a'], mount: rhythmGrid },
   { id: 'paint_fill', title: 'Заливка', desc: 'Залей всё одним цветом', tint: ['#0a1a0a', '#1a3a1a'], mount: paintFill },
-  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror }
+  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror },
+  { id: 'silver_crystal_3d', title: 'Кристальная шахта 3D', desc: 'Соберите кристаллы в текстурированном лабиринте', tint: ['#102d2a', '#3e9278'], silverOnly: true, mount: silverCrystal3D },
+  { id: 'silver_rail_3d', title: 'Городской спуск 3D', desc: 'Уклоняйтесь от блоков и собирайте световые осколки', tint: ['#08252a', '#327d73'], silverOnly: true, mount: mountSkyRail3D },
+  { id: 'silver_nebula_3d', title: 'Неоновая трасса 3D', desc: 'Премиальный заезд сквозь текстурированный космос', tint: ['#17102d', '#653d8c'], silverOnly: true, premium: true, mount: mountNebulaTrack3D }
 ];
 
 function colorMatch(canvas, report) {
@@ -9043,3 +9049,4 @@ function mirror(canvas, report) {
     };
   });
 }
+

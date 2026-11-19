@@ -854,10 +854,10 @@ export async function render(root) {
   api.gifts?.(fresh.id).then(async ({ gifts }) => {
     const shelf = body.querySelector('[data-my-shelf]');
     if (!shelf || !gifts?.length) return;
-    const { giftShelf } = await import('./gifts.js?v=20251028');
+    const { giftShelf } = await import('./gifts.js?v=20261119');
     shelf.innerHTML = giftShelf(gifts);
     shelf.onclick = async () => {
-      const { openMyGifts } = await import('./gifts.js?v=20251028');
+      const { openMyGifts } = await import('./gifts.js?v=20261119');
       openMyGifts(fresh.id, true);
     };
   }).catch(() => {});
@@ -959,15 +959,15 @@ export async function render(root) {
     openPixelBattle();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
-    const { openMyGifts } = await import('./gifts.js?v=20251028');
+    const { openMyGifts } = await import('./gifts.js?v=20261119');
     openMyGifts(state.user.id, true);
   });
   body.querySelector('[data-shop]')?.addEventListener('click', async () => {
-    const { openGiftShop } = await import('./gifts.js?v=20251028');
+    const { openGiftShop } = await import('./gifts.js?v=20261119');
     openGiftShop(null, () => openProfile());
   });
   body.querySelector('[data-wallet]')?.addEventListener('click', async () => {
-    const { openWallet } = await import('./gifts.js?v=20251028');
+    const { openWallet } = await import('./gifts.js?v=20261119');
     openWallet();
   });
   body.querySelector('[data-notes]').onclick = async () => {
@@ -1698,7 +1698,7 @@ export async function openProfile(username) {
     {
       try {
         const { gifts } = await api.gifts(user.id);
-        const { giftShelf } = await import('./gifts.js?v=20251028');
+        const { giftShelf } = await import('./gifts.js?v=20261119');
         const shelf = body.querySelector('[data-shelf]');
         if (shelf) shelf.innerHTML = giftShelf(gifts);
       } catch {}
@@ -1766,11 +1766,11 @@ export async function openProfile(username) {
     }
 
     body.querySelector('[data-gift]')?.addEventListener('click', async () => {
-      const { openGiftShop } = await import('./gifts.js?v=20251028');
+      const { openGiftShop } = await import('./gifts.js?v=20261119');
       openGiftShop(user, () => openProfile(username));
     });
     body.querySelector('[data-their-gifts]')?.addEventListener('click', async () => {
-      const { openMyGifts } = await import('./gifts.js?v=20251028');
+      const { openMyGifts } = await import('./gifts.js?v=20261119');
       openMyGifts(user.id, false);
     });
     body.querySelector('[data-info]')?.addEventListener('click', async () => {
@@ -1875,3 +1875,4 @@ export async function openProfile(username) {
     body.innerHTML = emptyState('warn', 'Не открылось', error.message);
   }
 }
+
