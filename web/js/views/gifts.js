@@ -103,10 +103,10 @@ export async function openGiftShop(target, done) {
   };
   const isSilver = String(state.user?.username || '').toLowerCase() === 'silver';
   types
-    .filter((kind) => (!kind.silverOnly || isSilver) && kind.price > 0 && (!kind.season || kind.season === season || (isHalloween && kind.season === 'halloween') || kind.isLimited))
+    .filter((kind) => (!kind.silverOnly || isSilver) && kind.price > 0 && (!kind.season || kind.season === season || (isHalloween && kind.season === 'halloween') || kind.isLimited || (kind.silverOnly && isSilver)))
     .forEach((kind) => {
     const card = el(`<button class="gift-card ${purse < kind.price ? 'poor' : ''}">
-      ${kind.season ? (SEASON_BADGE[kind.season] || '<span class="gift-season">сезон</span>') : ''}
+      ${kind.season && kind.season !== 'silver' ? (SEASON_BADGE[kind.season] || '<span class="gift-season">сезон</span>') : ''}
       ${kind.isLimited ? '<span class="gift-season" style="background:#c93030;color:#fff">LIMITED</span>' : ''}
       ${giftArt(kind, 52)}
       <span class="strong tiny" style="margin-top:7px">${esc(kind.title)}</span>
