@@ -304,7 +304,11 @@ export const GIFT_TYPES = [
   { id: 'silver_orbit', title: 'Орбита в ладонях', price: 1400, rarity: 'epic', art: 'comet', hue: 190, silverOnly: true },
   { id: 'silver_moonship', title: 'Лунный корабль', price: 2200, rarity: 'legend', art: 'moon', hue: 225, silverOnly: true },
   { id: 'silver_nova', title: 'Мини-сверхновая', price: 1800, rarity: 'epic', art: 'spark', hue: 285, silverOnly: true },
-  { id: 'silver_tesseract', title: 'Тессеракт', price: 3200, rarity: 'legend', art: 'crystal', hue: 165, silverOnly: true }
+  { id: 'silver_tesseract', title: 'Тессеракт', price: 3200, rarity: 'legend', art: 'crystal', hue: 165, silverOnly: true },
+  { id: 'silver_wish_capsule', title: 'Капсула желаний', price: 1600, rarity: 'epic', art: 'spark', hue: 275, silverOnly: true },
+  { id: 'silver_meteor_chest', title: 'Метеоритный ларец', price: 2600, rarity: 'legend', art: 'comet', hue: 32, silverOnly: true },
+  { id: 'silver_connection_heart', title: 'Сердце связи', price: 1900, rarity: 'epic', art: 'heart', hue: 345, silverOnly: true },
+  { id: 'silver_aurora_lantern', title: 'Фонарь северного сияния', price: 2100, rarity: 'epic', art: 'flame', hue: 165, silverOnly: true }
 ];
 
 const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];

@@ -252,7 +252,7 @@ async function jump(item, sheet) {
     return;
   }
   if (item.kind === 'gift') {
-    const { openMyGifts } = await import('./gifts.js?v=20261119');
+    const { openMyGifts } = await import('./gifts.js?v=20261120');
     openMyGifts(state.user.id, true);
     return;
   }

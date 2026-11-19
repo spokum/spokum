@@ -11,8 +11,15 @@ const RARITY = {
 };
 
 export function giftArt(gift, size = 44) {
-  const silverModel = document.documentElement.dataset.silverUi === 'on' ? ' silver-model' : '';
-  return `<span class="gift-art gift-${esc(gift.rarity || 'common')}${silverModel}" style="--h:${Number(gift.hue) || 220};width:${size}px;height:${size}px">${icon(gift.art || 'spark', Math.round(size * 0.5))}</span>`;
+  const silver = document.documentElement.dataset.silverUi === 'on';
+  const imageMap = {
+    silver_moonship: 'moonship', silver_wish_capsule: 'wish-capsule',
+    silver_meteor_chest: 'meteor-chest', silver_connection_heart: 'connection-heart',
+    silver_aurora_lantern: 'aurora-lantern'
+  };
+  const image = silver && imageMap[gift.id] ? `<img src="/images/silver-gifts/${imageMap[gift.id]}.png" alt="" loading="lazy">` : icon(gift.art || 'spark', Math.round(size * .5));
+  const art = String(gift.art || 'spark').replace(/[^a-z0-9_-]/gi, '');
+  return `<span class="gift-art gift-${esc(gift.rarity || 'common')}${silver ? ' silver-model' : ''} gift-art-${art}" style="--h:${Number(gift.hue) || 220};width:${size}px;height:${size}px">${image}</span>`;
 }
 
 export function giftShelf(gifts) {
