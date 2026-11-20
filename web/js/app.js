@@ -14,12 +14,12 @@ const TABS = [
 ];
 
 const views = {
-  feed: () => import('./views/feed.js?v=20261119'),
+  feed: () => import('./views/feed.js?v=20261123'),
   videos: () => import('./views/videos.js?v=20251028'),
   chats: () => import('./views/chats.js?v=20251028'),
   games: () => import('./views/games.js?v=20261122'),
-  settings: () => import('./views/settings.js?v=20261119'),
-  profile: () => import('./views/profile.js?v=20261119')
+  settings: () => import('./views/settings.js?v=20261123'),
+  profile: () => import('./views/profile.js?v=20261123')
 };
 
 const root = document.getElementById('app');

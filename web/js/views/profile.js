@@ -28,6 +28,12 @@ function socialUrl(platform, value) {
   return v;
 }
 
+const PREMIUM_BANNER_PRESETS = [
+  { label: 'Хвойный', hue: 148 }, { label: 'Лазурный', hue: 198 },
+  { label: 'Аметист', hue: 268 }, { label: 'Закат', hue: 326 },
+  { label: 'Медовый', hue: 42 }, { label: 'Ледяной', hue: 215 }
+];
+
 const SOCIAL_META = {
   telegram: { label: 'Telegram', glyph: 'send' },
   tiktok:   { label: 'TikTok',   glyph: 'play' },
@@ -472,6 +478,7 @@ export async function render(root) {
     <div class="topbar">
       <div><h1>Профиль</h1><p class="sub">Твоё пространство</p></div>
       <div class="spacer"></div>
+${user?.username ? `<button class="btn btn-icon" data-share-profile title="Поделиться профилем">${icon('share', 18)}</button>` : ''}
       <button class="btn btn-icon" data-edit title="Редактировать">${icon('edit', 18)}</button>
     </div>
     ${user?.username  ? `<div data-quote-host></div>` : ''}
@@ -646,7 +653,7 @@ export async function render(root) {
     <div class="col" data-posts></div>`;
 
   const list = body.querySelector('[data-posts]');
-  const { postCard } = await import('./feed.js?v=20251028');
+  const { postCard } = await import('./feed.js?v=20261123');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
@@ -708,6 +715,15 @@ export async function render(root) {
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
+  root.querySelector('[data-share-profile]')?.addEventListener('click', async () => {
+    const text = `Найди меня в СпокУме: @${user?.username || ''}`;
+    const data = { title: 'СпокУм', text, url: location.origin };
+    if (navigator.share) {
+      try { await navigator.share(data); return; } catch (error) { if (error?.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(`${text} — ${location.origin}`); toast('Ссылка и имя скопированы'); }
+    catch { toast(text); }
+  });
   body.querySelector('[data-disco]')?.addEventListener('click', async () => {
     const { openDisco } = await import('./disco.js?v=20251115');
     openDisco();
@@ -1005,8 +1021,17 @@ async function openZonePicker(done) {
 }
 
 function openBannerMenu(user, done) {
+  const bannerOptions = isPremium(user) ? `
+    <div class="card" style="padding:12px">
+      <div class="strong small" style="margin-bottom:8px">Премиум-обложки</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px">
+        ${PREMIUM_BANNER_PRESETS.map(({ label, hue }) => `<button class="btn btn-sm" type="button" data-banner-hue="${hue}" style="background:linear-gradient(135deg,hsl(${hue} 30% 26%),hsl(${(hue + 50) % 360} 28% 16%));color:#fff;border:1px solid rgba(255,255,255,.16)">${esc(label)}</button>`).join('')}
+      </div>
+      <div class="tiny muted" style="margin-top:7px">Обложку можно сменить в любой момент.</div>
+    </div>` : `<button class="list-item" data-premium-banners>${icon('spark', 18)}<span>6 премиум-обложек</span></button>`;
   const body = el(`
     <div class="col" style="gap:6px">
+      ${bannerOptions}
       <button class="list-item" data-pick>${icon('image', 18)}<span>Загрузить картинку</span></button>
       ${user?.banner ? `<button class="list-item" data-clear style="color:#c98b8b">${icon('trash', 18)}<span>Убрать баннер</span></button>` : ''}
       <p class="tiny muted" style="margin:6px 4px 0">Баннер виден всем в вашем профиле. Лучше широкая картинка.</p>
@@ -1040,6 +1065,25 @@ function openBannerMenu(user, done) {
       pickBtn.disabled = false;
     }
   };
+  body.querySelectorAll('[data-banner-hue]').forEach((button) => {
+    button.onclick = async () => {
+      try {
+        const result = await api.updateMe({ hue: Number(button.dataset.bannerHue), banner: null });
+        if (!result?.user) throw new Error('Не удалось сохранить обложку');
+        setUser(result.user);
+        sheet.close();
+        toast('Обложка обновлена');
+        done?.();
+      } catch (error) {
+        toast(error?.message || 'Не удалось сохранить обложку', 'err');
+      }
+    };
+  });
+  body.querySelector('[data-premium-banners]')?.addEventListener('click', async () => {
+    sheet.close();
+    const { openBilling } = await import('./settings.js?v=20261123');
+    openBilling?.();
+  });
   const clearBtn = body.querySelector('[data-clear]');
   if (clearBtn) clearBtn.onclick = () => apply(null);
 }
@@ -1716,7 +1760,7 @@ export async function openProfile(username) {
     }
 
     const list = body.querySelector('[data-posts]');
-    const { postCard } = await import('./feed.js?v=20251028');
+    const { postCard } = await import('./feed.js?v=20261123');
     mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => openProfile(username));
 
     body.querySelector('[data-contact]').onclick = async () => {
@@ -1853,7 +1897,7 @@ export async function openProfile(username) {
     }
 
     body.querySelector('[data-report]').onclick = async () => {
-      const { openReport } = await import('./feed.js?v=20251028');
+      const { openReport } = await import('./feed.js?v=20261123');
       openReport('user', user.id);
     };
     if (hasStory(user)) {
