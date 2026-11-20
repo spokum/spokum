@@ -6407,6 +6407,85 @@ function silverMaze(canvas, report) {
   });
 }
 
+function freeFireflies(canvas, report) {
+  return runner(canvas, () => {
+    let s, ended = false;
+    const reset = () => { s = { x: .5, y: .48, score: 0, t: 0, time: 30, over: false }; ended = false; };
+    reset();
+    return {
+      score: () => s.score,
+      bind(bind) {
+        bind('pointerdown', (e) => {
+          if (s.over) { reset(); return; }
+          const rect = canvas.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
+          if (Math.hypot((x - s.x) * rect.width, (y - s.y) * rect.height) < 55) {
+            s.score += 1; s.x = .12 + Math.random() * .76; s.y = .2 + Math.random() * .62;
+          }
+        });
+      },
+      update(dt) {
+        if (s.over) return;
+        s.t += dt; s.time = Math.max(0, 30 - s.t);
+        if (s.time === 0 && !ended) { s.over = true; ended = true; report(s.score); }
+      },
+      draw(ctx, { w, h }) {
+        const bg = ctx.createLinearGradient(0, 0, w, h); bg.addColorStop(0, '#102b34'); bg.addColorStop(1, '#142b39'); ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 28; i++) { const x=(i*137)%w, y=(i*83)%h; ctx.fillStyle='rgba(150,220,210,.14)'; ctx.beginPath(); ctx.arc(x,y,2+(i%3),0,Math.PI*2); ctx.fill(); }
+        const x=s.x*w, y=s.y*h; ctx.shadowColor='#b3ff92'; ctx.shadowBlur=26; ctx.fillStyle='#d9ffad'; ctx.beginPath(); ctx.arc(x,y,12+Math.sin(s.t*8)*2,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+        ctx.textAlign='center'; ctx.fillStyle='#f1f8ed'; ctx.font='700 25px Inter,system-ui'; ctx.fillText('Сад светлячков',w/2,42); ctx.font='600 15px Inter,system-ui'; ctx.fillText(`Светлячки ${s.score}  ·  ${Math.ceil(s.time)} сек`,w/2,68);
+        if (s.over) { ctx.fillStyle='rgba(5,12,18,.7)'; ctx.fillRect(0,0,w,h); ctx.fillStyle='#f1f8ed'; ctx.font='700 25px Inter,system-ui'; ctx.fillText(`Собрано: ${s.score}`,w/2,h/2); ctx.font='14px Inter,system-ui'; ctx.fillText('Коснитесь, чтобы сыграть ещё раз',w/2,h/2+28); } ctx.textAlign='start';
+      }
+    };
+  });
+}
+
+function freeMeteorCatch(canvas, report) {
+  return runner(canvas, () => {
+    let s, ended = false;
+    const reset = () => { s = { x:.5, target:.5, score:0, lives:3, t:0, spawn:0, drops:[], over:false }; ended=false; };
+    reset();
+    return {
+      score: () => s.score,
+      bind(bind) {
+        bind('pointermove', (e) => { const r=canvas.getBoundingClientRect(); s.target=Math.max(.06,Math.min(.94,(e.clientX-r.left)/r.width)); });
+        bind('pointerdown', (e) => { if (s.over) { reset(); const r=canvas.getBoundingClientRect(); s.target=(e.clientX-r.left)/r.width; } });
+      },
+      update(dt, { w, h }) {
+        if (s.over) return;
+        s.t+=dt; s.x+=(s.target-s.x)*Math.min(1,dt*8); s.spawn-=dt;
+        if (s.spawn<=0) { s.drops.push({x:.06+Math.random()*.88,y:-12,vy:100+Math.random()*90,meteor:Math.random()<.32,r:9+Math.random()*5}); s.spawn=.38+Math.random()*.38; }
+        for (const d of s.drops) { d.y+=d.vy*dt; if (d.y>h-50&&d.y<h-24&&Math.abs(d.x*w-s.x*w)<24) { d.hit=true; if(d.meteor)s.lives--; else s.score+=5; } }
+        s.drops=s.drops.filter(d=>!d.hit&&d.y<h+20);
+        if (s.lives<=0&&!ended) { s.over=true; ended=true; report(s.score); }
+      },
+      draw(ctx,{w,h}) {
+        const bg=ctx.createLinearGradient(0,0,0,h); bg.addColorStop(0,'#081327'); bg.addColorStop(1,'#253e62'); ctx.fillStyle=bg; ctx.fillRect(0,0,w,h);
+        for(let i=0;i<60;i++){ctx.fillStyle='rgba(230,240,255,.42)';ctx.fillRect((i*79)%w,(i*113)%h,2,2);}
+        s.drops.forEach(d=>{ctx.fillStyle=d.meteor?'#ff8a69':'#79f6db';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=14;ctx.beginPath();ctx.arc(d.x*w,d.y,d.r,0,Math.PI*2);ctx.fill();}); ctx.shadowBlur=0;
+        const px=s.x*w, py=h-44; ctx.fillStyle='#97aaff';ctx.beginPath();ctx.moveTo(px,py-19);ctx.lineTo(px+17,py+12);ctx.lineTo(px,py+7);ctx.lineTo(px-17,py+12);ctx.closePath();ctx.fill();
+        ctx.textAlign='center';ctx.fillStyle='#f2f5ff';ctx.font='700 24px Inter,system-ui';ctx.fillText('Метеорный ловец',w/2,38);ctx.font='600 15px Inter,system-ui';ctx.fillText(`Очки ${s.score}  ·  Жизни ${Math.max(0,s.lives)}`,w/2,64);
+        if(s.over){ctx.fillStyle='rgba(4,8,17,.74)';ctx.fillRect(0,0,w,h);ctx.fillStyle='#fff';ctx.font='700 25px Inter,system-ui';ctx.fillText('Заезд окончен',w/2,h/2-8);ctx.font='14px Inter,system-ui';ctx.fillText('Коснитесь, чтобы начать заново',w/2,h/2+22);} ctx.textAlign='start';
+      }
+    };
+  });
+}
+
+function freeColorPulse(canvas, report) {
+  return runner(canvas, () => {
+    let s, ended=false;
+    const reset=()=>{s={score:0,target:Math.floor(Math.random()*4),time:25,t:0,over:false};ended=false;}; reset();
+    const next=()=>{s.target=Math.floor(Math.random()*4);};
+    const colors=['#61e6c5','#ff718c','#78a7ff','#ffce68'];
+    return {
+      score:()=>s.score,
+      bind(bind){bind('pointerdown',(e)=>{if(s.over){reset();return;}const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,w=r.width,h=r.height;const col=x<w/2?0:1,row=y<h/2?0:1,pick=row*2+col;if(pick===s.target){s.score+=1;next();}else if(!ended){s.over=true;ended=true;report(s.score);}});},
+      update(dt){if(s.over)return;s.t+=dt;s.time=Math.max(0,25-s.t);if(!s.time&&!ended){s.over=true;ended=true;report(s.score);}},
+      draw(ctx,{w,h}){ctx.fillStyle='#111827';ctx.fillRect(0,0,w,h);const pad=Math.min(w,h)*.28,gap=14,cx=w/2,cy=h*.58;for(let i=0;i<4;i++){const x=cx+(i%2?1:-1)*(pad/2+gap/2),y=cy+(i>1?1:-1)*(pad/2+gap/2);ctx.fillStyle=colors[i];ctx.globalAlpha=i===s.target ? .94 : .38;ctx.shadowColor=colors[i];ctx.shadowBlur=i===s.target?24:3;ctx.beginPath();ctx.roundRect(x-pad/2,y-pad/2,pad,pad,20);ctx.fill();}ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.textAlign='center';ctx.fillStyle='#f5f7ff';ctx.font='700 23px Inter,system-ui';ctx.fillText('Цветовой импульс',w/2,38);ctx.font='600 15px Inter,system-ui';ctx.fillText(`Совпадений ${s.score}  ·  ${Math.ceil(s.time)} сек`,w/2,65);if(s.over){ctx.fillStyle='rgba(4,8,17,.7)';ctx.fillRect(0,0,w,h);ctx.fillStyle='#fff';ctx.font='700 24px Inter,system-ui';ctx.fillText(`Результат: ${s.score}`,w/2,h/2);ctx.font='14px Inter,system-ui';ctx.fillText('Коснитесь, чтобы повторить',w/2,h/2+28);}ctx.textAlign='start';}
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -6857,7 +6936,10 @@ export const GAMES = [
   { id: 'silver_rail_3d', title: 'Городской спуск 3D', desc: 'Уклоняйтесь от блоков и собирайте световые осколки', tint: ['#08252a', '#327d73'], silverOnly: true, mount: mountSkyRail3D },
   { id: 'silver_nebula_3d', title: 'Неоновая трасса 3D', desc: 'Премиальный заезд сквозь текстурированный космос', tint: ['#17102d', '#653d8c'], silverOnly: true, premium: true, mount: mountNebulaTrack3D },
   { id: 'silver_gate', title: 'Гравитационные врата', desc: 'Поймай момент и пройди светящиеся порталы', tint: ['#111631', '#653d8c'], silverOnly: true, premium: true, mount: silverGate },
-  { id: 'silver_maze', title: 'Кристальный лабиринт', desc: 'Собери три кристалла и найди выход', tint: ['#101a28', '#327d73'], silverOnly: true, premium: true, mount: silverMaze }
+  { id: 'silver_maze', title: 'Кристальный лабиринт', desc: 'Собери три кристалла и найди выход', tint: ['#101a28', '#327d73'], silverOnly: true, premium: true, mount: silverMaze },
+  { id: 'free_fireflies', title: 'Сад светлячков', desc: 'Лови огоньки в тихом ночном саду', tint: ['#102b34', '#456347'], mount: freeFireflies },
+  { id: 'free_meteor_catch', title: 'Метеорный ловец', desc: 'Собирай энергию и уклоняйся от метеоров', tint: ['#081327', '#38547a'], mount: freeMeteorCatch },
+  { id: 'free_color_pulse', title: 'Цветовой импульс', desc: 'Находи подсвеченную ячейку до смены цвета', tint: ['#101827', '#465a9d'], mount: freeColorPulse }
 ];
 
 function colorMatch(canvas, report) {

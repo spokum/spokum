@@ -1,16 +1,43 @@
 import { api, state, isPremium, isBeta, setUser } from '../store.js';
-import { GAMES } from '../games/index.js?v=20261121';
+import { GAMES } from '../games/index.js?v=20261122';
 import { el, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, emptyState } from '../ui.js';
 
 const bestKey = (id) => `spokum.best.${id}`;
+const userScope = () => String(state.user?.id || state.user?.username || 'guest').replace(/[^a-z0-9_-]/gi, '_');
+const playsKey = () => `spokum.gamesPlayed.${userScope()}`;
+const favoritesKey = () => `spokum.games.favorites.${userScope()}`;
+function readFavorites() {
+  try { return new Set(JSON.parse(localStorage.getItem(favoritesKey()) || '[]')); } catch { return new Set(); }
+}
+function readActivity() {
+  try { return JSON.parse(localStorage.getItem(`spokum.games.activity.${userScope()}`) || '{}') || {}; } catch { return {}; }
+}
+function recordActivity() {
+  const today = new Date().toISOString().slice(0, 10), prev = readActivity();
+  if (prev.day === today) return prev;
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const next = { day: today, streak: prev.day === yesterday ? (Number(prev.streak) || 0) + 1 : 1 };
+  try { localStorage.setItem(`spokum.games.activity.${userScope()}`, JSON.stringify(next)); } catch {}
+  return next;
+}
 
 export async function render(root) {
   const isSilver = String(state.user?.username || '').toLowerCase() === 'silver';
   const availableGames = GAMES.filter((game) => !game.silverOnly || isSilver);
   const paid = isPremium(state.user);
   const beta = isBeta(state.user);
+  const activity = readActivity();
+  const plays = Number(localStorage.getItem(playsKey()) || (isSilver ? localStorage.getItem('spokum.gamesPlayed') : 0) || 0);
+  const recordCount = availableGames.filter((game) => Number(localStorage.getItem(bestKey(game.id)) || 0) > 0).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const activityPanel = (!isSilver || !paid) ? `
+    <section class="card" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px;margin:8px 0 16px">
+      <div><div class="tiny muted">СЫГРАНО ПАРТИЙ</div><div class="strong" style="font-size:20px" data-total-plays>${plays}</div></div>
+      <div><div class="tiny muted">ЛИЧНЫЕ РЕКОРДЫ</div><div class="strong" style="font-size:20px">${recordCount}</div></div>
+      <div><div class="tiny muted">СЕРИЯ ДНЕЙ</div><div class="strong" style="font-size:20px" data-streak>${activity.day === today ? Number(activity.streak) || 1 : 0}</div></div>
+    </section>` : '';
   const premiumStats = isSilver && paid ? `
     <section class="card silver-premium-panel">
       <div class="silver-premium-stat"><span class="tiny muted">ИГРЫ ЗАПУЩЕНЫ</span><strong data-premium-plays>0</strong></div>
@@ -26,7 +53,17 @@ export async function render(root) {
       <div class="grow"><div class="tiny muted">ИСПЫТАНИЕ ДНЯ</div><div class="strong small">Собери 5 осколков в «Городском спуске 3D»</div><div class="tiny muted">Награда — 20 монет, один раз в день</div></div>
       <button class="btn btn-primary btn-sm" data-daily>${icon('play', 14)} Играть</button>
     </div>` : ''}
+    ${!isSilver ? `<div class="card" style="display:flex;align-items:center;gap:12px;margin:8px 0 14px;padding:14px">
+      <div class="grow"><div class="tiny muted">ЕЖЕДНЕВНАЯ ЦЕЛЬ</div><div class="strong small">${activity.day === today ? 'Сегодняшняя партия сыграна — серия сохранена!' : 'Сыграй сегодня, чтобы начать или продолжить серию дней'}</div></div>
+      <span class="pill">${activity.day === today ? `${Number(activity.streak) || 1} дн.` : 'Сегодня'}</span>
+    </div>` : ''}
+    ${activityPanel}
     ${premiumStats}
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin:4px 0 12px">
+      <input class="input grow" data-game-search placeholder="Найти игру" style="min-width:140px">
+      <button class="btn btn-sm" type="button" data-favorite-filter>☆ Избранное</button>
+      <button class="btn btn-primary btn-sm" type="button" data-random>✦ Случайная игра</button>
+    </div>
     <div class="game-grid" data-grid></div>
     <div class="row between" style="margin:22px 2px 10px">
       <div class="strong small">Таблица лидеров</div>
@@ -45,27 +82,32 @@ export async function render(root) {
   if (dailyGame && dailyButton) dailyButton.onclick = () => launch(dailyGame, () => render(root));
   if (isSilver && paid) {
     const records = availableGames.filter((game) => Number(localStorage.getItem(bestKey(game.id)) || 0) > 0).length;
-    root.querySelector('[data-premium-plays]').textContent = localStorage.getItem('spokum.gamesPlayed') || '0';
+    root.querySelector('[data-premium-plays]').textContent = String(plays);
     root.querySelector('[data-premium-records]').textContent = String(records);
     root.querySelector('[data-premium-games]').textContent = String(availableGames.filter((game) => game.premium).length);
   }
-  const shown = [...availableGames].sort((a, b) => Number(!!b.premium) - Number(!!a.premium));
+  const favorites = readFavorites();
+  const shown = [...availableGames].sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || Number(!!b.premium) - Number(!!a.premium));
   shown.forEach((game) => {
     const best = Number(localStorage.getItem(bestKey(game.id)) || 0);
     const locked = !!game.premium && !paid && !beta;
-    const card = el(`
-      <button class="game-card appear${locked ? ' locked' : ''}">
-        <div class="art" style="background:linear-gradient(150deg,${game.tint[0]},${game.tint[1]})"></div>
-        <div class="art" style="background:radial-gradient(60% 60% at 80% 15%, rgba(255,255,255,.16), transparent 70%)"></div>
-        <div class="row" style="position:relative;margin-bottom:auto;color:#eef2fb;opacity:.9">
-          ${icon(locked ? 'lock' : 'play', 22)}
-          <div class="spacer"></div>
-          ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>${beta && !paid ? 'Бета' : 'Премиум'}</span></span>` : ''}
-        </div>
-        <div class="label" style="color:#eef2fb">${esc(game.title)}</div>
-        <div class="desc">${esc(game.desc)}</div>
-        ${best ? `<div class="desc" style="color:var(--accent)">Рекорд ${best}</div>` : ''}
-      </button>`);
+    const wrap = el(`
+      <div class="game-entry" style="position:relative;min-width:0">
+        <button class="game-card appear${locked ? ' locked' : ''}" style="width:100%">
+          <div class="art" style="background:linear-gradient(150deg,${game.tint[0]},${game.tint[1]})"></div>
+          <div class="art" style="background:radial-gradient(60% 60% at 80% 15%, rgba(255,255,255,.16), transparent 70%)"></div>
+          <div class="row" style="position:relative;margin-bottom:auto;color:#eef2fb;opacity:.9">
+            ${icon(locked ? 'lock' : 'play', 22)}
+            <div class="spacer"></div>
+            ${game.premium ? `<span class="game-pro">${icon('crown', 11)}<span>${beta && !paid ? 'Бета' : 'Премиум'}</span></span>` : ''}
+          </div>
+          <div class="label" style="color:#eef2fb">${esc(game.title)}</div>
+          <div class="desc">${esc(game.desc)}</div>
+          ${best ? `<div class="desc" style="color:var(--accent)">Рекорд ${best}</div>` : ''}
+        </button>
+        <button class="btn btn-icon game-favorite" type="button" aria-label="${favorites.has(game.id) ? 'Убрать из избранного' : 'Добавить в избранное'}" aria-pressed="${favorites.has(game.id)}" title="Избранное" style="position:absolute;right:12px;top:12px;z-index:3;background:rgba(7,12,18,.58);color:${favorites.has(game.id) ? 'var(--accent)' : '#fff'};border:1px solid rgba(255,255,255,.2)">${favorites.has(game.id) ? '★' : '☆'}</button>
+      </div>`);
+    const card = wrap.querySelector('.game-card');
     card.onclick = async () => {
       if (!locked) return launch(game, () => render(root));
       toast(beta && !paid
@@ -74,8 +116,35 @@ export async function render(root) {
       const { openBilling } = await import('./settings.js?v=20251028');
       openBilling?.();
     };
-    grid.appendChild(card);
+    wrap.querySelector('.game-favorite').onclick = (event) => {
+      event.stopPropagation();
+      const next = readFavorites();
+      if (next.has(game.id)) next.delete(game.id); else next.add(game.id);
+      try { localStorage.setItem(favoritesKey(), JSON.stringify([...next])); } catch {}
+      render(root);
+    };
+    wrap.dataset.title = game.title.toLocaleLowerCase('ru-RU');
+    wrap.dataset.favorite = String(favorites.has(game.id));
+    grid.appendChild(wrap);
   });
+  const search = root.querySelector('[data-game-search]');
+  const favFilter = root.querySelector('[data-favorite-filter]');
+  let favoritesOnly = false;
+  const filterGames = () => {
+    const query = search.value.trim().toLocaleLowerCase('ru-RU');
+    grid.querySelectorAll('.game-entry').forEach((entry) => {
+      entry.hidden = (favoritesOnly && entry.dataset.favorite !== 'true') || !entry.dataset.title.includes(query);
+    });
+    favFilter.classList.toggle('btn-primary', favoritesOnly);
+    favFilter.textContent = favoritesOnly ? '★ Избранное' : '☆ Избранное';
+  };
+  search.oninput = filterGames;
+  favFilter.onclick = () => { favoritesOnly = !favoritesOnly; filterGames(); };
+  root.querySelector('[data-random]').onclick = () => {
+    const playable = availableGames.filter((game) => !game.premium || paid || beta);
+    const game = playable[Math.floor(Math.random() * playable.length)];
+    if (game) launch(game, () => render(root));
+  };
 
   root.querySelector('[data-game-achv]')?.addEventListener('click', async () => {
     const { openGameAchievements } = await import('./game-achievements.js?v=20251028');
@@ -110,8 +179,12 @@ function launch(game, done) {
     return;
   }
   try {
-    const current = Number(localStorage.getItem('spokum.gamesPlayed')) || 0;
-    localStorage.setItem('spokum.gamesPlayed', String(current + 1));
+    const current = Number(localStorage.getItem(playsKey())) || 0;
+    localStorage.setItem(playsKey(), String(current + 1));
+    if (String(state.user?.username || '').toLowerCase() === 'silver') {
+      const legacy = Number(localStorage.getItem('spokum.gamesPlayed')) || 0;
+      localStorage.setItem('spokum.gamesPlayed', String(legacy + 1));
+    }
   } catch {}
   const stage = el(`
     <div class="game-stage">
@@ -146,6 +219,7 @@ function launch(game, done) {
   let recorded = false;
 
   const report = async (score) => {
+    if (score > 0) recordActivity();
     if (score > best) {
       best = score;
       localStorage.setItem(bestKey(game.id), String(score));
@@ -212,6 +286,9 @@ function launch(game, done) {
    seconds of a session. Covers the six premium games and a generic
    fallback for the rest. */
 const HINTS = {
+  free_fireflies: 'Коснитесь светлячка, чтобы поймать его. У вас 30 секунд — ловите столько огоньков, сколько сможете.',
+  free_meteor_catch: 'Ведите пальцем или мышью, чтобы управлять кораблём. Собирайте бирюзовые сферы и избегайте оранжевых метеоров.',
+  free_color_pulse: 'Коснитесь подсвеченной ячейки. Ошибка завершит раунд, а правильные касания добавят очки.',
   silver_crystal_3d: 'Найдите 6 кристаллов и вернитесь к порталу. WASD или стрелки — движение, перетаскивание экрана — обзор; на телефоне используйте джойстик.',
   silver_rail_3d: 'Свайпайте влево и вправо, чтобы менять дорожки. Собирайте осколки и избегайте блоков. Три столкновения завершают заезд.',
   silver_nebula_3d: 'Свайпайте между тремя дорожками, собирайте осколки и не врезайтесь в блоки. Это премиальный маршрут с ускорением.',
