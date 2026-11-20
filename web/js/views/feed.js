@@ -95,6 +95,7 @@ export async function render(root) {
       </div>
       <span data-streak></span>
       <div class="spacer"></div>
+      <button class="btn btn-icon" data-focus title="Тихий режим" aria-pressed="false">${icon('eye', 18)}</button>
       <button class="btn btn-icon" data-search-toggle title="Поиск">${icon('search', 18)}</button>
       <button class="btn btn-icon" data-saved title="Сохранённое">${icon('star', 18)}</button>
       <button class="btn btn-icon" data-refresh title="Обновить">${icon('refresh', 18)}</button>
@@ -110,6 +111,20 @@ export async function render(root) {
     <div class="col" data-list></div>`;
 
   root.querySelector('[data-refresh]').onclick = () => load(root);
+
+  const focusButton = root.querySelector('[data-focus]');
+  const applyFocusMode = (enabled) => {
+    try { localStorage.setItem('spokum.feed.focusMode', enabled ? '1' : '0'); } catch {}
+    for (const selector of ['[data-event]', '[data-announce]', '[data-composer]', '[data-filters]']) {
+      const node = root.querySelector(selector);
+      if (node) node.hidden = enabled;
+    }
+    focusButton?.classList.toggle('btn-primary', enabled);
+    focusButton?.setAttribute('aria-pressed', String(enabled));
+    if (focusButton) focusButton.title = enabled ? 'Выключить тихий режим' : 'Тихий режим';
+  };
+  applyFocusMode(localStorage.getItem('spokum.feed.focusMode') === '1');
+  focusButton?.addEventListener('click', () => applyFocusMode(localStorage.getItem('spokum.feed.focusMode') !== '1'));
 
   const searchBox = root.querySelector('[data-search]');
   const query = root.querySelector('[data-query]');
@@ -972,6 +987,7 @@ export function postCard(post, refresh, options = {}) {
         <span data-reacts></span>
         <button class="icon-btn ${post.liked ? 'on' : ''}" data-like aria-pressed="${post.liked ? 'true' : 'false'}" hidden>${icon('heart', 17)}<span>${post.likes}</span></button>
         <button class="icon-btn" data-comments>${icon('comment', 17)}<span>${post.comments}</span></button>
+        ${post.text ? `<button class="icon-btn" data-read title="Прочитать запись вслух">${icon('volume', 17)}</button>` : ''}
         <button class="icon-btn ${isSaved(post.id) ? 'on' : ''}" data-save title="Сохранить">${icon('star', 17)}</button>
         <button class="icon-btn ${isBookmarked(post.id) ? 'on' : ''}" data-bookmark title="В закладки">${icon('star', 17)}</button>
         ${state.user ? `<button class="icon-btn" data-repost title="Репостнуть">${icon('refresh', 17)}</button>` : ''}
@@ -1013,6 +1029,22 @@ export function postCard(post, refresh, options = {}) {
     if (hasStory(post.author)) openStories(post.author.id);
     else openProfile(post.author.username);
   };
+
+  card.querySelector('[data-read]')?.addEventListener('click', () => {
+    if (!('speechSynthesis' in window) || !window.SpeechSynthesisUtterance) {
+      toast('Озвучивание не поддерживается на этом устройстве', 'err');
+      return;
+    }
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      return toast('Озвучивание остановлено');
+    }
+    const utterance = new SpeechSynthesisUtterance(post.text);
+    utterance.lang = 'ru-RU';
+    utterance.rate = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  });
 
   card.querySelector('[data-save]').onclick = (event) => {
     const on = toggleSaved(post);
