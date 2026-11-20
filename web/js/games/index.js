@@ -6340,6 +6340,73 @@ function orbit2(canvas, report) {
   });
 }
 
+function silverGate(canvas, report) {
+  return runner(canvas, () => {
+    let s;
+    const reset = () => { s = { x: 0, dir: 1, target: .5, speed: .72, score: 0, misses: 0, over: false }; };
+    reset();
+    const next = () => { s.target = .18 + Math.random() * .64; s.speed = Math.min(1.65, s.speed + .055); };
+    return {
+      score: () => s.score,
+      bind(bind) {
+        bind('pointerdown', () => {
+          if (s.over) { reset(); return; }
+          if (Math.abs(s.x - s.target) < .095) { s.score += 10; next(); }
+          else { s.misses += 1; if (s.misses >= 3) { s.over = true; report(s.score); } else next(); }
+        });
+      },
+      update(dt) { if (!s.over) { s.x += s.dir * s.speed * dt; if (s.x > 1 || s.x < 0) { s.dir *= -1; s.x = Math.max(0, Math.min(1, s.x)); } } },
+      draw(ctx, { w, h }) {
+        const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#111631'); bg.addColorStop(1, '#251246'); ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 50; i++) { ctx.fillStyle = 'rgba(210,220,255,.5)'; ctx.fillRect((i * 83) % w, (i * 47) % h, 2, 2); }
+        const left = w * .12, width = w * .76, y = h * .56;
+        ctx.fillStyle = 'rgba(160,130,255,.16)'; ctx.fillRect(left + s.target * width - 13, y - 54, 26, 108);
+        ctx.strokeStyle = '#b9a3ff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(left + s.target * width - 16, y + 45); ctx.lineTo(left + s.target * width - 16, y - 36); ctx.arc(left + s.target * width, y - 36, 16, Math.PI, 0); ctx.lineTo(left + s.target * width + 16, y + 45); ctx.stroke();
+        ctx.fillStyle = '#25243d'; ctx.fillRect(left, y + 58, width, 16); ctx.fillStyle = '#b9a3ff'; ctx.fillRect(left + s.x * width - 8, y + 49, 16, 34);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#f5f1ff'; ctx.font = '700 25px Inter,system-ui'; ctx.fillText('Гравитационные врата', w / 2, h * .2); ctx.font = '600 16px Inter,system-ui'; ctx.fillText(`Очки ${s.score}   Ошибки ${s.misses}/3`, w / 2, h * .29); ctx.fillStyle = 'rgba(245,241,255,.7)'; ctx.font = '14px Inter,system-ui'; ctx.fillText(s.over ? 'Коснитесь, чтобы начать заново' : 'Коснитесь, когда корабль в светящемся окне', w / 2, h * .84); ctx.textAlign = 'start';
+      }
+    };
+  });
+}
+
+function silverMaze(canvas, report) {
+  return runner(canvas, () => {
+    const map = ['########', '#S...#.#', '#.#..#.#', '#.#G...#', '#G..#..#', '#......#', '#...E..#', '########'];
+    let s;
+    const reset = () => { s = { r: 1, c: 1, gems: new Set(), score: 0, over: false }; };
+    reset();
+    const move = (dr, dc) => {
+      if (s.over) { reset(); return; }
+      const nr = s.r + dr, nc = s.c + dc;
+      if (nr < 0 || nr >= map.length || nc < 0 || nc >= map[0].length || map[nr][nc] === '#') return;
+      s.r = nr; s.c = nc;
+      if (map[nr][nc] === 'G' && !s.gems.has(`${nr}:${nc}`)) { s.gems.add(`${nr}:${nc}`); s.score += 25; }
+      if (map[nr][nc] === 'E' && s.gems.size === 3) { s.score += 100; s.over = true; report(s.score); }
+    };
+    return {
+      score: () => s.score,
+      bind(bind) {
+        bind('keydown', (e) => { const d = { ArrowUp: [-1,0], w: [-1,0], ArrowDown: [1,0], s: [1,0], ArrowLeft: [0,-1], a: [0,-1], ArrowRight: [0,1], d: [0,1] }[e.key]; if (d) { e.preventDefault(); move(...d); } }, window);
+        bind('pointerdown', (e) => { const rect = canvas.getBoundingClientRect(); const x = e.clientX - rect.left - rect.width/2, y = e.clientY - rect.top - rect.height/2; if (Math.abs(x) > Math.abs(y)) move(0, x > 0 ? 1 : -1); else move(y > 0 ? 1 : -1, 0); });
+      },
+      update() {},
+      draw(ctx, { w, h }) {
+        const bg = ctx.createLinearGradient(0, 0, w, h); bg.addColorStop(0, '#101a28'); bg.addColorStop(1, '#183846'); ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+        const tile = Math.min(w / 10, h / 12), ox = (w - map[0].length * tile) / 2, oy = (h - map.length * tile) / 2 + 12;
+        for (let r = 0; r < map.length; r++) for (let c = 0; c < map[r].length; c++) {
+          const x = ox + c * tile, y = oy + r * tile, wall = map[r][c] === '#';
+          ctx.fillStyle = wall ? '#315b69' : '#102832'; ctx.beginPath(); ctx.moveTo(x + tile/2,y); ctx.lineTo(x+tile,y+tile/2); ctx.lineTo(x+tile/2,y+tile); ctx.lineTo(x,y+tile/2); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = 'rgba(170,240,230,.16)'; ctx.stroke();
+          if (map[r][c] === 'G' && !s.gems.has(`${r}:${c}`)) { ctx.fillStyle = '#70ffe2'; ctx.shadowColor = '#70ffe2'; ctx.shadowBlur = 14; ctx.beginPath(); ctx.arc(x+tile/2,y+tile/2,tile*.17,0,Math.PI*2); ctx.fill(); ctx.shadowBlur = 0; }
+          if (map[r][c] === 'E') { ctx.fillStyle = s.gems.size === 3 ? '#ffd978' : '#8b91a0'; ctx.fillRect(x+tile*.3,y+tile*.3,tile*.4,tile*.4); }
+        }
+        const px=ox+s.c*tile+tile/2, py=oy+s.r*tile+tile/2; ctx.fillStyle='#ffb86c'; ctx.shadowColor='#ff9b53'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(px,py,tile*.23,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+        ctx.textAlign='center'; ctx.fillStyle='#e9f7f5'; ctx.font='700 21px Inter,system-ui'; ctx.fillText('Кристальный лабиринт',w/2,Math.max(28,oy-22)); ctx.font='14px Inter,system-ui'; ctx.fillText(`Кристаллы ${s.gems.size}/3  ·  Очки ${s.score}`,w/2,h-20); ctx.textAlign='start';
+      }
+    };
+  });
+}
+
 export const GAMES = [
   {
     id: 'shelter',
@@ -6788,7 +6855,9 @@ export const GAMES = [
   { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror },
   { id: 'silver_crystal_3d', title: 'Кристальная шахта 3D', desc: 'Соберите кристаллы в текстурированном лабиринте', tint: ['#102d2a', '#3e9278'], silverOnly: true, mount: silverCrystal3D },
   { id: 'silver_rail_3d', title: 'Городской спуск 3D', desc: 'Уклоняйтесь от блоков и собирайте световые осколки', tint: ['#08252a', '#327d73'], silverOnly: true, mount: mountSkyRail3D },
-  { id: 'silver_nebula_3d', title: 'Неоновая трасса 3D', desc: 'Премиальный заезд сквозь текстурированный космос', tint: ['#17102d', '#653d8c'], silverOnly: true, premium: true, mount: mountNebulaTrack3D }
+  { id: 'silver_nebula_3d', title: 'Неоновая трасса 3D', desc: 'Премиальный заезд сквозь текстурированный космос', tint: ['#17102d', '#653d8c'], silverOnly: true, premium: true, mount: mountNebulaTrack3D },
+  { id: 'silver_gate', title: 'Гравитационные врата', desc: 'Поймай момент и пройди светящиеся порталы', tint: ['#111631', '#653d8c'], silverOnly: true, premium: true, mount: silverGate },
+  { id: 'silver_maze', title: 'Кристальный лабиринт', desc: 'Собери три кристалла и найди выход', tint: ['#101a28', '#327d73'], silverOnly: true, premium: true, mount: silverMaze }
 ];
 
 function colorMatch(canvas, report) {
