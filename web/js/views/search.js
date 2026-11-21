@@ -153,7 +153,11 @@ export async function openSearch(initialQuery = '') {
         html += users.map((u) => `
           <div class="card list-item" style="padding:8px" data-user="${esc(u.username)}">
             ${avatar(u, 32)}
-            <div class="grow" style="text-align:left"><div class="small strong">${esc(u.displayName)}</div><div class="tiny muted">@${esc(u.username)}</div></div>
+            <div class="grow" style="text-align:left">
+              <div class="small strong">${esc(u.displayName)}</div>
+              <div class="tiny muted">@${esc(u.username)}</div>
+              ${Array.isArray(u.aliases) && u.aliases.length ? `<div class="tiny muted">Также: ${u.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
+            </div>
           </div>
         `).join('');
       }
@@ -190,7 +194,7 @@ export async function openSearch(initialQuery = '') {
     results.innerHTML = html;
     results.querySelectorAll('[data-user]').forEach((elNode) => {
       elNode.onclick = () => {
-        import('./profile.js?v=20251028').then((m) => m.openProfile(elNode.dataset.user));
+        import('./profile.js?v=20261125').then((m) => m.openProfile(elNode.dataset.user));
       };
     });
     wireChannels(results);

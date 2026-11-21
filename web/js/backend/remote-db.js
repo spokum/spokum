@@ -33,6 +33,7 @@ function shapeProfile(row, extra = {}) {
     username: row.username,
     loginName: row.login_name || row.username,
     displayName: row.display_name || row.username,
+    aliases: (Array.isArray(extra.aliases) ? extra.aliases : []).filter((name) => name && name !== row.username),
     bio: row.bio || '',
     hue: row.hue ?? 220,
     avatar: row.avatar || null,
@@ -777,7 +778,20 @@ export async function createBackend(url, key) {
           }
         } catch {}
       }
-      return { users: [...found.values()].map((row) => shapeProfile(row)) };
+      const aliasesByUser = new Map();
+      if (found.size) {
+        try {
+          const { data: names } = await sb.from('usernames').select('user_id, username').in('user_id', [...found.keys()]);
+          for (const row of names || []) {
+            const list = aliasesByUser.get(row.user_id) || [];
+            list.push(row.username);
+            aliasesByUser.set(row.user_id, list);
+          }
+        } catch {}
+      }
+      return {
+        users: [...found.values()].map((row) => shapeProfile(row, { aliases: aliasesByUser.get(row.id) || [] }))
+      };
     },
 
     async searchChannels(query) {
@@ -950,8 +964,13 @@ export async function createBackend(url, key) {
       }
       guard(posts.error);
       const liked = await likedSet((posts.data || []).map((row) => row.id));
+      let aliases = [];
+      try {
+        const { data: names } = await sb.from('usernames').select('username').eq('user_id', data.id).order('created_at', { ascending: true });
+        aliases = (names || []).map((row) => row.username).filter((name) => name !== data.username);
+      } catch {}
       return {
-        user: shapeProfile(data, await counters(data.id)),
+        user: shapeProfile(data, { ...(await counters(data.id)), aliases }),
         posts: (posts.data || []).map((row) => shapePost(row, liked))
       };
     },
@@ -2788,7 +2807,20 @@ export async function createBackend(url, key) {
     async searchAll(query) {
       const { data, error } = await sb.rpc('search_all', { p_query: query });
       guard(error);
-      return data || { users: [], posts: [], groups: [] };
+      const result = data || { users: [], posts: [], groups: [] };
+      if (String(query || '').trim().length >= 2) {
+        try {
+          const { users = [] } = await this.searchUsers(query);
+          const merged = new Map((result.users || []).map((user) => [String(user.id), user]));
+          for (const user of users) {
+            const id = String(user.id);
+            const existing = merged.get(id);
+            merged.set(id, existing ? { ...user, ...existing, aliases: user.aliases || [] } : user);
+          }
+          result.users = [...merged.values()];
+        } catch {}
+      }
+      return result;
     },
     async setPinCode(code) {
       const { data, error } = await sb.rpc('set_pin_code', { p_code: code });

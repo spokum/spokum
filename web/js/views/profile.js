@@ -550,6 +550,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
         <span class="strong" style="font-size:20px">${esc(fresh.displayName)}</span>${badges(fresh)}
       </div>
       <div class="small muted" style="margin-top:2px">@${esc(fresh.username)}</div>
+      ${Array.isArray(fresh.aliases) && fresh.aliases.length ? `<div class="tiny muted" style="margin-top:3px">Также: ${fresh.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
       <div data-pinned-achv style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px;min-height:0"></div>
       <div class="tiny muted" data-status-line style="margin-top:4px;line-height:1.4;min-height:0"></div>
       ${fresh.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${formatBio(fresh.bio)}</p>` : ''}
@@ -653,7 +654,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
     <div class="col" data-posts></div>`;
 
   const list = body.querySelector('[data-posts]');
-  const { postCard } = await import('./feed.js?v=20261123');
+  const { postCard } = await import('./feed.js?v=20261125');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
@@ -1691,6 +1692,7 @@ export async function openProfile(username) {
           <span class="strong" style="font-size:19px">${esc(user.displayName)}</span>${badges(user)}
         </div>
         <div class="small muted">@${esc(user.username)}</div>
+        ${Array.isArray(user.aliases) && user.aliases.length ? `<div class="tiny muted" style="margin-top:3px">Также: ${user.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
         ${user.isModerator ? `<div style="display:flex;justify-content:center;margin-top:8px"><span class="rank-pill">${icon('shield', 13)}<span>${esc(rankName(user))}</span></span></div>` : ''}
         <div data-shelf></div>
         <div data-likes></div>
@@ -1760,7 +1762,7 @@ export async function openProfile(username) {
     }
 
     const list = body.querySelector('[data-posts]');
-    const { postCard } = await import('./feed.js?v=20261123');
+    const { postCard } = await import('./feed.js?v=20261125');
     mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => openProfile(username));
 
     body.querySelector('[data-contact]').onclick = async () => {
@@ -1897,7 +1899,7 @@ export async function openProfile(username) {
     }
 
     body.querySelector('[data-report]').onclick = async () => {
-      const { openReport } = await import('./feed.js?v=20261123');
+      const { openReport } = await import('./feed.js?v=20261125');
       openReport('user', user.id);
     };
     if (hasStory(user)) {
