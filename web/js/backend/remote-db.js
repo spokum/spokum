@@ -34,6 +34,7 @@ function shapeProfile(row, extra = {}) {
     loginName: row.login_name || row.username,
     displayName: row.display_name || row.username,
     aliases: (Array.isArray(extra.aliases) ? extra.aliases : []).filter((name) => name && name !== row.username),
+    collectionNumbers: Array.isArray(extra.collectionNumbers) ? extra.collectionNumbers : [],
     bio: row.bio || '',
     hue: row.hue ?? 220,
     avatar: row.avatar || null,
@@ -768,6 +769,7 @@ export async function createBackend(url, key) {
       const { data, error } = await request;
       guard(error);
       const found = new Map((data || []).map((row) => [row.id, row]));
+      const digits = q.replace(/\D/g, '');
       if (q) {
         try {
           const aliases = await sb.from('usernames').select('user_id').ilike('username', `%${q}%`).limit(40);
@@ -778,19 +780,42 @@ export async function createBackend(url, key) {
           }
         } catch {}
       }
+      if (digits.length >= 4) {
+        try {
+          const matches = await sb.from('collection_numbers').select('user_id').ilike('number', `%${digits}%`).limit(40);
+          const missing = (matches.data || []).map((row) => row.user_id).filter((id) => !found.has(id));
+          if (missing.length) {
+            const extra = await sb.from('profiles').select('*').in('id', missing);
+            for (const row of extra.data || []) found.set(row.id, row);
+          }
+        } catch {}
+      }
       const aliasesByUser = new Map();
+      const numbersByUser = new Map();
       if (found.size) {
         try {
-          const { data: names } = await sb.from('usernames').select('user_id, username').in('user_id', [...found.keys()]);
+          const ids = [...found.keys()];
+          const { data: names } = await sb.from('usernames').select('user_id, username').in('user_id', ids);
           for (const row of names || []) {
             const list = aliasesByUser.get(row.user_id) || [];
             list.push(row.username);
             aliasesByUser.set(row.user_id, list);
           }
         } catch {}
+        try {
+          const { data: numbers } = await sb.from('collection_numbers').select('user_id, number').in('user_id', [...found.keys()]);
+          for (const row of numbers || []) {
+            const list = numbersByUser.get(row.user_id) || [];
+            list.push(row.number);
+            numbersByUser.set(row.user_id, list);
+          }
+        } catch {}
       }
       return {
-        users: [...found.values()].map((row) => shapeProfile(row, { aliases: aliasesByUser.get(row.id) || [] }))
+        users: [...found.values()].map((row) => shapeProfile(row, {
+          aliases: aliasesByUser.get(row.id) || [],
+          collectionNumbers: numbersByUser.get(row.id) || []
+        }))
       };
     },
 
@@ -920,6 +945,19 @@ export async function createBackend(url, key) {
       return { names: (data || []).map((row) => row.username), limit: limit.data || 3 };
     },
 
+    async myCollectionNumbers() {
+      requireUid();
+      const { data, error } = await sb.from('collection_numbers').select('number').eq('user_id', uid).order('created_at', { ascending: true });
+      guard(error);
+      return { numbers: (data || []).map((row) => row.number) };
+    },
+
+    async buyCollectionNumber(prefix, digits) {
+      const { data, error } = await sb.rpc('buy_collection_number', { p_prefix: prefix, p_digits: digits });
+      guard(error);
+      return data || {};
+    },
+
     async addUsername(name) {
       const { data, error } = await sb.rpc('add_username', { wanted: name });
       guard(error);
@@ -949,6 +987,16 @@ export async function createBackend(url, key) {
           data = found.data;
         }
       }
+      if (!data) {
+        const digits = clean.replace(/\D/g, '');
+        if (digits.length === 11) {
+          const number = await sb.from('collection_numbers').select('user_id').eq('number', `+${digits}`).maybeSingle();
+          if (number.data) {
+            const found = await sb.from('profiles').select('*').eq('id', number.data.user_id).maybeSingle();
+            data = found.data;
+          }
+        }
+      }
       if (!data) throw new Error('Пользователь не найден');
       const grab = () =>
         sb
@@ -965,12 +1013,17 @@ export async function createBackend(url, key) {
       guard(posts.error);
       const liked = await likedSet((posts.data || []).map((row) => row.id));
       let aliases = [];
+      let collectionNumbers = [];
       try {
         const { data: names } = await sb.from('usernames').select('username').eq('user_id', data.id).order('created_at', { ascending: true });
         aliases = (names || []).map((row) => row.username).filter((name) => name !== data.username);
       } catch {}
+      try {
+        const { data: numbers } = await sb.from('collection_numbers').select('number').eq('user_id', data.id).order('created_at', { ascending: true });
+        collectionNumbers = (numbers || []).map((row) => row.number);
+      } catch {}
       return {
-        user: shapeProfile(data, { ...(await counters(data.id)), aliases }),
+        user: shapeProfile(data, { ...(await counters(data.id)), aliases, collectionNumbers }),
         posts: (posts.data || []).map((row) => shapePost(row, liked))
       };
     },

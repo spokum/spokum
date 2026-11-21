@@ -240,9 +240,17 @@ function aliasesOf(user) {
   return [user.username, ...list.filter((name) => name !== user.username)];
 }
 
+function collectionNumbersOf(user) {
+  return Array.isArray(user?.collectionNumbers) ? user.collectionNumbers : [];
+}
+
 function ownerOf(name) {
   const clean = String(name || '').toLowerCase().replace(/^@/, '');
-  return state.users.find((u) => aliasesOf(u).includes(clean));
+  const digits = clean.replace(/\D/g, '');
+  return state.users.find((user) =>
+    aliasesOf(user).includes(clean) ||
+    (digits.length === 11 && collectionNumbersOf(user).includes(`+${digits}`))
+  );
 }
 
 export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
@@ -367,6 +375,7 @@ function pub(user) {
     id: user.id,
     username: user.username,
     aliases: aliasesOf(user).filter((name) => name !== user.username),
+    collectionNumbers: collectionNumbersOf(user),
     displayName: user.displayName,
     bio: user.bio,
     hue: user.hue,
@@ -923,6 +932,27 @@ export const local = {
     return { names: aliasesOf(user), limit: user.premiumUntil > Date.now() ? 8 : 3 };
   },
 
+  async myCollectionNumbers() {
+    return { numbers: collectionNumbersOf(need()) };
+  },
+
+  async buyCollectionNumber(prefix, digits) {
+    const user = need();
+    notMuted(user);
+    const allowed = ['+666', '+777', '+888', '+555', '+999'];
+    const cleanDigits = String(digits || '').replace(/\D/g, '');
+    if (!allowed.includes(prefix)) fail('Неизвестный формат номера');
+    if (!/^\d{8}$/.test(cleanDigits)) fail('Введите 8 цифр номера');
+    const number = prefix + cleanDigits;
+    if (state.users.some((person) => collectionNumbersOf(person).includes(number))) fail('Этот номер уже занят');
+    if ((user.coins || 0) < 5000) fail(`Не хватает монет: нужно 5000, у вас ${user.coins || 0}`);
+    user.coins -= 5000;
+    user.collectionNumbers = [...collectionNumbersOf(user), number];
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: -5000, reason: 'Коллекционный номер ' + number, createdAt: Date.now() });
+    save();
+    return { number, coins: user.coins };
+  },
+
   async addUsername(name) {
     const user = need();
     const clean = String(name || '').toLowerCase().replace(/^@/, '');
@@ -959,14 +989,15 @@ export const local = {
 
   async searchUsers(query) {
     const q = String(query || '').toLowerCase().replace(/^@/, '');
+    const digits = q.replace(/\D/g, '');
     return {
       users: state.users
-        .filter(
-          (u) =>
-            !q ||
-            aliasesOf(u).some((name) => name.includes(q)) ||
-            u.displayName.toLowerCase().includes(q) ||
-            u.bio.toLowerCase().includes(q)
+        .filter((u) =>
+          !q ||
+          aliasesOf(u).some((name) => name.includes(q)) ||
+          u.displayName.toLowerCase().includes(q) ||
+          u.bio.toLowerCase().includes(q) ||
+          (digits.length >= 4 && collectionNumbersOf(u).some((number) => number.replace(/\D/g, '').includes(digits)))
         )
         .slice(0, 40)
         .map(pub)

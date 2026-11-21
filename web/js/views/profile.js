@@ -472,6 +472,83 @@ function dayWordChip(user) {
   return `<div style="display:flex;justify-content:center;margin-top:8px"><span class="day-word">${icon('spark', 13)} ${esc(user.dayWord)}</span></div>`;
 }
 
+function formatCollectionNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length === 11 ? `+${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7)}` : String(value || '');
+}
+
+function openCollectionNumbers(done) {
+  const prefixes = ['+666', '+777', '+888', '+555', '+999'];
+  const body = el(`<div class="col" style="gap:12px">
+    <div class="tiny muted">Каждый номер стоит 5000 монет и навсегда закрепляется за аккаунтом. По номеру можно найти профиль.</div>
+    <div class="card" style="padding:12px">
+      <div class="tiny muted">Баланс</div>
+      <div class="strong" data-number-balance>${Number(state.user?.coins || 0)} монет</div>
+    </div>
+    <div class="col" style="gap:8px">
+      <label class="tiny muted">Формат номера</label>
+      <select class="input" data-number-prefix>${prefixes.map((prefix) => `<option value="${prefix}">${prefix}</option>`).join('')}</select>
+      <div class="row" style="gap:8px">
+        <input class="input grow" data-number-a inputmode="numeric" maxlength="4" placeholder="1234" aria-label="Первые четыре цифры">
+        <input class="input grow" data-number-b inputmode="numeric" maxlength="4" placeholder="5678" aria-label="Последние четыре цифры">
+      </div>
+      <div class="tiny muted" data-number-preview>+666 1234 5678</div>
+      <button class="btn btn-primary" data-number-buy disabled>Купить за 5000 монет</button>
+    </div>
+    <div>
+      <div class="strong small" style="margin-bottom:6px">Мои номера</div>
+      <div class="col" data-number-owned><div class="tiny muted">Загрузка…</div></div>
+    </div>
+  </div>`);
+  const sheet = openSheet('Коллекционные номера', body, {});
+  const prefixInput = body.querySelector('[data-number-prefix]');
+  const first = body.querySelector('[data-number-a]');
+  const second = body.querySelector('[data-number-b]');
+  const preview = body.querySelector('[data-number-preview]');
+  const buy = body.querySelector('[data-number-buy]');
+  const drawPreview = () => {
+    first.value = first.value.replace(/\D/g, '').slice(0, 4);
+    second.value = second.value.replace(/\D/g, '').slice(0, 4);
+    preview.textContent = `${prefixInput.value} ${first.value.padEnd(4, '·')} ${second.value.padEnd(4, '·')}`;
+    buy.disabled = first.value.length !== 4 || second.value.length !== 4;
+  };
+  prefixInput.onchange = drawPreview;
+  first.oninput = drawPreview;
+  second.oninput = drawPreview;
+  const drawOwned = async () => {
+    const slot = body.querySelector('[data-number-owned]');
+    try {
+      const { numbers = [] } = await api.myCollectionNumbers();
+      slot.innerHTML = numbers.length
+        ? numbers.map((number) => `<div class="list-item" style="padding:8px 0"><span class="strong small">${esc(formatCollectionNumber(number))}</span></div>`).join('')
+        : '<div class="tiny muted">Пока номеров нет</div>';
+    } catch (error) {
+      slot.innerHTML = `<div class="tiny muted">${esc(error.message || 'Не удалось загрузить номера')}</div>`;
+    }
+  };
+  drawOwned();
+  buy.onclick = async () => {
+    if (buy.disabled) return;
+    buy.disabled = true;
+    try {
+      const result = await api.buyCollectionNumber(prefixInput.value, first.value + second.value);
+      const refreshed = await api.me();
+      if (refreshed) setUser(refreshed);
+      body.querySelector('[data-number-balance]').textContent = `${Number(state.user?.coins || result.coins || 0)} монет`;
+      first.value = '';
+      second.value = '';
+      drawPreview();
+      await drawOwned();
+      toast('Номер закреплён за аккаунтом');
+      done?.();
+    } catch (error) {
+      toast(error.message || 'Не удалось купить номер');
+      buy.disabled = false;
+    }
+  };
+  drawPreview();
+}
+
 export async function render(root) {
   const user = state.user;
   root.innerHTML = `
@@ -531,14 +608,6 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    <button class="hw-profile-btn" data-disco style="background:linear-gradient(135deg,#1a0033,#330066);color:#fff">
-      <span class="hw-profile-icon">${icon('star', 24)}</span>
-      <span class="grow" style="text-align:left">
-        <span class="strong small" style="color:#fff">Возращение СпокУм!</span>
-        <span class="tiny" style="color:#ccc">Присоединяйтесь к дискотеке! Всеми любимые песни там</span>
-      </span>
-      ${icon('forward', 18)}
-    </button>
     <div class="card profile-card appear">
       <div class="banner" style="${bannerStyle(fresh)}">
         <div class="banner-inner">${bannerPins(fresh)}</div>
@@ -551,6 +620,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
       </div>
       <div class="small muted" style="margin-top:2px">@${esc(fresh.username)}</div>
       ${Array.isArray(fresh.aliases) && fresh.aliases.length ? `<div class="tiny muted" style="margin-top:3px">Также: ${fresh.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
+      ${Array.isArray(fresh.collectionNumbers) && fresh.collectionNumbers.length ? `<div class="tiny muted" style="margin-top:3px">Номер: ${fresh.collectionNumbers.map(formatCollectionNumber).map(esc).join(' · ')}</div>` : ''}
       <div data-pinned-achv style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px;min-height:0"></div>
       <div class="tiny muted" data-status-line style="margin-top:4px;line-height:1.4;min-height:0"></div>
       ${fresh.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${formatBio(fresh.bio)}</p>` : ''}
@@ -573,6 +643,9 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
       </div>
       <div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-moodcal>${icon('chart', 17)} Календарь настроения</button>
+      </div>
+      <div class="row" style="margin-top:8px;gap:8px">
+        <button class="btn grow" data-collection-numbers>${icon('spark', 17)} Коллекционные номера</button>
       </div>
       <div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-status>${icon('edit', 17)} Сменить статус</button>
@@ -654,7 +727,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
     <div class="col" data-posts></div>`;
 
   const list = body.querySelector('[data-posts]');
-  const { postCard } = await import('./feed.js?v=20261125');
+  const { postCard } = await import('./feed.js?v=20261126');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
@@ -725,13 +798,10 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
     try { await navigator.clipboard.writeText(`${text} — ${location.origin}`); toast('Ссылка и имя скопированы'); }
     catch { toast(text); }
   });
-  body.querySelector('[data-disco]')?.addEventListener('click', async () => {
-    const { openDisco } = await import('./disco.js?v=20251115');
-    openDisco();
-  });
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
   body.querySelector('[data-names]').onclick = () => openUsernames(() => render(root));
+  body.querySelector('[data-collection-numbers]').onclick = () => openCollectionNumbers(() => render(root));
   body.querySelector('[data-safe]').onclick = () => openZonePicker(() => render(root));
   body.querySelector('[data-journal]').onclick = async () => {
     const { openJournalHistory } = await import('./journal.js?v=20251028');
@@ -1693,6 +1763,7 @@ export async function openProfile(username) {
         </div>
         <div class="small muted">@${esc(user.username)}</div>
         ${Array.isArray(user.aliases) && user.aliases.length ? `<div class="tiny muted" style="margin-top:3px">Также: ${user.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
+        ${Array.isArray(user.collectionNumbers) && user.collectionNumbers.length ? `<div class="tiny muted" style="margin-top:3px">Номер: ${user.collectionNumbers.map(formatCollectionNumber).map(esc).join(' · ')}</div>` : ''}
         ${user.isModerator ? `<div style="display:flex;justify-content:center;margin-top:8px"><span class="rank-pill">${icon('shield', 13)}<span>${esc(rankName(user))}</span></span></div>` : ''}
         <div data-shelf></div>
         <div data-likes></div>
@@ -1762,7 +1833,7 @@ export async function openProfile(username) {
     }
 
     const list = body.querySelector('[data-posts]');
-    const { postCard } = await import('./feed.js?v=20261125');
+    const { postCard } = await import('./feed.js?v=20261126');
     mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => openProfile(username));
 
     body.querySelector('[data-contact]').onclick = async () => {
@@ -1899,7 +1970,7 @@ export async function openProfile(username) {
     }
 
     body.querySelector('[data-report]').onclick = async () => {
-      const { openReport } = await import('./feed.js?v=20261125');
+      const { openReport } = await import('./feed.js?v=20261126');
       openReport('user', user.id);
     };
     if (hasStory(user)) {

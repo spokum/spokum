@@ -157,6 +157,7 @@ export async function openSearch(initialQuery = '') {
               <div class="small strong">${esc(u.displayName)}</div>
               <div class="tiny muted">@${esc(u.username)}</div>
               ${Array.isArray(u.aliases) && u.aliases.length ? `<div class="tiny muted">Также: ${u.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
+              ${Array.isArray(u.collectionNumbers) && u.collectionNumbers.length ? `<div class="tiny muted">Номер: ${u.collectionNumbers.map((number) => { const digits = String(number).replace(/\D/g, ''); return digits.length === 11 ? `+${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7)}` : number; }).map(esc).join(' · ')}</div>` : ''}
             </div>
           </div>
         `).join('');
@@ -194,7 +195,7 @@ export async function openSearch(initialQuery = '') {
     results.innerHTML = html;
     results.querySelectorAll('[data-user]').forEach((elNode) => {
       elNode.onclick = () => {
-        import('./profile.js?v=20261125').then((m) => m.openProfile(elNode.dataset.user));
+        import('./profile.js?v=20261126').then((m) => m.openProfile(elNode.dataset.user));
       };
     });
     wireChannels(results);
