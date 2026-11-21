@@ -3,6 +3,8 @@ import { el, esc, plural, fullDate } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, badges, toast, openSheet, pickImage, emptyState, confirmSheet, hasStory, bannerStyle, bannerPins } from '../ui.js';
 import { openStories, publishStory } from './stories.js';
+import { auraColor, openAuraPicker } from './aura.js';
+import { mountStarfield, openStarfield } from './starfield.js';
 
 export function formatBio(text) {
   if (!text) return '';
@@ -606,6 +608,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   setUser({ ...state.user, ...fresh });
   const days = Math.max(1, Math.round((Date.now() - fresh.createdAt) / 86400000));
   const mood = MOODS[fresh.mood] || MOODS.calm;
+  const auraCol = auraColor();
 
   body.innerHTML = `
     <div class="card profile-card appear">
@@ -614,7 +617,10 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
         <button class="banner-edit" data-banner>${icon('image', 14)} Баннер</button>
       </div>
       <div class="profile-body" style="text-align:center">
-      <div style="display:flex;justify-content:center">${avatar(fresh, 88)}</div>
+      <div style="display:flex;justify-content:center;position:relative">
+        ${auraCol ? `<div aria-hidden="true" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,${auraCol}66 0%,${auraCol}00 70%);pointer-events:none"></div>` : ''}
+        <div style="position:relative;z-index:1">${avatar(fresh, 88)}</div>
+      </div>
       <div class="row" style="justify-content:center;gap:6px;margin-top:14px">
         <span class="strong" style="font-size:20px">${esc(fresh.displayName)}</span>${badges(fresh)}
       </div>
@@ -660,7 +666,12 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
         <button class="btn grow" data-story>${icon('play', 17)} Добавить историю</button>
         ${hasStory(fresh) ? `<button class="btn grow" data-my-story>${icon('eye', 17)} Моя история</button>` : ''}
       </div>
-      <button class="btn" data-pins-edit style="width:100%;margin-top:8px">${icon('spark', 17)} Разместить пины</button>` : ''}
+      <button class="btn" data-pins-edit style="width:100%;margin-top:8px">${icon('spark', 17)} Разместить пины</button>
+      <div class="row" style="margin-top:8px;gap:8px">
+        <button class="btn grow" data-starfield>${icon('star', 17)} Звёздное небо</button>
+        <button class="btn grow" data-aura>${icon('spark', 17)} Цвет ауры</button>
+      </div>
+      <button class="btn" data-pro-stats style="width:100%;margin-top:8px">${icon('chart', 17)} Расширенная статистика</button>` : ''}
       </div>
     </div>
     <div data-music-host></div>
@@ -729,6 +740,14 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   const list = body.querySelector('[data-posts]');
   const { postCard } = await import('./feed.js?v=20261126');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
+
+  mountStarfield(body);
+  body.querySelector('[data-starfield]')?.addEventListener('click', () => openStarfield(() => render(root)));
+  body.querySelector('[data-aura]')?.addEventListener('click', () => openAuraPicker(() => render(root)));
+  body.querySelector('[data-pro-stats]')?.addEventListener('click', async () => {
+    const { openProStats } = await import('./stats-pro.js?v=20261122');
+    openProStats();
+  });
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
   drawShelf(body, fresh, true, () => render(root));

@@ -6782,7 +6782,10 @@ export const GAMES = [
   { id: 'gravity_well', title: 'Гравитация', desc: 'Управляй гравитацией, веди корабль', tint: ['#0a0a1a', '#1a1a3a'], mount: gravityWell },
   { id: 'rhythm_grid', title: 'Ритм-сетка', desc: 'Запомни и повтори узор', tint: ['#1a0a1a', '#3a1a3a'], mount: rhythmGrid },
   { id: 'paint_fill', title: 'Заливка', desc: 'Залей всё одним цветом', tint: ['#0a1a0a', '#1a3a1a'], mount: paintFill },
-  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror }
+  { id: 'mirror', title: 'Зеркало', desc: 'Веди обе линии синхронно', tint: ['#1a1a0a', '#3a3a1a'], mount: mirror },
+  { id: 'neon_runner', title: 'Неон забег', desc: 'Беги по неоновой трассе', tint: ['#0a0014', '#1a0040'], mount: neonRunner },
+  { id: 'bubble_shooter', title: 'Стрелок', desc: 'Собери 3 одинаковых пузыря', tint: ['#001420', '#003050'], mount: bubbleShooter },
+  { id: 'pixel_art', title: 'Пиксель арт', desc: 'Раскрась по образцу', tint: ['#10000a', '#300020'], mount: pixelArt }
 ];
 
 function colorMatch(canvas, report) {
@@ -9039,6 +9042,368 @@ function mirror(canvas, report) {
         ctx.globalAlpha = 1;
         hud(ctx, w, [`Очки ${score}`, `Жизни ${lives}`, pressing ? 'Веди палец' : 'Касайся и веди']);
         if (over) overText(ctx, w, h, `Итог ${score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function neonRunner(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w, height = h;
+    let lane = 1;
+    let ballY = height - 70;
+    let obstacles = [], orbs = [], sparks = [];
+    let score = 0, dist = 0, spawn = 0.7, orbSpawn = 1.4, over = false;
+    const stars = Array.from({ length: 60 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.4 + 0.3, v: 0.1 + Math.random() * 0.4 }));
+    const reset = () => {
+      lane = 1; obstacles = []; orbs = []; sparks = [];
+      score = 0; dist = 0; spawn = 0.7; orbSpawn = 1.4; over = false;
+      ballY = height - 70;
+    };
+    reset();
+    let startX = null;
+    const laneX = (l) => width * (l + 0.5) / 3;
+    return {
+      score: () => score,
+      resize(s) { width = s.w; height = s.h; ballY = height - 70; },
+      bind(bind, node) {
+        bind('pointerdown', (e) => {
+          if (over) { reset(); return; }
+          startX = pointerX(node, e);
+        });
+        bind('pointerup', (e) => {
+          if (startX == null) return;
+          const endX = pointerX(node, e);
+          const dx = endX - startX;
+          if (Math.abs(dx) > 24) lane += dx < 0 ? -1 : 1;
+          else lane += endX < width / 2 ? -1 : 1;
+          lane = Math.max(0, Math.min(2, lane));
+          startX = null;
+        });
+        bind('pointerleave', () => { startX = null; });
+      },
+      update(dt) {
+        if (over) return;
+        dist += dt;
+        const speed = 220 + dist * 10;
+        stars.forEach(st => { st.y += st.v * dt * 0.5; if (st.y > 1) { st.y = 0; st.x = Math.random(); } });
+        spawn -= dt;
+        if (spawn <= 0) {
+          spawn = Math.max(0.4, 0.9 - dist * 0.01);
+          obstacles.push({ lane: Math.floor(Math.random() * 3), y: -30, size: 24 });
+        }
+        orbSpawn -= dt;
+        if (orbSpawn <= 0) {
+          orbSpawn = 1.2 + Math.random() * 1.0;
+          orbs.push({ lane: Math.floor(Math.random() * 3), y: -20, r: 8 });
+        }
+        obstacles.forEach(o => o.y += speed * dt);
+        orbs.forEach(o => o.y += speed * dt);
+        obstacles = obstacles.filter(o => o.y < height + 40);
+        orbs = orbs.filter(o => {
+          if (o.y > height + 40) return false;
+          if (o.lane === lane && Math.abs(o.y - ballY) < 24) {
+            score += 5;
+            const x = laneX(o.lane);
+            for (let i = 0; i < 10; i++) sparks.push({ x, y: o.y, vx: (Math.random() - 0.5) * 220, vy: (Math.random() - 0.5) * 220, life: 0.5, color: '#a0ffd0' });
+            return false;
+          }
+          return true;
+        });
+        for (const o of obstacles) {
+          if (o.lane === lane && o.y > ballY - 26 && o.y < ballY + 26) {
+            over = true; report(score);
+            const x = laneX(lane);
+            for (let i = 0; i < 20; i++) sparks.push({ x, y: ballY, vx: (Math.random() - 0.5) * 320, vy: (Math.random() - 0.5) * 320, life: 0.6, color: '#ff6090' });
+            break;
+          }
+        }
+        sparks.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+        sparks = sparks.filter(p => p.life > 0);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#0a0014', '#1a0040']);
+        ctx.strokeStyle = 'rgba(180,80,255,0.18)'; ctx.lineWidth = 1;
+        for (let i = 1; i < 3; i++) { const x = w * i / 3; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        stars.forEach(st => { ctx.fillStyle = `rgba(220,180,255,${0.3 + st.s * 0.3})`; ctx.fillRect(st.x * w, st.y * h, st.s, st.s * 2); });
+        orbs.forEach(o => {
+          const x = laneX(o.lane);
+          const g = ctx.createRadialGradient(x, o.y, 0, x, o.y, o.r + 6);
+          g.addColorStop(0, 'rgba(120,255,220,1)'); g.addColorStop(1, 'rgba(60,200,180,0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, o.y, o.r + 6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#e0fff5'; ctx.beginPath(); ctx.arc(x, o.y, o.r * 0.5, 0, Math.PI * 2); ctx.fill();
+        });
+        obstacles.forEach(o => {
+          const x = laneX(o.lane);
+          ctx.save();
+          ctx.shadowColor = '#ff3080'; ctx.shadowBlur = 14;
+          ctx.fillStyle = '#ff3080';
+          ctx.fillRect(x - o.size / 2, o.y - o.size / 2, o.size, o.size);
+          ctx.restore();
+        });
+        const bx = laneX(lane);
+        const g = ctx.createRadialGradient(bx, ballY, 0, bx, ballY, 26);
+        g.addColorStop(0, 'rgba(200,180,255,1)'); g.addColorStop(0.5, 'rgba(140,80,255,0.7)'); g.addColorStop(1, 'rgba(80,40,200,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, ballY, 26, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(bx, ballY, 9, 0, Math.PI * 2); ctx.fill();
+        sparks.forEach(p => { ctx.globalAlpha = Math.max(0, p.life * 2); ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        hud(ctx, w, [`Очки ${score}`, `Полоса ${lane + 1}`, `Скорость ${Math.floor(dist * 10)}%`]);
+        if (over) overText(ctx, w, h, `Итог ${score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function bubbleShooter(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    const COLS = 9;
+    const COLORS = ['#ff6b8a', '#ffb04d', '#7ed957', '#5aa0ff', '#a98aff'];
+    let width = w, height = h, cell = w / COLS, rows = Math.floor((h - 70) / cell);
+    let grid = [], bullet = null;
+    let shooter = { x: width / 2, y: height - 30, color: 0, next: 0 };
+    let aim = { x: width / 2, y: 0 };
+    let score = 0, dist = 0, dropT = 7, over = false, sparks = [];
+    const reset = () => {
+      cell = width / COLS; rows = Math.floor((height - 70) / cell);
+      grid = Array.from({ length: 4 }, () => Array.from({ length: COLS }, () => Math.floor(Math.random() * COLORS.length)));
+      shooter = { x: width / 2, y: height - 30, color: Math.floor(Math.random() * COLORS.length), next: Math.floor(Math.random() * COLORS.length) };
+      aim = { x: width / 2, y: 0 };
+      bullet = null; score = 0; dist = 0; dropT = 7; over = false; sparks = [];
+    };
+    reset();
+    const cellCenter = (r, c) => ({ x: c * cell + cell / 2, y: r * cell + cell / 2 });
+    const popCluster = (r, c) => {
+      const color = grid[r][c];
+      if (color == null) return;
+      const stack = [[r, c]]; const seen = new Set(); const cluster = [];
+      while (stack.length) {
+        const [rr, cc] = stack.pop();
+        const key = rr + ':' + cc;
+        if (seen.has(key)) continue; seen.add(key);
+        if (rr < 0 || rr >= grid.length || cc < 0 || cc >= COLS) continue;
+        if (grid[rr][cc] !== color) continue;
+        cluster.push([rr, cc]);
+        stack.push([rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]);
+      }
+      if (cluster.length >= 3) {
+        cluster.forEach(([rr, cc]) => {
+          grid[rr][cc] = null;
+          const p = cellCenter(rr, cc);
+          for (let i = 0; i < 5; i++) sparks.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 220, vy: (Math.random() - 0.5) * 220, life: 0.5, color: COLORS[color] });
+        });
+        score += cluster.length * 10;
+      }
+      while (grid.length && grid[grid.length - 1].every((v) => v == null)) grid.pop();
+    };
+    const snap = () => {
+      let best = null, bd = Infinity;
+      for (let r = 0; r <= grid.length; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (r < grid.length && grid[r][c] != null) continue;
+          const p = cellCenter(r, c);
+          const d = (p.x - bullet.x) * (p.x - bullet.x) + (p.y - bullet.y) * (p.y - bullet.y);
+          if (d < bd) { bd = d; best = { r, c }; }
+        }
+      }
+      if (!best) { bullet = null; return; }
+      while (grid.length <= best.r) grid.push(Array.from({ length: COLS }, () => null));
+      grid[best.r][best.c] = bullet.color;
+      popCluster(best.r, best.c);
+      shooter.color = shooter.next;
+      shooter.next = Math.floor(Math.random() * COLORS.length);
+      bullet = null;
+      if (grid.length > rows) { over = true; report(score); }
+    };
+    return {
+      score: () => score,
+      resize(s) {
+        width = s.w; height = s.h; cell = width / COLS; rows = Math.floor((height - 70) / cell);
+        shooter.x = width / 2; shooter.y = height - 30;
+        aim.x = width / 2;
+      },
+      bind(bind, node) {
+        const aimAt = (e) => {
+          const p = pointerPos(node, e);
+          aim.x = p.x; aim.y = Math.min(p.y, shooter.y - 20);
+        };
+        bind('pointermove', aimAt);
+        bind('pointerdown', (e) => {
+          if (over) { reset(); return; }
+          aimAt(e);
+          if (bullet) return;
+          const dx = aim.x - shooter.x, dy = aim.y - shooter.y;
+          const len = Math.hypot(dx, dy) || 1;
+          if (dy >= -10) return;
+          bullet = { x: shooter.x, y: shooter.y, vx: dx / len * 600, vy: dy / len * 600, color: shooter.color };
+        });
+      },
+      update(dt) {
+        if (over) return;
+        dist += dt;
+        dropT -= dt;
+        if (dropT <= 0) {
+          dropT = Math.max(3.5, 8 - dist * 0.05);
+          grid.unshift(Array.from({ length: COLS }, () => Math.floor(Math.random() * COLORS.length)));
+          if (grid.length > rows) { over = true; report(score); }
+        }
+        if (bullet) {
+          bullet.x += bullet.vx * dt; bullet.y += bullet.vy * dt;
+          if (bullet.x < cell / 2) { bullet.x = cell / 2; bullet.vx = Math.abs(bullet.vx); }
+          if (bullet.x > width - cell / 2) { bullet.x = width - cell / 2; bullet.vx = -Math.abs(bullet.vx); }
+          if (bullet.y < cell / 2) { snap(); }
+          else {
+            for (let r = 0; r < grid.length; r++) {
+              for (let c = 0; c < COLS; c++) {
+                if (grid[r][c] == null) continue;
+                const p = cellCenter(r, c);
+                if (Math.hypot(p.x - bullet.x, p.y - bullet.y) < cell * 0.9) { snap(); return; }
+              }
+            }
+          }
+        }
+        sparks.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+        sparks = sparks.filter(p => p.life > 0);
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#001420', '#003050']);
+        for (let r = 0; r < grid.length; r++) {
+          for (let c = 0; c < COLS; c++) {
+            if (grid[r][c] == null) continue;
+            const p = cellCenter(r, c);
+            ctx.fillStyle = COLORS[grid[r][c]];
+            ctx.beginPath(); ctx.arc(p.x, p.y, cell * 0.42, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.beginPath(); ctx.arc(p.x - cell * 0.12, p.y - cell * 0.12, cell * 0.13, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        const dx = aim.x - shooter.x, dy = aim.y - shooter.y;
+        const len = Math.hypot(dx, dy) || 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 2;
+        ctx.setLineDash([5, 7]);
+        ctx.beginPath(); ctx.moveTo(shooter.x, shooter.y); ctx.lineTo(shooter.x + dx / len * 80, shooter.y + dy / len * 80); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = COLORS[shooter.next];
+        ctx.beginPath(); ctx.arc(shooter.x - 28, shooter.y, 7, 0, Math.PI * 2); ctx.fill();
+        if (bullet) {
+          ctx.fillStyle = COLORS[bullet.color];
+          ctx.beginPath(); ctx.arc(bullet.x, bullet.y, cell * 0.42, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.fillStyle = COLORS[shooter.color];
+          ctx.beginPath(); ctx.arc(shooter.x, shooter.y, cell * 0.42, 0, Math.PI * 2); ctx.fill();
+        }
+        sparks.forEach(p => { ctx.globalAlpha = Math.max(0, p.life * 2); ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        hud(ctx, w, [`Очки ${score}`, `Рядов ${grid.length}/${rows}`, `Время ${Math.floor(dist)}с`]);
+        if (over) overText(ctx, w, h, `Итог ${score}`, 'Тап для повтора');
+      }
+    };
+  });
+}
+
+function pixelArt(canvas, report) {
+  return runner(canvas, ({ w, h }) => {
+    let width = w, height = h;
+    const N = 8;
+    const PATTERNS = [
+      { name: 'Сердце', g: ['.XX..XX.', 'XXXXXXXX', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...', '........'] },
+      { name: 'Звезда', g: ['...XX...', '...XX...', '.XXXXXX.', 'XXXXXXXX', '.XXXXXX.', '..X..X..', '.X....X.', 'X......X'] },
+      { name: 'Смайл', g: ['........', '.XX..XX.', '.XX..XX.', '........', 'X......X', '.XXXXXX.', '..XXXX..', '........'] },
+      { name: 'Стрела', g: ['...XX...', '..XXXX..', '.XXXXXX.', 'XXXXXXXX', '...XX...', '...XX...', '...XX...', '...XX...'] },
+      { name: 'Ромб', g: ['...XX...', '..XXXX..', '.XXXXXX.', 'XXXXXXXX', 'XXXXXXXX', '.XXXXXX.', '..XXXX..', '...XX...'] },
+      { name: 'Дом', g: ['...XX...', '..XXXX..', '.XXXXXX.', 'XXXXXXXX', 'XXXXXXXX', 'XX.XX.XX', 'XX.XX.XX', 'XX.XX.XX'] },
+      { name: 'Цветок', g: ['..XXXX..', '.XX..XX.', 'XX....XX', 'XX....XX', 'XX....XX', 'XX....XX', '.XX..XX.', '..XXXX..'] }
+    ];
+    let level = 0;
+    let painted = new Array(N * N).fill(false);
+    let target = [];
+    let complete = false, completeT = 0, score = 0;
+    const loadLevel = (lv) => {
+      const p = PATTERNS[lv % PATTERNS.length];
+      target = [];
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) target.push(p.g[r][c] === 'X');
+      painted = new Array(N * N).fill(false);
+      complete = false; completeT = 0;
+    };
+    loadLevel(level);
+    const check = () => { for (let i = 0; i < N * N; i++) if (painted[i] !== target[i]) return false; return true; };
+    return {
+      score: () => score,
+      resize(s) { width = s.w; height = s.h; },
+      bind(bind, node) {
+        bind('pointerdown', (e) => {
+          if (complete) return;
+          const rect = node.getBoundingClientRect();
+          const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+          const y = (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
+          const size = Math.min(width, height - 80) - 16;
+          const ox = (width - size) / 2;
+          const oy = 56;
+          const cell = size / N;
+          const c = Math.floor((x - ox) / cell);
+          const r = Math.floor((y - oy) / cell);
+          if (c < 0 || r < 0 || c >= N || r >= N) return;
+          painted[r * N + c] = !painted[r * N + c];
+          if (check()) {
+            complete = true; completeT = 1.4;
+            score += 1;
+            report(score);
+          }
+        });
+      },
+      update(dt) {
+        if (complete) {
+          completeT -= dt;
+          if (completeT <= 0) { level += 1; loadLevel(level); }
+        }
+      },
+      draw(ctx, size) {
+        const { w, h } = size;
+        backdrop(ctx, w, h, ['#10000a', '#300020']);
+        const p = PATTERNS[level % PATTERNS.length];
+        const board = Math.min(w, h - 80) - 16;
+        const ox = (w - board) / 2;
+        const oy = 56;
+        const cell = board / N;
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(ox - 6, oy - 6, board + 12, board + 12);
+        for (let r = 0; r < N; r++) {
+          for (let c = 0; c < N; c++) {
+            const i = r * N + c;
+            const x = ox + c * cell, y = oy + r * cell;
+            ctx.fillStyle = 'rgba(255,255,255,0.025)';
+            ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+            if (painted[i]) {
+              const col = complete ? '#80ffb0' : '#ff60c0';
+              ctx.save();
+              ctx.shadowColor = col; ctx.shadowBlur = 8;
+              ctx.fillStyle = col;
+              ctx.fillRect(x + 3, y + 3, cell - 6, cell - 6);
+              ctx.restore();
+            }
+            ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
+          }
+        }
+        const psz = 56;
+        const pox = w - psz - 12, poy = h - psz - 12;
+        const pc = psz / N;
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.fillRect(pox - 3, poy - 3, psz + 6, psz + 6);
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+          if (p.g[r][c] === 'X') { ctx.fillStyle = 'rgba(255,180,220,0.9)'; ctx.fillRect(pox + c * pc, poy + r * pc, pc, pc); }
+        }
+        hud(ctx, w, [`Уровень ${level + 1}`, `Собрано ${score}`, complete ? 'Готово!' : p.name]);
+        if (complete) {
+          ctx.textAlign = 'center';
+          ctx.fillStyle = 'rgba(128,255,176,0.95)';
+          ctx.font = '700 22px Inter, system-ui, sans-serif';
+          ctx.fillText(`Уровень ${level + 1} пройден!`, w / 2, h / 2);
+          ctx.textAlign = 'start';
+        }
       }
     };
   });
