@@ -64,7 +64,7 @@ export async function openSearch(initialQuery = '') {
         const id = Number(node.dataset.channel);
         try {
           sheet.close();
-          const { openChat } = await import('./chats.js?v=20261121');
+          const { openChat } = await import('./chats.js?v=20261122');
           document.querySelector('[data-tab="chats"]')?.click();
           setTimeout(() => openChat(id), 60);
         } catch (error) {
@@ -190,7 +190,7 @@ export async function openSearch(initialQuery = '') {
     results.innerHTML = html;
     results.querySelectorAll('[data-user]').forEach((elNode) => {
       elNode.onclick = () => {
-        import('./profile.js?v=20261121').then((m) => m.openProfile(elNode.dataset.user));
+        import('./profile.js?v=20261122').then((m) => m.openProfile(elNode.dataset.user));
       };
     });
     wireChannels(results);

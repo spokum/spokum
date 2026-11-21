@@ -117,7 +117,7 @@ export async function openFriends() {
               const { chat } = await api.createChat({ kind: 'dm', members: [Number(b.dataset.write)] });
               sheet.close();
               document.querySelector('[data-tab="chats"]')?.click();
-              const { openChat } = await import('./chats.js?v=20261121');
+              const { openChat } = await import('./chats.js?v=20261122');
               setTimeout(() => openChat(chat.id), 80);
             } catch (e) { toast(e.message, 'err'); }
           };

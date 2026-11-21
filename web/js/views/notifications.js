@@ -230,39 +230,39 @@ async function jump(item, sheet) {
   const meta = item.meta || {};
   sheet.close();
   if (item.kind === 'message' && meta.chat) {
-    const { openChat } = await import('./chats.js?v=20261121');
+    const { openChat } = await import('./chats.js?v=20261122');
     openChat(meta.chat);
     return;
   }
   if (item.kind === 'report') {
-    const { openMod } = await import('./mod.js?v=20261121');
+    const { openMod } = await import('./mod.js?v=20261122');
     openMod();
     return;
   }
   if (item.kind === 'modaction' || item.kind === 'payment') {
-    const { openAdmin } = await import('./admin.js?v=20261121');
+    const { openAdmin } = await import('./admin.js?v=20261122');
     openAdmin();
     return;
   }
   if (item.kind === 'newpost' && meta.author) {
-    const { openProfile } = await import('./profile.js?v=20261121');
+    const { openProfile } = await import('./profile.js?v=20261122');
     const { users } = await api.searchUsers('');
     const author = users.find((row) => String(row.id) === String(meta.author));
     if (author) openProfile(author.username);
     return;
   }
   if (item.kind === 'gift') {
-    const { openMyGifts } = await import('./gifts.js?v=20261121');
+    const { openMyGifts } = await import('./gifts.js?v=20261122');
     openMyGifts(state.user.id, true);
     return;
   }
   if (item.kind === 'letter') {
-    const { openLetters } = await import('./letters.js?v=20261121');
+    const { openLetters } = await import('./letters.js?v=20261122');
     openLetters();
     return;
   }
   if (item.kind === 'capsule') {
-    const { openCapsules } = await import('./capsule.js?v=20261121');
+    const { openCapsules } = await import('./capsule.js?v=20261122');
     openCapsules();
     return;
   }
@@ -278,7 +278,7 @@ export async function openNotifications() {
 
   const draw = async () => {
     try {
-      const { isQuietHour } = await import('./quiet-hours.js?v=20261121');
+      const { isQuietHour } = await import('./quiet-hours.js?v=20261122');
       if (isQuietHour()) {
         const now = new Date();
         const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });

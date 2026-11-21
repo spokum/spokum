@@ -83,7 +83,7 @@ export function openVisitors() {
         if (!name) return;
         sheet.close();
         try {
-          const { openProfile } = await import('./profile.js?v=20261121');
+          const { openProfile } = await import('./profile.js?v=20261122');
           openProfile(name);
         } catch {}
       };

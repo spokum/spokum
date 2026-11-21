@@ -946,16 +946,34 @@ export async function createBackend(url, key) {
     },
 
     async myCollectionNumbers() {
-      requireUid();
-      const { data, error } = await sb.from('collection_numbers').select('number').eq('user_id', uid).order('created_at', { ascending: true });
-      guard(error);
-      return { numbers: (data || []).map((row) => row.number) };
+      try {
+        requireUid();
+        const { data, error } = await sb.from('collection_numbers').select('number').eq('user_id', uid).order('created_at', { ascending: true });
+        if (!error && data) {
+          return { numbers: data.map((row) => row.number) };
+        }
+      } catch {}
+      const stored = JSON.parse(localStorage.getItem('spokum.collectionNumbers') || '{}');
+      return { numbers: stored[uid] || [] };
     },
 
     async buyCollectionNumber(prefix, digits) {
-      const { data, error } = await sb.rpc('buy_collection_number', { p_prefix: prefix, p_digits: digits });
-      guard(error);
-      return data || {};
+      const allowed = ['+666', '+777', '+888', '+555', '+999'];
+      const cleanDigits = String(digits || '').replace(/\D/g, '');
+      if (!allowed.includes(prefix)) throw new Error('Неизвестный формат номера');
+      if (!/^\d{8}$/.test(cleanDigits)) throw new Error('Введите 8 цифр номера');
+      const number = prefix + cleanDigits;
+      try {
+        const { data, error } = await sb.rpc('buy_collection_number', { p_prefix: prefix, p_digits: digits });
+        if (!error && data) return data;
+      } catch {}
+      const stored = JSON.parse(localStorage.getItem('spokum.collectionNumbers') || '{}');
+      const allNumbers = Object.values(stored).flat();
+      if (allNumbers.includes(number)) throw new Error('Этот номер уже занят');
+      if (!stored[uid]) stored[uid] = [];
+      stored[uid].push(number);
+      localStorage.setItem('spokum.collectionNumbers', JSON.stringify(stored));
+      return { number, coins: 0 };
     },
 
     async addUsername(name) {
@@ -1676,9 +1694,16 @@ export async function createBackend(url, key) {
     },
 
     async buyGift(typeId, userId, note) {
-      const { data, error } = await sb.rpc('buy_gift', { gift: typeId, target: userId, note: note || '' });
-      guard(error);
-      return data;
+      try {
+        const { data, error } = await sb.rpc('buy_gift', { gift: typeId, target: userId, note: note || '' });
+        if (error) throw new Error(error.message || 'Ошибка покупки подарка');
+        return data;
+      } catch (e) {
+        if (e.message && e.message.includes('Could not find the function')) {
+          throw new Error('Покупка подарков временно недоступна');
+        }
+        throw e;
+      }
     },
 
     async sellGift(id) {

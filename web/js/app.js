@@ -14,12 +14,12 @@ const TABS = [
 ];
 
 const views = {
-  feed: () => import('./views/feed.js?v=20261121'),
-  videos: () => import('./views/videos.js?v=20261121'),
-  chats: () => import('./views/chats.js?v=20261121'),
-  games: () => import('./views/games.js?v=20261121'),
-  settings: () => import('./views/settings.js?v=20261121'),
-  profile: () => import('./views/profile.js?v=20261121')
+  feed: () => import('./views/feed.js?v=20261122'),
+  videos: () => import('./views/videos.js?v=20261122'),
+  chats: () => import('./views/chats.js?v=20261122'),
+  games: () => import('./views/games.js?v=20261122'),
+  settings: () => import('./views/settings.js?v=20261122'),
+  profile: () => import('./views/profile.js?v=20261122')
 };
 
 const root = document.getElementById('app');
@@ -203,7 +203,7 @@ function guardHistory() {
     }
     if (window.SpokumHost || Date.now() - leaveHint > 2500) {
       leaveHint = Date.now();
-      import('./ui.js?v=20261121').then(({ toast }) => toast('Ещё раз назад, чтобы выйти')).catch(() => {});
+      import('./ui.js?v=20261122').then(({ toast }) => toast('Ещё раз назад, чтобы выйти')).catch(() => {});
       try {
         history.pushState({ spokum: 'guard' }, '');
       } catch {}
@@ -216,7 +216,7 @@ function guardHistory() {
 async function checkDevice(fresh) {
   if (!api.touchDevice) return false;
   try {
-    const { deviceInfo, rememberBlock } = await import('./device.js?v=20261121');
+    const { deviceInfo, rememberBlock } = await import('./device.js?v=20261122');
     const info = await deviceInfo();
     const { state: ban } = await api.touchDevice(info, fresh);
     rememberBlock(ban);
@@ -323,7 +323,7 @@ async function boot() {
   watchNetwork();
   watchSwipes();
   guardHistory();
-  import('./views/settings.js?v=20261121').then((module) => {
+  import('./views/settings.js?v=20261122').then((module) => {
     module.applyNight?.();
     module.applyComfort?.();
     setInterval(() => module.applyNight?.(), 300000);
@@ -363,7 +363,7 @@ async function boot() {
     networkBar();
     setInterval(bringBackSession, 30000);
   }
-  const { pinOn, askPin } = await import('./pin.js?v=20261121');
+  const { pinOn, askPin } = await import('./pin.js?v=20261122');
   if (pinOn()) {
     const ok = await askPin(root);
     if (!ok) {
@@ -376,7 +376,7 @@ async function boot() {
   start();
   announcePremium(state.user);
   checkPixelBattle();
-  import('./views/future-letter.js?v=20261121')
+  import('./views/future-letter.js?v=20261122')
     .then(({ notifyFutureLetters }) => notifyFutureLetters())
     .catch(() => {});
 }
@@ -395,7 +395,7 @@ function checkPixelBattle() {
     document.body.appendChild(banner);
     document.body.style.paddingTop = '40px';
     banner.querySelector('[data-pixel-go]').onclick = async () => {
-      const { openPixelBattle } = await import('./views/pixel-battle.js?v=20261121');
+      const { openPixelBattle } = await import('./views/pixel-battle.js?v=20261122');
       openPixelBattle();
     };
     banner.querySelector('[data-pixel-close]').onclick = () => {
@@ -424,12 +424,12 @@ function start() {
   openTab(state.tab || 'feed');
   connectSocket();
   askJournal();
-  import('./call.js?v=20261121').then((module) => module.initCalls()).catch(() => {});
-  import('./views/notifications.js?v=20261121').then((module) => {
+  import('./call.js?v=20261122').then((module) => module.initCalls()).catch(() => {});
+  import('./views/notifications.js?v=20261122').then((module) => {
     module.refreshBell();
     setTimeout(() => module.offerNotifications?.(), 4000);
   }).catch(() => {});
-  import('./accounts.js?v=20261121').then((module) => module.rememberCurrent()).catch(() => {});
+  import('./accounts.js?v=20261122').then((module) => module.rememberCurrent()).catch(() => {});
   if (api.tidyProfile) {
     setTimeout(() => {
       api.tidyProfile()
@@ -445,7 +445,7 @@ function start() {
 async function askJournal() {
   if (!state.user || !navigator.onLine) return;
   try {
-    const journal = await import('./views/journal.js?v=20261121');
+    const journal = await import('./views/journal.js?v=20261122');
     if (!(await journal.shouldAskToday())) return;
     setTimeout(() => journal.openJournal(), 1200);
   } catch {}
@@ -522,7 +522,7 @@ async function openTab(tab) {
   window.__spokum = { openTab };
   const host = shell.querySelector('[data-view]');
   if (state.user && navigator.onLine) {
-    const { loadStories } = await import('./views/stories.js?v=20261121');
+    const { loadStories } = await import('./views/stories.js?v=20261122');
     await Promise.race([loadStories(), new Promise((done) => setTimeout(done, 4000))]);
   }
   shell.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === tab));
@@ -536,7 +536,7 @@ async function openTab(tab) {
     host.innerHTML = `<div class="empty">${error.message}</div>`;
   }
   try {
-    const bell = await import('./views/notifications.js?v=20261121');
+    const bell = await import('./views/notifications.js?v=20261122');
     bell.mountBell(host, tab);
     if (Date.now() - bellAt > 20000) {
       bellAt = Date.now();
@@ -606,7 +606,7 @@ document.addEventListener('click', async (event) => {
   if (!shot || !shot.src) return;
   event.preventDefault();
   event.stopPropagation();
-  const { openLightbox } = await import('./ui.js?v=20261121');
+  const { openLightbox } = await import('./ui.js?v=20261122');
   const group = shot.closest('[data-album]');
   if (group) {
     const all = [...group.querySelectorAll('img')].map((node) => node.dataset.full || node.src);
@@ -631,7 +631,7 @@ window.addEventListener('spokum:message', (event) => {
 });
 
 window.addEventListener('spokum:notify', async (event) => {
-  const bell = await import('./views/notifications.js?v=20261121');
+  const bell = await import('./views/notifications.js?v=20261122');
   const item = event.detail || {};
   if (!bell.markShown(item.id)) return;
   bell.bumpBell();
@@ -660,7 +660,7 @@ async function pullNews() {
     } catch {}
   }
   try {
-    const bell = await import('./views/notifications.js?v=20261121');
+    const bell = await import('./views/notifications.js?v=20261122');
     await bell.pullNotifications();
   } catch {}
   if (Date.now() - unreadAt > 45000) {

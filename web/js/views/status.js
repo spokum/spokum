@@ -41,7 +41,7 @@ export function setStatus(text) {
   const t = String(text || '').slice(0, MAX);
   try { localStorage.setItem(KEY, t); } catch {}
   try {
-    import('../store.js?v=20261121').then(({ api }) => {
+    import('../store.js?v=20261122').then(({ api }) => {
       if (api && typeof api.updateMe === 'function') {
         api.updateMe({ status: t }).catch(() => {});
       }

@@ -199,7 +199,7 @@ async function openAppeals() {
 
   body.querySelectorAll('[data-new]').forEach((button) => {
     button.onclick = async () => {
-      const { promptSheet } = await import('../ui.js?v=20261121');
+      const { promptSheet } = await import('../ui.js?v=20261122');
       const text = await promptSheet({
         title: 'Спор о наказании',
         label: 'Расскажите, что произошло на самом деле',
@@ -564,7 +564,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   const body = root.querySelector('[data-body]');
   if (user?.username) {
     const renderLocalQuoteWidget = () => {
-      import('./daily-quote.js?v=20261121').then(({ dailyQuoteWidgetHtml, bindDailyQuoteWidget }) => {
+      import('./daily-quote.js?v=20261122').then(({ dailyQuoteWidgetHtml, bindDailyQuoteWidget }) => {
         const host = root.querySelector('[data-quote-host]');
         if (!host || host.innerHTML.trim()) return;
         host.innerHTML = dailyQuoteWidgetHtml();
@@ -589,7 +589,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
           </button>`;
         const btn = root.querySelector('[data-dq-open]');
         if (btn) btn.onclick = async () => {
-          const { openDailyQuote } = await import('./daily-quote.js?v=20261121');
+          const { openDailyQuote } = await import('./daily-quote.js?v=20261122');
           openDailyQuote();
         };
       }).catch(() => renderLocalQuoteWidget());
@@ -735,40 +735,40 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
   body.querySelector('[data-feedback]')?.addEventListener('click', async () => {
-    const { openFeedback } = await import('./feedback.js?v=20261121');
+    const { openFeedback } = await import('./feedback.js?v=20261122');
     openFeedback();
   });
   body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
   body.querySelector('[data-twins]')?.addEventListener('click', () => openTwins());
 
   body.querySelector('[data-mood-chats]')?.addEventListener('click', async () => {
-    const { openMoodChats } = await import('./mood-chats.js?v=20261121');
+    const { openMoodChats } = await import('./mood-chats.js?v=20261122');
     openMoodChats();
   });
   body.querySelector('[data-voice-rooms]')?.addEventListener('click', async () => {
-    const { openVoiceRooms } = await import('./voice-rooms.js?v=20261121');
+    const { openVoiceRooms } = await import('./voice-rooms.js?v=20261122');
     openVoiceRooms();
   });
   body.querySelector('[data-pnotes]')?.addEventListener('click', async () => {
-    const { openNotes } = await import('./notes.js?v=20261121');
+    const { openNotes } = await import('./notes.js?v=20261122');
     openNotes();
     setTimeout(() => {
-      import('./notes.js?v=20261121').then(({ getNotesCount }) => {
+      import('./notes.js?v=20261122').then(({ getNotesCount }) => {
         const node = body.querySelector('[data-pnotes-count]');
         if (node) node.textContent = String(getNotesCount());
       }).catch(() => {});
     }, 600);
   });
   body.querySelector('[data-gallery]')?.addEventListener('click', async () => {
-    const { openGallery } = await import('./gallery.js?v=20261121');
+    const { openGallery } = await import('./gallery.js?v=20261122');
     openGallery(fresh.username);
   });
   body.querySelector('[data-profile-music]')?.addEventListener('click', async () => {
-    const { openMusicPicker } = await import('./profile-music.js?v=20261121');
+    const { openMusicPicker } = await import('./profile-music.js?v=20261122');
     openMusicPicker(() => paintMusicWidget());
   });
 
-  import('./notes.js?v=20261121').then(({ getNotesCount }) => {
+  import('./notes.js?v=20261122').then(({ getNotesCount }) => {
     const node = body.querySelector('[data-pnotes-count]');
     if (node) node.textContent = String(getNotesCount());
   }).catch(() => {});
@@ -776,10 +776,10 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   const musicHost = body.querySelector('[data-music-host]');
   const paintMusicWidget = () => {
     if (!musicHost) return;
-    import('./profile-music.js?v=20261121').then(({ profileMusicWidget, bindMusicWidget }) => {
+    import('./profile-music.js?v=20261122').then(({ profileMusicWidget, bindMusicWidget }) => {
       musicHost.innerHTML = profileMusicWidget({ isMine: true });
       bindMusicWidget(musicHost, () => {
-        import('./profile-music.js?v=20261121').then(({ openMusicPicker }) => {
+        import('./profile-music.js?v=20261122').then(({ openMusicPicker }) => {
           openMusicPicker(() => paintMusicWidget());
         });
       });
@@ -804,7 +804,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   body.querySelector('[data-collection-numbers]').onclick = () => openCollectionNumbers(() => render(root));
   body.querySelector('[data-safe]').onclick = () => openZonePicker(() => render(root));
   body.querySelector('[data-journal]').onclick = async () => {
-    const { openJournalHistory } = await import('./journal.js?v=20261121');
+    const { openJournalHistory } = await import('./journal.js?v=20261122');
     openJournalHistory();
   };
   body.querySelector('[data-banner]').onclick = () => openBannerMenu(fresh, () => render(root));
@@ -812,25 +812,25 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   body.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => render(root)));
   body.querySelector('[data-my-story]')?.addEventListener('click', () => openStories(fresh.id, () => render(root)));
   body.querySelector('[data-admin]')?.addEventListener('click', async () => {
-    const { openAdmin } = await import('./admin.js?v=20261121');
+    const { openAdmin } = await import('./admin.js?v=20261122');
     openAdmin();
   });
 
   body.querySelector('[data-mod]')?.addEventListener('click', async () => {
-    const { openMod } = await import('./mod.js?v=20261121');
+    const { openMod } = await import('./mod.js?v=20261122');
     openMod();
   });
   body.querySelector('[data-badges]')?.addEventListener('click', async () => {
-    const { openAchievements } = await import('./achievements.js?v=20261121');
+    const { openAchievements } = await import('./achievements.js?v=20261122');
     openAchievements();
   });
   body.querySelector('[data-moodcal]')?.addEventListener('click', async () => {
-    const { openMoodCalendar } = await import('./mood-calendar.js?v=20261121');
+    const { openMoodCalendar } = await import('./mood-calendar.js?v=20261122');
     openMoodCalendar({ username: fresh.username });
   });
 
   const paintStatusLine = () => {
-    import('./status.js?v=20261121').then(({ getStatus }) => {
+    import('./status.js?v=20261122').then(({ getStatus }) => {
       const node = body.querySelector('[data-status-line]');
       if (!node) return;
       const text = getStatus();
@@ -845,36 +845,36 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   };
   paintStatusLine();
   body.querySelector('[data-status]')?.addEventListener('click', async () => {
-    const { openStatusEditor } = await import('./status.js?v=20261121');
+    const { openStatusEditor } = await import('./status.js?v=20261122');
     openStatusEditor(() => render(root));
   });
 
-  import('./challenges.js?v=20261121').then(({ todayCompletedCount, todayTotal }) => {
+  import('./challenges.js?v=20261122').then(({ todayCompletedCount, todayTotal }) => {
     const node = body.querySelector('[data-challenges-count]');
     if (node) node.textContent = `${todayCompletedCount()}/${todayTotal()}`;
   }).catch(() => {});
   body.querySelector('[data-challenges]')?.addEventListener('click', async () => {
-    const { openChallenges } = await import('./challenges.js?v=20261121');
+    const { openChallenges } = await import('./challenges.js?v=20261122');
     await openChallenges();
-    import('./challenges.js?v=20261121').then(({ todayCompletedCount, todayTotal }) => {
+    import('./challenges.js?v=20261122').then(({ todayCompletedCount, todayTotal }) => {
       const node = body.querySelector('[data-challenges-count]');
       if (node) node.textContent = `${todayCompletedCount()}/${todayTotal()}`;
     }).catch(() => {});
   });
 
-  import('./visitors.js?v=20261121').then(({ visitorsCount }) => {
+  import('./visitors.js?v=20261122').then(({ visitorsCount }) => {
     const node = body.querySelector('[data-visitors-count]');
     if (node) node.textContent = String(visitorsCount());
   }).catch(() => {});
   body.querySelector('[data-visitors]')?.addEventListener('click', async () => {
-    const { openVisitors } = await import('./visitors.js?v=20261121');
+    const { openVisitors } = await import('./visitors.js?v=20261122');
     await openVisitors();
-    import('./visitors.js?v=20261121').then(({ visitorsCount }) => {
+    import('./visitors.js?v=20261122').then(({ visitorsCount }) => {
       const node = body.querySelector('[data-visitors-count]');
       if (node) node.textContent = String(visitorsCount());
     }).catch(() => {});
   });
-  import('./achievements.js?v=20261121').then(({ computeStats, achievementsList, evaluate, pinnedAchievements, RARITY }) => {
+  import('./achievements.js?v=20261122').then(({ computeStats, achievementsList, evaluate, pinnedAchievements, RARITY }) => {
     computeStats().then((stats) => {
       const list = achievementsList();
       const evaluated = evaluate(list, stats);
@@ -882,7 +882,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
       const node = body.querySelector('[data-achv-count]');
       if (node) node.textContent = `${count}/${list.length}`;
     }).catch(() => {});
-    import('./bookmarks.js?v=20261121').then(() => {
+    import('./bookmarks.js?v=20261122').then(() => {
       try {
         const list = JSON.parse(localStorage.getItem('spokum.bookmarks') || '[]');
         const node = body.querySelector('[data-bookmark-count]');
@@ -904,38 +904,38 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
       host.querySelectorAll('[data-achv-id]').forEach((node) => {
         node.style.cursor = 'pointer';
         node.onclick = async () => {
-          const { openAchievements } = await import('./achievements.js?v=20261121');
+          const { openAchievements } = await import('./achievements.js?v=20261122');
           openAchievements();
         };
       });
     }).catch(() => {});
   }).catch(() => {});
   body.querySelector('[data-breathe]')?.addEventListener('click', async () => {
-    const { openBreathe } = await import('./extras.js?v=20261121');
+    const { openBreathe } = await import('./extras.js?v=20261122');
     openBreathe();
   });
   body.querySelector('[data-noise]')?.addEventListener('click', async () => {
-    const { openNoise } = await import('./extras.js?v=20261121');
+    const { openNoise } = await import('./extras.js?v=20261122');
     openNoise();
   });
   body.querySelector('[data-moodmap]')?.addEventListener('click', async () => {
-    const { openMoodMap } = await import('./extras.js?v=20261121');
+    const { openMoodMap } = await import('./extras.js?v=20261122');
     openMoodMap();
   });
   body.querySelector('[data-network-mood]')?.addEventListener('click', async () => {
-    const { openNetworkMood } = await import('./network-mood.js?v=20261121');
+    const { openNetworkMood } = await import('./network-mood.js?v=20261122');
     openNetworkMood();
   });
   body.querySelector('[data-future-letter]')?.addEventListener('click', async () => {
-    const { openFutureLetter } = await import('./future-letter.js?v=20261121');
+    const { openFutureLetter } = await import('./future-letter.js?v=20261122');
     openFutureLetter();
   });
   body.querySelector('[data-radio]')?.addEventListener('click', async () => {
-    const { openRadio } = await import('./radio.js?v=20261121');
+    const { openRadio } = await import('./radio.js?v=20261122');
     openRadio();
   });
   body.querySelector('[data-campfire]')?.addEventListener('click', async () => {
-    const { openCampfire } = await import('./campfire.js?v=20261121');
+    const { openCampfire } = await import('./campfire.js?v=20261122');
     openCampfire();
   });
   api.gifts?.(fresh.id).then(async ({ gifts }) => {
@@ -950,99 +950,99 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
   }).catch(() => {});
 
   body.querySelector('[data-letters]')?.addEventListener('click', async () => {
-    const { openLetters } = await import('./letters.js?v=20261121');
+    const { openLetters } = await import('./letters.js?v=20261122');
     openLetters();
   });
   body.querySelector('[data-capsule]')?.addEventListener('click', async () => {
-    const { openCapsules } = await import('./capsule.js?v=20261121');
+    const { openCapsules } = await import('./capsule.js?v=20261122');
     openCapsules();
   });
   body.querySelector('[data-time-capsule]')?.addEventListener('click', async () => {
-    const { openTimeCapsule } = await import('./time-capsule.js?v=20261121');
+    const { openTimeCapsule } = await import('./time-capsule.js?v=20261122');
     openTimeCapsule();
   });
   body.querySelector('[data-mood-map]')?.addEventListener('click', async () => {
-    const { openMoodMap } = await import('./mood-map.js?v=20261121');
+    const { openMoodMap } = await import('./mood-map.js?v=20261122');
     openMoodMap();
   });
   body.querySelector('[data-daily-quote]')?.addEventListener('click', async () => {
-    const { openDailyQuote } = await import('./daily-quote.js?v=20261121');
+    const { openDailyQuote } = await import('./daily-quote.js?v=20261122');
     openDailyQuote();
   });
   body.querySelector('[data-gratitude]')?.addEventListener('click', async () => {
-    const { openGratitude } = await import('./gratitude.js?v=20261121');
+    const { openGratitude } = await import('./gratitude.js?v=20261122');
     openGratitude();
   });
   body.querySelector('[data-gratitude-journal]')?.addEventListener('click', async () => {
-    const { openGratitudeJournal } = await import('./gratitude.js?v=20261121');
+    const { openGratitudeJournal } = await import('./gratitude.js?v=20261122');
     openGratitudeJournal();
   });
   body.querySelector('[data-sounds]')?.addEventListener('click', async () => {
-    const { openSounds } = await import('./sounds.js?v=20261121');
+    const { openSounds } = await import('./sounds.js?v=20261122');
     openSounds();
   });
   body.querySelector('[data-compliments]')?.addEventListener('click', async () => {
-    const { openCompliments } = await import('./compliments.js?v=20261121');
+    const { openCompliments } = await import('./compliments.js?v=20261122');
     openCompliments();
   });
   body.querySelector('[data-quests]')?.addEventListener('click', async () => {
-    const { openQuests } = await import('./quests.js?v=20261121');
+    const { openQuests } = await import('./quests.js?v=20261122');
     openQuests();
   });
   body.querySelector('[data-daily]')?.addEventListener('click', async () => {
-    const { openDailyRewards } = await import('./daily-rewards.js?v=20261121');
+    const { openDailyRewards } = await import('./daily-rewards.js?v=20261122');
     openDailyRewards();
   });
   body.querySelector('[data-cards]')?.addEventListener('click', async () => {
-    const { openCards } = await import('./cards.js?v=20261121');
+    const { openCards } = await import('./cards.js?v=20261122');
     openCards();
   });
   body.querySelector('[data-bookmarks]')?.addEventListener('click', async () => {
-    const { openBookmarks } = await import('./bookmarks.js?v=20261121');
+    const { openBookmarks } = await import('./bookmarks.js?v=20261122');
     openBookmarks();
   });
   body.querySelector('[data-tournaments]')?.addEventListener('click', async () => {
-    const { openTournaments } = await import('./tournaments.js?v=20261121');
+    const { openTournaments } = await import('./tournaments.js?v=20261122');
     openTournaments();
   });
   body.querySelector('[data-confessions]')?.addEventListener('click', async () => {
-    const { openConfessions } = await import('./confessions.js?v=20261121');
+    const { openConfessions } = await import('./confessions.js?v=20261122');
     openConfessions();
   });
   body.querySelector('[data-wishlist]')?.addEventListener('click', async () => {
-    const { openWishlist } = await import('./extras2.js?v=20261121');
+    const { openWishlist } = await import('./extras2.js?v=20261122');
     openWishlist(fresh.id, true);
   });
   body.querySelector('[data-viewers]')?.addEventListener('click', async () => {
-    const { openProfileViewers } = await import('./extras2.js?v=20261121');
+    const { openProfileViewers } = await import('./extras2.js?v=20261122');
     openProfileViewers();
   });
   body.querySelector('[data-friends]')?.addEventListener('click', async () => {
-    const { openFriends } = await import('./friends.js?v=20261121');
+    const { openFriends } = await import('./friends.js?v=20261122');
     openFriends();
   });
   body.querySelector('[data-groups]')?.addEventListener('click', async () => {
-    const { openGroups } = await import('./groups.js?v=20261121');
+    const { openGroups } = await import('./groups.js?v=20261122');
     openGroups();
   });
   body.querySelector('[data-wheel]')?.addEventListener('click', async () => {
-    const { openWheel } = await import('./wheel.js?v=20261121');
+    const { openWheel } = await import('./wheel.js?v=20261122');
     openWheel();
   });
   body.querySelector('[data-leaderboard]')?.addEventListener('click', async () => {
-    const { openLeaderboard } = await import('./leaderboard.js?v=20261121');
+    const { openLeaderboard } = await import('./leaderboard.js?v=20261122');
     openLeaderboard();
   });
   body.querySelector('[data-events]')?.addEventListener('click', async () => {
-    const { openEvents } = await import('./leaderboard.js?v=20261121');
+    const { openEvents } = await import('./leaderboard.js?v=20261122');
     openEvents();
   });
   body.querySelector('[data-widgets]')?.addEventListener('click', async () => {
-    const { openWidgets } = await import('./widgets.js?v=20261121');
+    const { openWidgets } = await import('./widgets.js?v=20261122');
     openWidgets();
   });
   body.querySelector('[data-pixel]')?.addEventListener('click', async () => {
-    const { openPixelBattle } = await import('./pixel-battle.js?v=20261121');
+    const { openPixelBattle } = await import('./pixel-battle.js?v=20261122');
     openPixelBattle();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
@@ -1058,7 +1058,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
     openWallet();
   });
   body.querySelector('[data-notes]').onclick = async () => {
-    const { openNotifications } = await import('./notifications.js?v=20261121');
+    const { openNotifications } = await import('./notifications.js?v=20261122');
     openNotifications();
   };
   body.querySelector('[data-contacts]').onclick = openContacts;
@@ -1066,7 +1066,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
 
   body.querySelector('[data-logout]').onclick = async () => {
     if (!(await confirmSheet({ title: 'Выйти из аккаунта', text: 'Сессия на этом устройстве закроется', confirm: 'Выйти', danger: true }))) return;
-    const { forget } = await import('../accounts.js?v=20261121');
+    const { forget } = await import('../accounts.js?v=20261122');
     forget(state.user?.id);
     await api.logout();
     setUser(null);
@@ -1075,7 +1075,7 @@ ${user?.username ? `<button class="btn btn-icon" data-share-profile title="По�
 }
 
 async function openZonePicker(done) {
-  const { MODES } = await import('./safe.js?v=20261121');
+  const { MODES } = await import('./safe.js?v=20261122');
   const body = el(`<div class="col" style="gap:6px">${Object.entries(MODES)
     .map(([key, mode]) => `<button class="list-item" data-zone="${key}" style="${moodStyle(key)}">
       <span class="mood-tag" style="${moodStyle(key)}"><i class="mood-dot"></i>${esc(MOODS[key]?.label || key)}</span>
@@ -1565,7 +1565,7 @@ export function openUsernames(done) {
 }
 
 export async function openAccounts() {
-  const { savedAccounts, switchTo, forget, rememberCurrent, ACCOUNT_LIMIT } = await import('../accounts.js?v=20261121');
+  const { savedAccounts, switchTo, forget, rememberCurrent, ACCOUNT_LIMIT } = await import('../accounts.js?v=20261122');
   await rememberCurrent();
 
   const body = el('<div class="col" style="gap:8px"></div>');
@@ -1674,7 +1674,7 @@ function mediaTabs(chips, list, posts, postCard, refresh) {
 }
 
 export async function enterSafeZone(mood, done) {
-  const { openSafeZone } = await import('./safe.js?v=20261121');
+  const { openSafeZone } = await import('./safe.js?v=20261122');
   openSafeZone(mood, (minutes) => {
     toast(`Вы побыли здесь ${minutes} мин`);
     done?.();
@@ -1691,7 +1691,7 @@ function openMoodPicker(done) {
       const mood = button.dataset.mood;
       sheet.close();
 
-      const { HEAVY_MOODS } = await import('./safe.js?v=20261121');
+      const { HEAVY_MOODS } = await import('./safe.js?v=20261122');
       const heavy = HEAVY_MOODS.includes(mood);
       if (heavy) enterSafeZone(mood, done);
 
@@ -1747,7 +1747,7 @@ export async function openProfile(username) {
       api.recordProfileView(user.id).catch(() => {});
     }
     if (user?.id && state.user?.id !== user.id) {
-      import('./visitors.js?v=20261121').then(({ recordVisit }) => {
+      import('./visitors.js?v=20261122').then(({ recordVisit }) => {
         recordVisit(user.id, user.username, user.displayName);
       }).catch(() => {});
     }
@@ -1825,7 +1825,7 @@ export async function openProfile(username) {
     {
       const musicHost = body.querySelector('[data-music-host]');
       if (musicHost) {
-        import('./profile-music.js?v=20261121').then(({ profileMusicWidget, bindMusicWidget }) => {
+        import('./profile-music.js?v=20261122').then(({ profileMusicWidget, bindMusicWidget }) => {
           musicHost.innerHTML = profileMusicWidget({ isMine: false, music: user.music || null });
           bindMusicWidget(musicHost, null);
         }).catch(() => {});
@@ -1868,7 +1868,7 @@ export async function openProfile(username) {
         if (data.mine) thankBtn.disabled = true;
       }).catch(() => {});
       thankBtn.onclick = async () => {
-        const { promptSheet } = await import('../ui.js?v=20261121');
+        const { promptSheet } = await import('../ui.js?v=20261122');
         const note = await promptSheet({ title: 'Спасибо модератору', label: 'За что', placeholder: 'Можно оставить пустым', multiline: true, confirm: 'Отправить' });
         if (note === null) return;
         try {
@@ -1891,11 +1891,11 @@ export async function openProfile(username) {
       openMyGifts(user.id, false);
     });
     body.querySelector('[data-info]')?.addEventListener('click', async () => {
-      const { openUserInfo } = await import('./userinfo.js?v=20261121');
+      const { openUserInfo } = await import('./userinfo.js?v=20261122');
       openUserInfo(user.id);
     });
     body.querySelector('[data-punish]')?.addEventListener('click', async () => {
-      const { openPunish } = await import('./mod.js?v=20261121');
+      const { openPunish } = await import('./mod.js?v=20261122');
       openPunish(user, () => openProfile(username));
     });
     body.querySelector('[data-block]')?.addEventListener('click', async () => {
@@ -1949,7 +1949,7 @@ export async function openProfile(username) {
         try {
           current = (await api.noteAbout(user.id)).note || '';
         } catch {}
-        const { promptSheet } = await import('../ui.js?v=20261121');
+        const { promptSheet } = await import('../ui.js?v=20261122');
         const text = await promptSheet({
           title: 'Заметка о человеке',
           label: 'Подсказка для себя: где познакомились, о чём говорили. Видно только вам, человек не узнает',
@@ -1981,7 +1981,7 @@ export async function openProfile(username) {
       try {
         const { chat } = await api.createChat({ kind: 'dm', members: [user.id] });
         view.remove();
-        const { openChat } = await import('./chats.js?v=20261121');
+        const { openChat } = await import('./chats.js?v=20261122');
         document.querySelector('[data-tab="chats"]')?.click();
         setTimeout(() => openChat(chat.id), 60);
       } catch (error) {
