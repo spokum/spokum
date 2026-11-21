@@ -366,6 +366,7 @@ function pub(user) {
   return {
     id: user.id,
     username: user.username,
+    aliases: aliasesOf(user).filter((name) => name !== user.username),
     displayName: user.displayName,
     bio: user.bio,
     hue: user.hue,

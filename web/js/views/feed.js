@@ -130,7 +130,7 @@ export async function render(root) {
   const query = root.querySelector('[data-query]');
   root.querySelector('[data-search-toggle]').onclick = () => {
     if (state.user?.username  && api.searchAll) {
-      import('./search.js?v=20251028').then(({ openSearch }) => openSearch());
+      import('./search.js?v=20261125').then(({ openSearch }) => openSearch());
       return;
     }
     searchBox.hidden = !searchBox.hidden;
