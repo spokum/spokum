@@ -105,17 +105,17 @@ export async function openWidgets() {
 
     host.querySelector('[data-wheel]')?.addEventListener('click', async () => {
       sheet.close();
-      const { openWheel } = await import('./wheel.js?v=20251028');
+      const { openWheel } = await import('./wheel.js?v=20261121');
       openWheel();
     });
     host.querySelector('[data-quests]')?.addEventListener('click', async () => {
       sheet.close();
-      const { openQuests } = await import('./quests.js?v=20251028');
+      const { openQuests } = await import('./quests.js?v=20261121');
       openQuests();
     });
     host.querySelector('[data-tour]')?.addEventListener('click', async () => {
       sheet.close();
-      const { openTournaments } = await import('./tournaments.js?v=20251028');
+      const { openTournaments } = await import('./tournaments.js?v=20261121');
       openTournaments();
     });
   } catch (e) { host.innerHTML = emptyState('warn', 'Ошибка', e.message); }

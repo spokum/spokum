@@ -58,7 +58,7 @@ function applyWinterPending() {
     if (granted.length) {
       setTimeout(() => {
         try {
-          import('../ui.js?v=20251028').then(({ toast }) =>
+          import('../ui.js?v=20261121').then(({ toast }) =>
             toast('Админ выдал: ' + granted.join(', '), 'ok')
           );
         } catch {}

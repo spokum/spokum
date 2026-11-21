@@ -55,7 +55,7 @@ async function probe(label, run) {
 }
 
 export async function runDiagnostics() {
-  const { openSheet } = await import('../ui.js?v=20251028');
+  const { openSheet } = await import('../ui.js?v=20261121');
   const body = el('<div class="col"><div class="small muted center">Проверяем</div></div>');
   openSheet('Проверка связи', body);
 
@@ -191,7 +191,7 @@ export function renderAuth(root, done) {
       ${mode === 'register' ? '<p class="tiny muted center" style="margin:0;line-height:1.6">Создавая аккаунт, вы принимаете <a href="/offer.html" class="link-btn">пользовательское соглашение</a>, <a href="/privacy.html" class="link-btn">политику конфиденциальности</a> и <a href="/consent.html" class="link-btn">согласие на обработку данных</a></p>' : ''}`;
 
     form.querySelector('[data-rules]')?.addEventListener('click', async () => {
-      const { openRules } = await import('./rules.js?v=20251028');
+      const { openRules } = await import('./rules.js?v=20261121');
       openRules();
     });
 
@@ -236,7 +236,7 @@ export function renderAuth(root, done) {
           } catch {}
         }
         try {
-          const { deviceInfo, rememberBlock } = await import('../device.js?v=20251028');
+          const { deviceInfo, rememberBlock } = await import('../device.js?v=20261121');
           const info = await deviceInfo();
           const { state: ban } = await api.touchDevice(info, mode === 'register');
           rememberBlock(ban);
@@ -249,7 +249,7 @@ export function renderAuth(root, done) {
           }
         } catch {}
         try {
-          const { rememberCurrent } = await import('../accounts.js?v=20251028');
+          const { rememberCurrent } = await import('../accounts.js?v=20261121');
           await rememberCurrent();
         } catch {}
         done();

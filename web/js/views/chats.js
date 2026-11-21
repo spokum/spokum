@@ -29,7 +29,7 @@ export async function render(root) {
 
   root.querySelector('[data-new]').onclick = openCreate;
   root.querySelector('[data-random-chat]').onclick = async () => {
-    const { openRandomChat } = await import('./random-chat.js?v=20251028');
+    const { openRandomChat } = await import('./random-chat.js?v=20261121');
     openRandomChat();
   };
   const search = root.querySelector('[data-search]');
@@ -121,7 +121,7 @@ async function loadRecommendedChannels(root) {
     list.appendChild(row);
   });
   host.querySelector('[data-all-channels]').onclick = () => {
-    import('./search.js?v=20251028').then(({ openSearch }) => openSearch());
+    import('./search.js?v=20261121').then(({ openSearch }) => openSearch());
   };
 }
 
@@ -256,11 +256,11 @@ export async function openChat(chatId) {
   };
   view.querySelector('[data-menu]').onclick = () => openChatMenu(chat, view);
   view.querySelector('[data-call]')?.addEventListener('click', async () => {
-    const { startCall } = await import('../call.js?v=20251028');
+    const { startCall } = await import('../call.js?v=20261121');
     startCall(chat);
   });
   view.querySelector('[data-video-call]')?.addEventListener('click', async () => {
-    const { startCall } = await import('../call.js?v=20251028');
+    const { startCall } = await import('../call.js?v=20261121');
     startCall(chat, { video: true });
   });
 
@@ -315,7 +315,7 @@ export async function openChat(chatId) {
     try {
       if (payload?.kind === 'text' && payload.body && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         try {
-          const { moderateMessage } = await import('./ai-moderation.js?v=20251108');
+          const { moderateMessage } = await import('./ai-moderation.js?v=20261121');
           const verdict = await moderateMessage(payload.body, { id: state.user?.id, username: state.user?.username });
           if (verdict?.removed) {
             toast('Сообщение снято модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
@@ -371,7 +371,7 @@ export async function openChat(chatId) {
   view.querySelector('[data-stickers]')?.addEventListener('click', () => openStickers(send));
 
   view.querySelector('[data-emoji-sticker]')?.addEventListener('click', async () => {
-    const { openStickerPicker } = await import('./stickers.js?v=20251028');
+    const { openStickerPicker } = await import('./stickers.js?v=20261121');
     openStickerPicker((emoji) => send({ kind: 'sticker', body: emoji }));
   });
 
@@ -778,7 +778,7 @@ function openChatMenu(chat, view) {
   });
   body.querySelector('[data-report]')?.addEventListener('click', async () => {
     sheet.close();
-    const { openReport } = await import('./feed.js?v=20251028');
+    const { openReport } = await import('./feed.js?v=20261121');
     openReport('user', chat.peer.id);
   });
   body.querySelector('[data-close]').onclick = () => {

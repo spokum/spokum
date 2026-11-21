@@ -1,7 +1,7 @@
 const CLIENT_URL = 'https://esm.sh/@supabase/supabase-js@2.45.4';
 const EMAIL_DOMAIN = 'spokum.app';
 
-import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js';
+import { GIFT_TYPES as LOCAL_GIFT_TYPES } from './local.js?v=20261120';
 
 const ms = (value) => (value ? Date.parse(value) : 0);
 const emailFor = (username) => `${username}@${EMAIL_DOMAIN}`;
@@ -33,6 +33,8 @@ function shapeProfile(row, extra = {}) {
     username: row.username,
     loginName: row.login_name || row.username,
     displayName: row.display_name || row.username,
+    aliases: (Array.isArray(extra.aliases) ? extra.aliases : []).filter((name) => name && name !== row.username),
+    collectionNumbers: Array.isArray(extra.collectionNumbers) ? extra.collectionNumbers : [],
     bio: row.bio || '',
     hue: row.hue ?? 220,
     avatar: row.avatar || null,
@@ -163,6 +165,29 @@ function withTimeout(promise, ms, fallback) {
     promise,
     new Promise((done) => setTimeout(() => done(fallback), ms))
   ]);
+}
+
+async function invokeModeration(sb, text, context) {
+  const { data, error } = await sb.functions.invoke('moderate', { body: { text, context } });
+  if (error) {
+    let details = {};
+    try { details = await error.context?.json() || {}; } catch {}
+    const failure = new Error(details.reason || details.error || error.message || 'Ошибка ИИ-модерации');
+    Object.assign(failure, details);
+    throw failure;
+  }
+  return data;
+}
+
+async function moderationToken(sb, text, context) {
+  if (!String(text || '').trim()) return null;
+  const verdict = await invokeModeration(sb, text, context);
+  if (!verdict?.allowed) {
+    const failure = new Error(verdict?.reason || 'Текст не прошёл ИИ-модерацию');
+    Object.assign(failure, verdict || {});
+    throw failure;
+  }
+  return verdict.approvalToken || null;
 }
 
 async function loadFactory() {
@@ -744,6 +769,7 @@ export async function createBackend(url, key) {
       const { data, error } = await request;
       guard(error);
       const found = new Map((data || []).map((row) => [row.id, row]));
+      const digits = q.replace(/\D/g, '');
       if (q) {
         try {
           const aliases = await sb.from('usernames').select('user_id').ilike('username', `%${q}%`).limit(40);
@@ -754,7 +780,67 @@ export async function createBackend(url, key) {
           }
         } catch {}
       }
-      return { users: [...found.values()].map((row) => shapeProfile(row)) };
+      if (digits.length >= 4) {
+        try {
+          const matches = await sb.from('collection_numbers').select('user_id').ilike('number', `%${digits}%`).limit(40);
+          const missing = (matches.data || []).map((row) => row.user_id).filter((id) => !found.has(id));
+          if (missing.length) {
+            const extra = await sb.from('profiles').select('*').in('id', missing);
+            for (const row of extra.data || []) found.set(row.id, row);
+          }
+        } catch {}
+      }
+      const aliasesByUser = new Map();
+      const numbersByUser = new Map();
+      if (found.size) {
+        try {
+          const ids = [...found.keys()];
+          const { data: names } = await sb.from('usernames').select('user_id, username').in('user_id', ids);
+          for (const row of names || []) {
+            const list = aliasesByUser.get(row.user_id) || [];
+            list.push(row.username);
+            aliasesByUser.set(row.user_id, list);
+          }
+        } catch {}
+        try {
+          const { data: numbers } = await sb.from('collection_numbers').select('user_id, number').in('user_id', [...found.keys()]);
+          for (const row of numbers || []) {
+            const list = numbersByUser.get(row.user_id) || [];
+            list.push(row.number);
+            numbersByUser.set(row.user_id, list);
+          }
+        } catch {}
+      }
+      return {
+        users: [...found.values()].map((row) => shapeProfile(row, {
+          aliases: aliasesByUser.get(row.id) || [],
+          collectionNumbers: numbersByUser.get(row.id) || []
+        }))
+      };
+    },
+
+    async searchChannels(query) {
+      const { data, error } = await sb.rpc('search_channels', { p_query: String(query || '') });
+      guard(error);
+      return data || { channels: [] };
+    },
+
+    async recommendedChannels() {
+      const { data, error } = await sb.rpc('recommended_channels');
+      guard(error);
+      return data || { channels: [] };
+    },
+
+    async followChannel(id) {
+      const { data, error } = await sb.rpc('follow_channel', { p_channel_id: id });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async unfollowChannel(id) {
+      const { data, error } = await sb.rpc('unfollow_channel', { p_channel_id: id });
+      guard(error);
+      return data || { ok: true };
     },
 
     async saveSession() {
@@ -859,6 +945,19 @@ export async function createBackend(url, key) {
       return { names: (data || []).map((row) => row.username), limit: limit.data || 3 };
     },
 
+    async myCollectionNumbers() {
+      requireUid();
+      const { data, error } = await sb.from('collection_numbers').select('number').eq('user_id', uid).order('created_at', { ascending: true });
+      guard(error);
+      return { numbers: (data || []).map((row) => row.number) };
+    },
+
+    async buyCollectionNumber(prefix, digits) {
+      const { data, error } = await sb.rpc('buy_collection_number', { p_prefix: prefix, p_digits: digits });
+      guard(error);
+      return data || {};
+    },
+
     async addUsername(name) {
       const { data, error } = await sb.rpc('add_username', { wanted: name });
       guard(error);
@@ -888,6 +987,16 @@ export async function createBackend(url, key) {
           data = found.data;
         }
       }
+      if (!data) {
+        const digits = clean.replace(/\D/g, '');
+        if (digits.length === 11) {
+          const number = await sb.from('collection_numbers').select('user_id').eq('number', `+${digits}`).maybeSingle();
+          if (number.data) {
+            const found = await sb.from('profiles').select('*').eq('id', number.data.user_id).maybeSingle();
+            data = found.data;
+          }
+        }
+      }
       if (!data) throw new Error('Пользователь не найден');
       const grab = () =>
         sb
@@ -903,8 +1012,18 @@ export async function createBackend(url, key) {
       }
       guard(posts.error);
       const liked = await likedSet((posts.data || []).map((row) => row.id));
+      let aliases = [];
+      let collectionNumbers = [];
+      try {
+        const { data: names } = await sb.from('usernames').select('username').eq('user_id', data.id).order('created_at', { ascending: true });
+        aliases = (names || []).map((row) => row.username).filter((name) => name !== data.username);
+      } catch {}
+      try {
+        const { data: numbers } = await sb.from('collection_numbers').select('number').eq('user_id', data.id).order('created_at', { ascending: true });
+        collectionNumbers = (numbers || []).map((row) => row.number);
+      } catch {}
       return {
-        user: shapeProfile(data, await counters(data.id)),
+        user: shapeProfile(data, { ...(await counters(data.id)), aliases, collectionNumbers }),
         posts: (posts.data || []).map((row) => shapePost(row, liked))
       };
     },
@@ -1031,6 +1150,8 @@ export async function createBackend(url, key) {
       };
       if (publishAt && publishAt > Date.now()) payload.publish_at = new Date(publishAt).toISOString();
       if (isDraft) payload.is_draft = true;
+      const approval = await moderationToken(sb, body, 'post');
+      if (approval) payload.moderation_token = approval;
       const shed = [['publish_at'], ['sound', 'poll'], ['kind', 'media', 'video', 'poster', 'duration']];
       let { data, error } = await sb.from('posts').insert(payload).select(POST_SELECT()).single();
       for (const keys of shed) {
@@ -1105,6 +1226,8 @@ export async function createBackend(url, key) {
         .limit(1);
       if (!recent.data?.length) {
         const payload = { post_id: id, author_id: me, body };
+        const approval = await moderationToken(sb, body, 'comment');
+        if (approval) payload.moderation_token = approval;
         if (replyTo && typeof replyTo === 'object') {
           if (replyTo.commentId) payload.reply_to_id = replyTo.commentId;
           if (replyTo.userId) payload.reply_to_user = replyTo.userId;
@@ -1246,6 +1369,10 @@ export async function createBackend(url, key) {
         duration: payload.duration || 0
       };
       if (payload.replyToId) msgPayload.reply_to_id = payload.replyToId;
+      if (msgPayload.kind === 'text') {
+        const approval = await moderationToken(sb, msgPayload.body, 'message');
+        if (approval) msgPayload.moderation_token = approval;
+      }
       const { data, error } = await sb
         .from('messages')
         .insert(msgPayload)
@@ -1373,6 +1500,40 @@ export async function createBackend(url, key) {
       return { ok: true };
     },
 
+    async moderateContent(text, context) {
+      return invokeModeration(sb, String(text || ''), context);
+    },
+
+    async aiModerationState() {
+      const { data, error } = await sb.rpc('ai_moderation_state');
+      guard(error);
+      return data || { enabled: false, failOpen: true, reports: 0 };
+    },
+
+    async setAiModerationEnabled(on) {
+      const { data, error } = await sb.rpc('ai_moderation_set_enabled', { p_enabled: !!on });
+      guard(error);
+      return data;
+    },
+
+    async aiModerationReports() {
+      const { data, error } = await sb.rpc('ai_moderation_reports');
+      guard(error);
+      return data || { reports: [] };
+    },
+
+    async resolveAiModerationReport(id, resolved = true) {
+      const { data, error } = await sb.rpc('ai_moderation_resolve_report', { p_id: id, p_resolved: resolved });
+      guard(error);
+      return data || { ok: true };
+    },
+
+    async clearAiModerationReports() {
+      const { data, error } = await sb.rpc('ai_moderation_clear_reports');
+      guard(error);
+      return data || { ok: true };
+    },
+
     async modQueue() {
       const grab = () => sb.from('posts').select(POST_SELECT()).order('created_at', { ascending: false }).limit(60);
       let { data, error } = await grab();
@@ -1462,8 +1623,24 @@ export async function createBackend(url, key) {
     async giftTypes() {
       const { data, error } = await sb.from('gift_types').select('*').order('sort');
       guard(error);
-      const rawRemote = data || [];
-      const remote = rawRemote.filter((g) => !/^LIMITED\s*:/i.test(g.title || ''));
+      const definitions = new Map(LOCAL_GIFT_TYPES.map((g) => [g.id, g]));
+      const remote = (data || []).map((row) => {
+        const canonicalId = /^l_(phoenix|dragon|unicorn)$/.test(row.id) ? row.id.slice(2) : row.id;
+        const definition = definitions.get(canonicalId) || {};
+        return {
+          ...row,
+          ...definition,
+          id: canonicalId,
+          purchaseId: row.id,
+          title: String(row.title || definition.title || canonicalId).replace(/^LIMITED\s*:\s*/i, ''),
+          price: Number(row.price ?? definition.price ?? 0),
+          rarity: definition.rarity || (row.rarity === 'legendary' ? 'legend' : row.rarity),
+          art: row.art || definition.art || 'spark',
+          hue: row.hue ?? definition.hue ?? 220,
+          isLimited: !!row.is_limited || !!definition.isLimited,
+          silverOnly: !!definition.silverOnly
+        };
+      });
       const seenIds = new Set(remote.map((g) => g.id));
       const seenTitles = new Set(remote.map((g) => (g.title || '').toLowerCase().trim()));
       const localOnly = LOCAL_GIFT_TYPES.filter((g) =>
@@ -1484,11 +1661,12 @@ export async function createBackend(url, key) {
         gifts: (data || []).map((row) => ({
           id: row.id,
           typeId: row.type_id,
-          title: row.type?.title || row.type_id,
+          title: String(row.type?.title || row.type_id).replace(/^LIMITED\s*:\s*/i, ''),
           price: row.type?.price || 0,
-          rarity: row.type?.rarity || 'common',
+          rarity: row.type?.rarity === 'legendary' ? 'legend' : (row.type?.rarity || 'common'),
           art: row.type?.art || 'spark',
           hue: row.type?.hue ?? 220,
+          silverOnly: !!LOCAL_GIFT_TYPES.find((gift) => gift.id === row.type_id)?.silverOnly,
           note: row.note || '',
           pinned: !!row.pinned,
           createdAt: ms(row.created_at),
@@ -1630,13 +1808,17 @@ export async function createBackend(url, key) {
     },
 
     async repost(id, note) {
-      const { data, error } = await sb.rpc('repost', { target: id, note: note || '' });
+      const body = String(note || '').slice(0, 500);
+      const approval = await moderationToken(sb, body, 'repost');
+      const { data, error } = await sb.rpc('repost', { target: id, note: body, approval });
       guard(error);
       return data;
     },
 
     async sendPost(chatId, postId, note) {
-      const { data, error } = await sb.rpc('send_post', { chat: chatId, target: postId, note: note || '' });
+      const body = String(note || '').slice(0, 500);
+      const approval = await moderationToken(sb, body, 'share');
+      const { data, error } = await sb.rpc('send_post', { chat: chatId, target: postId, note: body, approval });
       guard(error);
       return data;
     },
@@ -1756,9 +1938,11 @@ export async function createBackend(url, key) {
     },
 
     async pinPost(id, on) {
-      const { error } = await sb.rpc('pin_post', { target: id, on_top: !!on });
+      const { data, error } = on === undefined
+        ? await sb.rpc('pin_post', { p_post_id: id })
+        : await sb.rpc('pin_post', { target: id, on_top: !!on });
       guard(error);
-      return { ok: true };
+      return data || { ok: true };
     },
 
     async follow(id, on) {
@@ -2576,11 +2760,6 @@ export async function createBackend(url, key) {
       return { quests: data || [] };
     },
 
-    async touchStreak() {
-      const { data, error } = await sb.rpc('touch_streak');
-      guard(error);
-      return data || { ok: true };
-    },
 
     async todayQuote() {
       const { data, error } = await sb.rpc('today_quote');
@@ -2614,11 +2793,6 @@ export async function createBackend(url, key) {
       guard(error);
       return data || { ok: true };
     },
-    async pinPost(id) {
-      const { data, error } = await sb.rpc('pin_post', { p_post_id: id });
-      guard(error);
-      return data || { ok: true };
-    },
     async sendFriendRequest(targetId) {
       const { data, error } = await sb.rpc('send_friend_request', { p_target: targetId });
       guard(error);
@@ -2649,17 +2823,7 @@ export async function createBackend(url, key) {
       guard(error);
       return data || { ok: true };
     },
-    async acceptFriend(userId) {
-      const { data, error } = await sb.rpc('accept_friend', { p_requester: userId });
-      guard(error);
-      return data || { ok: true };
-    },
     async declineFriend(userId) {
-      const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
-      guard(error);
-      return data || { ok: true };
-    },
-    async removeFriend(userId) {
       const { data, error } = await sb.rpc('remove_friend', { p_target: userId });
       guard(error);
       return data || { ok: true };
@@ -2696,7 +2860,20 @@ export async function createBackend(url, key) {
     async searchAll(query) {
       const { data, error } = await sb.rpc('search_all', { p_query: query });
       guard(error);
-      return data || { users: [], posts: [], groups: [] };
+      const result = data || { users: [], posts: [], groups: [] };
+      if (String(query || '').trim().length >= 2) {
+        try {
+          const { users = [] } = await this.searchUsers(query);
+          const merged = new Map((result.users || []).map((user) => [String(user.id), user]));
+          for (const user of users) {
+            const id = String(user.id);
+            const existing = merged.get(id);
+            merged.set(id, existing ? { ...user, ...existing, aliases: user.aliases || [] } : user);
+          }
+          result.users = [...merged.values()];
+        } catch {}
+      }
+      return result;
     },
     async setPinCode(code) {
       const { data, error } = await sb.rpc('set_pin_code', { p_code: code });
@@ -2731,3 +2908,4 @@ export async function createBackend(url, key) {
     }
   };
 }
+

@@ -28,6 +28,12 @@ function socialUrl(platform, value) {
   return v;
 }
 
+const PREMIUM_BANNER_PRESETS = [
+  { label: 'Хвойный', hue: 148 }, { label: 'Лазурный', hue: 198 },
+  { label: 'Аметист', hue: 268 }, { label: 'Закат', hue: 326 },
+  { label: 'Медовый', hue: 42 }, { label: 'Ледяной', hue: 215 }
+];
+
 const SOCIAL_META = {
   telegram: { label: 'Telegram', glyph: 'send' },
   tiktok:   { label: 'TikTok',   glyph: 'play' },
@@ -193,7 +199,7 @@ async function openAppeals() {
 
   body.querySelectorAll('[data-new]').forEach((button) => {
     button.onclick = async () => {
-      const { promptSheet } = await import('../ui.js?v=20251028');
+      const { promptSheet } = await import('../ui.js?v=20261121');
       const text = await promptSheet({
         title: 'Спор о наказании',
         label: 'Расскажите, что произошло на самом деле',
@@ -466,12 +472,90 @@ function dayWordChip(user) {
   return `<div style="display:flex;justify-content:center;margin-top:8px"><span class="day-word">${icon('spark', 13)} ${esc(user.dayWord)}</span></div>`;
 }
 
+function formatCollectionNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length === 11 ? `+${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7)}` : String(value || '');
+}
+
+function openCollectionNumbers(done) {
+  const prefixes = ['+666', '+777', '+888', '+555', '+999'];
+  const body = el(`<div class="col" style="gap:12px">
+    <div class="tiny muted">Каждый номер стоит 5000 монет и навсегда закрепляется за аккаунтом. По номеру можно найти профиль.</div>
+    <div class="card" style="padding:12px">
+      <div class="tiny muted">Баланс</div>
+      <div class="strong" data-number-balance>${Number(state.user?.coins || 0)} монет</div>
+    </div>
+    <div class="col" style="gap:8px">
+      <label class="tiny muted">Формат номера</label>
+      <select class="input" data-number-prefix>${prefixes.map((prefix) => `<option value="${prefix}">${prefix}</option>`).join('')}</select>
+      <div class="row" style="gap:8px">
+        <input class="input grow" data-number-a inputmode="numeric" maxlength="4" placeholder="1234" aria-label="Первые четыре цифры">
+        <input class="input grow" data-number-b inputmode="numeric" maxlength="4" placeholder="5678" aria-label="Последние четыре цифры">
+      </div>
+      <div class="tiny muted" data-number-preview>+666 1234 5678</div>
+      <button class="btn btn-primary" data-number-buy disabled>Купить за 5000 монет</button>
+    </div>
+    <div>
+      <div class="strong small" style="margin-bottom:6px">Мои номера</div>
+      <div class="col" data-number-owned><div class="tiny muted">Загрузка…</div></div>
+    </div>
+  </div>`);
+  const sheet = openSheet('Коллекционные номера', body, {});
+  const prefixInput = body.querySelector('[data-number-prefix]');
+  const first = body.querySelector('[data-number-a]');
+  const second = body.querySelector('[data-number-b]');
+  const preview = body.querySelector('[data-number-preview]');
+  const buy = body.querySelector('[data-number-buy]');
+  const drawPreview = () => {
+    first.value = first.value.replace(/\D/g, '').slice(0, 4);
+    second.value = second.value.replace(/\D/g, '').slice(0, 4);
+    preview.textContent = `${prefixInput.value} ${first.value.padEnd(4, '·')} ${second.value.padEnd(4, '·')}`;
+    buy.disabled = first.value.length !== 4 || second.value.length !== 4;
+  };
+  prefixInput.onchange = drawPreview;
+  first.oninput = drawPreview;
+  second.oninput = drawPreview;
+  const drawOwned = async () => {
+    const slot = body.querySelector('[data-number-owned]');
+    try {
+      const { numbers = [] } = await api.myCollectionNumbers();
+      slot.innerHTML = numbers.length
+        ? numbers.map((number) => `<div class="list-item" style="padding:8px 0"><span class="strong small">${esc(formatCollectionNumber(number))}</span></div>`).join('')
+        : '<div class="tiny muted">Пока номеров нет</div>';
+    } catch (error) {
+      slot.innerHTML = `<div class="tiny muted">${esc(error.message || 'Не удалось загрузить номера')}</div>`;
+    }
+  };
+  drawOwned();
+  buy.onclick = async () => {
+    if (buy.disabled) return;
+    buy.disabled = true;
+    try {
+      const result = await api.buyCollectionNumber(prefixInput.value, first.value + second.value);
+      const refreshed = await api.me();
+      if (refreshed) setUser(refreshed);
+      body.querySelector('[data-number-balance]').textContent = `${Number(state.user?.coins || result.coins || 0)} монет`;
+      first.value = '';
+      second.value = '';
+      drawPreview();
+      await drawOwned();
+      toast('Номер закреплён за аккаунтом');
+      done?.();
+    } catch (error) {
+      toast(error.message || 'Не удалось купить номер');
+      buy.disabled = false;
+    }
+  };
+  drawPreview();
+}
+
 export async function render(root) {
   const user = state.user;
   root.innerHTML = `
     <div class="topbar">
       <div><h1>Профиль</h1><p class="sub">Твоё пространство</p></div>
       <div class="spacer"></div>
+${user?.username ? `<button class="btn btn-icon" data-share-profile title="Поделиться профилем">${icon('share', 18)}</button>` : ''}
       <button class="btn btn-icon" data-edit title="Редактировать">${icon('edit', 18)}</button>
     </div>
     ${user?.username  ? `<div data-quote-host></div>` : ''}
@@ -480,7 +564,7 @@ export async function render(root) {
   const body = root.querySelector('[data-body]');
   if (user?.username) {
     const renderLocalQuoteWidget = () => {
-      import('./daily-quote.js?v=20251102').then(({ dailyQuoteWidgetHtml, bindDailyQuoteWidget }) => {
+      import('./daily-quote.js?v=20261121').then(({ dailyQuoteWidgetHtml, bindDailyQuoteWidget }) => {
         const host = root.querySelector('[data-quote-host]');
         if (!host || host.innerHTML.trim()) return;
         host.innerHTML = dailyQuoteWidgetHtml();
@@ -505,7 +589,7 @@ export async function render(root) {
           </button>`;
         const btn = root.querySelector('[data-dq-open]');
         if (btn) btn.onclick = async () => {
-          const { openDailyQuote } = await import('./daily-quote.js?v=20251102');
+          const { openDailyQuote } = await import('./daily-quote.js?v=20261121');
           openDailyQuote();
         };
       }).catch(() => renderLocalQuoteWidget());
@@ -524,14 +608,6 @@ export async function render(root) {
   const mood = MOODS[fresh.mood] || MOODS.calm;
 
   body.innerHTML = `
-    <button class="hw-profile-btn" data-disco style="background:linear-gradient(135deg,#1a0033,#330066);color:#fff">
-      <span class="hw-profile-icon">${icon('star', 24)}</span>
-      <span class="grow" style="text-align:left">
-        <span class="strong small" style="color:#fff">Возращение СпокУм!</span>
-        <span class="tiny" style="color:#ccc">Присоединяйтесь к дискотеке! Всеми любимые песни там</span>
-      </span>
-      ${icon('forward', 18)}
-    </button>
     <div class="card profile-card appear">
       <div class="banner" style="${bannerStyle(fresh)}">
         <div class="banner-inner">${bannerPins(fresh)}</div>
@@ -543,6 +619,8 @@ export async function render(root) {
         <span class="strong" style="font-size:20px">${esc(fresh.displayName)}</span>${badges(fresh)}
       </div>
       <div class="small muted" style="margin-top:2px">@${esc(fresh.username)}</div>
+      ${Array.isArray(fresh.aliases) && fresh.aliases.length ? `<div class="tiny muted" style="margin-top:3px">Также: ${fresh.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
+      ${Array.isArray(fresh.collectionNumbers) && fresh.collectionNumbers.length ? `<div class="tiny muted" style="margin-top:3px">Номер: ${fresh.collectionNumbers.map(formatCollectionNumber).map(esc).join(' · ')}</div>` : ''}
       <div data-pinned-achv style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px;min-height:0"></div>
       <div class="tiny muted" data-status-line style="margin-top:4px;line-height:1.4;min-height:0"></div>
       ${fresh.bio ? `<p class="small" style="margin:12px 0 0;line-height:1.5">${formatBio(fresh.bio)}</p>` : ''}
@@ -565,6 +643,9 @@ export async function render(root) {
       </div>
       <div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-moodcal>${icon('chart', 17)} Календарь настроения</button>
+      </div>
+      <div class="row" style="margin-top:8px;gap:8px">
+        <button class="btn grow" data-collection-numbers>${icon('spark', 17)} Коллекционные номера</button>
       </div>
       <div class="row" style="margin-top:8px;gap:8px">
         <button class="btn grow" data-status>${icon('edit', 17)} Сменить статус</button>
@@ -646,7 +727,7 @@ export async function render(root) {
     <div class="col" data-posts></div>`;
 
   const list = body.querySelector('[data-posts]');
-  const { postCard } = await import('./feed.js?v=20251028');
+  const { postCard } = await import('./feed.js?v=20261126');
   mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => render(root));
 
   body.querySelector('[data-recap]')?.addEventListener('click', () => openRecap('month'));
@@ -654,40 +735,40 @@ export async function render(root) {
   body.querySelector('[data-card]')?.addEventListener('click', () => openMoodCard(fresh));
   body.querySelector('[data-appeals]')?.addEventListener('click', () => openAppeals());
   body.querySelector('[data-feedback]')?.addEventListener('click', async () => {
-    const { openFeedback } = await import('./feedback.js?v=20251028');
+    const { openFeedback } = await import('./feedback.js?v=20261121');
     openFeedback();
   });
   body.querySelector('[data-invite]')?.addEventListener('click', () => openInvite());
   body.querySelector('[data-twins]')?.addEventListener('click', () => openTwins());
 
   body.querySelector('[data-mood-chats]')?.addEventListener('click', async () => {
-    const { openMoodChats } = await import('./mood-chats.js?v=20251028');
+    const { openMoodChats } = await import('./mood-chats.js?v=20261121');
     openMoodChats();
   });
   body.querySelector('[data-voice-rooms]')?.addEventListener('click', async () => {
-    const { openVoiceRooms } = await import('./voice-rooms.js?v=20251028');
+    const { openVoiceRooms } = await import('./voice-rooms.js?v=20261121');
     openVoiceRooms();
   });
   body.querySelector('[data-pnotes]')?.addEventListener('click', async () => {
-    const { openNotes } = await import('./notes.js?v=20251028');
+    const { openNotes } = await import('./notes.js?v=20261121');
     openNotes();
     setTimeout(() => {
-      import('./notes.js?v=20251028').then(({ getNotesCount }) => {
+      import('./notes.js?v=20261121').then(({ getNotesCount }) => {
         const node = body.querySelector('[data-pnotes-count]');
         if (node) node.textContent = String(getNotesCount());
       }).catch(() => {});
     }, 600);
   });
   body.querySelector('[data-gallery]')?.addEventListener('click', async () => {
-    const { openGallery } = await import('./gallery.js?v=20251028');
+    const { openGallery } = await import('./gallery.js?v=20261121');
     openGallery(fresh.username);
   });
   body.querySelector('[data-profile-music]')?.addEventListener('click', async () => {
-    const { openMusicPicker } = await import('./profile-music.js?v=20251028');
+    const { openMusicPicker } = await import('./profile-music.js?v=20261121');
     openMusicPicker(() => paintMusicWidget());
   });
 
-  import('./notes.js?v=20251028').then(({ getNotesCount }) => {
+  import('./notes.js?v=20261121').then(({ getNotesCount }) => {
     const node = body.querySelector('[data-pnotes-count]');
     if (node) node.textContent = String(getNotesCount());
   }).catch(() => {});
@@ -695,10 +776,10 @@ export async function render(root) {
   const musicHost = body.querySelector('[data-music-host]');
   const paintMusicWidget = () => {
     if (!musicHost) return;
-    import('./profile-music.js?v=20251028').then(({ profileMusicWidget, bindMusicWidget }) => {
+    import('./profile-music.js?v=20261121').then(({ profileMusicWidget, bindMusicWidget }) => {
       musicHost.innerHTML = profileMusicWidget({ isMine: true });
       bindMusicWidget(musicHost, () => {
-        import('./profile-music.js?v=20251028').then(({ openMusicPicker }) => {
+        import('./profile-music.js?v=20261121').then(({ openMusicPicker }) => {
           openMusicPicker(() => paintMusicWidget());
         });
       });
@@ -708,16 +789,22 @@ export async function render(root) {
 
   const edit = () => openEditor(() => render(root));
   root.querySelector('[data-edit]').onclick = edit;
-  body.querySelector('[data-disco]')?.addEventListener('click', async () => {
-    const { openDisco } = await import('./disco.js?v=20251115');
-    openDisco();
+  root.querySelector('[data-share-profile]')?.addEventListener('click', async () => {
+    const text = `Найди меня в СпокУме: @${user?.username || ''}`;
+    const data = { title: 'СпокУм', text, url: location.origin };
+    if (navigator.share) {
+      try { await navigator.share(data); return; } catch (error) { if (error?.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(`${text} — ${location.origin}`); toast('Ссылка и имя скопированы'); }
+    catch { toast(text); }
   });
   body.querySelector('[data-edit-2]').onclick = edit;
   body.querySelector('[data-mood]').onclick = () => openMoodPicker(() => render(root));
   body.querySelector('[data-names]').onclick = () => openUsernames(() => render(root));
+  body.querySelector('[data-collection-numbers]').onclick = () => openCollectionNumbers(() => render(root));
   body.querySelector('[data-safe]').onclick = () => openZonePicker(() => render(root));
   body.querySelector('[data-journal]').onclick = async () => {
-    const { openJournalHistory } = await import('./journal.js?v=20251028');
+    const { openJournalHistory } = await import('./journal.js?v=20261121');
     openJournalHistory();
   };
   body.querySelector('[data-banner]').onclick = () => openBannerMenu(fresh, () => render(root));
@@ -725,25 +812,25 @@ export async function render(root) {
   body.querySelector('[data-story]')?.addEventListener('click', () => publishStory(() => render(root)));
   body.querySelector('[data-my-story]')?.addEventListener('click', () => openStories(fresh.id, () => render(root)));
   body.querySelector('[data-admin]')?.addEventListener('click', async () => {
-    const { openAdmin } = await import('./admin.js?v=20251028');
+    const { openAdmin } = await import('./admin.js?v=20261121');
     openAdmin();
   });
 
   body.querySelector('[data-mod]')?.addEventListener('click', async () => {
-    const { openMod } = await import('./mod.js?v=20251028');
+    const { openMod } = await import('./mod.js?v=20261121');
     openMod();
   });
   body.querySelector('[data-badges]')?.addEventListener('click', async () => {
-    const { openAchievements } = await import('./achievements.js?v=20251028');
+    const { openAchievements } = await import('./achievements.js?v=20261121');
     openAchievements();
   });
   body.querySelector('[data-moodcal]')?.addEventListener('click', async () => {
-    const { openMoodCalendar } = await import('./mood-calendar.js?v=20251028');
+    const { openMoodCalendar } = await import('./mood-calendar.js?v=20261121');
     openMoodCalendar({ username: fresh.username });
   });
 
   const paintStatusLine = () => {
-    import('./status.js?v=20251028').then(({ getStatus }) => {
+    import('./status.js?v=20261121').then(({ getStatus }) => {
       const node = body.querySelector('[data-status-line]');
       if (!node) return;
       const text = getStatus();
@@ -758,36 +845,36 @@ export async function render(root) {
   };
   paintStatusLine();
   body.querySelector('[data-status]')?.addEventListener('click', async () => {
-    const { openStatusEditor } = await import('./status.js?v=20251028');
+    const { openStatusEditor } = await import('./status.js?v=20261121');
     openStatusEditor(() => render(root));
   });
 
-  import('./challenges.js?v=20251028').then(({ todayCompletedCount, todayTotal }) => {
+  import('./challenges.js?v=20261121').then(({ todayCompletedCount, todayTotal }) => {
     const node = body.querySelector('[data-challenges-count]');
     if (node) node.textContent = `${todayCompletedCount()}/${todayTotal()}`;
   }).catch(() => {});
   body.querySelector('[data-challenges]')?.addEventListener('click', async () => {
-    const { openChallenges } = await import('./challenges.js?v=20251028');
+    const { openChallenges } = await import('./challenges.js?v=20261121');
     await openChallenges();
-    import('./challenges.js?v=20251028').then(({ todayCompletedCount, todayTotal }) => {
+    import('./challenges.js?v=20261121').then(({ todayCompletedCount, todayTotal }) => {
       const node = body.querySelector('[data-challenges-count]');
       if (node) node.textContent = `${todayCompletedCount()}/${todayTotal()}`;
     }).catch(() => {});
   });
 
-  import('./visitors.js?v=20251028').then(({ visitorsCount }) => {
+  import('./visitors.js?v=20261121').then(({ visitorsCount }) => {
     const node = body.querySelector('[data-visitors-count]');
     if (node) node.textContent = String(visitorsCount());
   }).catch(() => {});
   body.querySelector('[data-visitors]')?.addEventListener('click', async () => {
-    const { openVisitors } = await import('./visitors.js?v=20251028');
+    const { openVisitors } = await import('./visitors.js?v=20261121');
     await openVisitors();
-    import('./visitors.js?v=20251028').then(({ visitorsCount }) => {
+    import('./visitors.js?v=20261121').then(({ visitorsCount }) => {
       const node = body.querySelector('[data-visitors-count]');
       if (node) node.textContent = String(visitorsCount());
     }).catch(() => {});
   });
-  import('./achievements.js?v=20251028').then(({ computeStats, achievementsList, evaluate, pinnedAchievements, RARITY }) => {
+  import('./achievements.js?v=20261121').then(({ computeStats, achievementsList, evaluate, pinnedAchievements, RARITY }) => {
     computeStats().then((stats) => {
       const list = achievementsList();
       const evaluated = evaluate(list, stats);
@@ -795,7 +882,7 @@ export async function render(root) {
       const node = body.querySelector('[data-achv-count]');
       if (node) node.textContent = `${count}/${list.length}`;
     }).catch(() => {});
-    import('./bookmarks.js?v=20251028').then(() => {
+    import('./bookmarks.js?v=20261121').then(() => {
       try {
         const list = JSON.parse(localStorage.getItem('spokum.bookmarks') || '[]');
         const node = body.querySelector('[data-bookmark-count]');
@@ -817,161 +904,161 @@ export async function render(root) {
       host.querySelectorAll('[data-achv-id]').forEach((node) => {
         node.style.cursor = 'pointer';
         node.onclick = async () => {
-          const { openAchievements } = await import('./achievements.js?v=20251028');
+          const { openAchievements } = await import('./achievements.js?v=20261121');
           openAchievements();
         };
       });
     }).catch(() => {});
   }).catch(() => {});
   body.querySelector('[data-breathe]')?.addEventListener('click', async () => {
-    const { openBreathe } = await import('./extras.js?v=20251028');
+    const { openBreathe } = await import('./extras.js?v=20261121');
     openBreathe();
   });
   body.querySelector('[data-noise]')?.addEventListener('click', async () => {
-    const { openNoise } = await import('./extras.js?v=20251028');
+    const { openNoise } = await import('./extras.js?v=20261121');
     openNoise();
   });
   body.querySelector('[data-moodmap]')?.addEventListener('click', async () => {
-    const { openMoodMap } = await import('./extras.js?v=20251028');
+    const { openMoodMap } = await import('./extras.js?v=20261121');
     openMoodMap();
   });
   body.querySelector('[data-network-mood]')?.addEventListener('click', async () => {
-    const { openNetworkMood } = await import('./network-mood.js?v=20251028');
+    const { openNetworkMood } = await import('./network-mood.js?v=20261121');
     openNetworkMood();
   });
   body.querySelector('[data-future-letter]')?.addEventListener('click', async () => {
-    const { openFutureLetter } = await import('./future-letter.js?v=20251028');
+    const { openFutureLetter } = await import('./future-letter.js?v=20261121');
     openFutureLetter();
   });
   body.querySelector('[data-radio]')?.addEventListener('click', async () => {
-    const { openRadio } = await import('./radio.js?v=20251028');
+    const { openRadio } = await import('./radio.js?v=20261121');
     openRadio();
   });
   body.querySelector('[data-campfire]')?.addEventListener('click', async () => {
-    const { openCampfire } = await import('./campfire.js?v=20251028');
+    const { openCampfire } = await import('./campfire.js?v=20261121');
     openCampfire();
   });
   api.gifts?.(fresh.id).then(async ({ gifts }) => {
     const shelf = body.querySelector('[data-my-shelf]');
     if (!shelf || !gifts?.length) return;
-    const { giftShelf } = await import('./gifts.js?v=20251028');
+    const { giftShelf } = await import('./gifts.js?v=20261120');
     shelf.innerHTML = giftShelf(gifts);
     shelf.onclick = async () => {
-      const { openMyGifts } = await import('./gifts.js?v=20251028');
+      const { openMyGifts } = await import('./gifts.js?v=20261120');
       openMyGifts(fresh.id, true);
     };
   }).catch(() => {});
 
   body.querySelector('[data-letters]')?.addEventListener('click', async () => {
-    const { openLetters } = await import('./letters.js?v=20251028');
+    const { openLetters } = await import('./letters.js?v=20261121');
     openLetters();
   });
   body.querySelector('[data-capsule]')?.addEventListener('click', async () => {
-    const { openCapsules } = await import('./capsule.js?v=20251028');
+    const { openCapsules } = await import('./capsule.js?v=20261121');
     openCapsules();
   });
   body.querySelector('[data-time-capsule]')?.addEventListener('click', async () => {
-    const { openTimeCapsule } = await import('./time-capsule.js?v=20251102');
+    const { openTimeCapsule } = await import('./time-capsule.js?v=20261121');
     openTimeCapsule();
   });
   body.querySelector('[data-mood-map]')?.addEventListener('click', async () => {
-    const { openMoodMap } = await import('./mood-map.js?v=20251102');
+    const { openMoodMap } = await import('./mood-map.js?v=20261121');
     openMoodMap();
   });
   body.querySelector('[data-daily-quote]')?.addEventListener('click', async () => {
-    const { openDailyQuote } = await import('./daily-quote.js?v=20251102');
+    const { openDailyQuote } = await import('./daily-quote.js?v=20261121');
     openDailyQuote();
   });
   body.querySelector('[data-gratitude]')?.addEventListener('click', async () => {
-    const { openGratitude } = await import('./gratitude.js?v=20251028');
+    const { openGratitude } = await import('./gratitude.js?v=20261121');
     openGratitude();
   });
   body.querySelector('[data-gratitude-journal]')?.addEventListener('click', async () => {
-    const { openGratitudeJournal } = await import('./gratitude.js?v=20251028');
+    const { openGratitudeJournal } = await import('./gratitude.js?v=20261121');
     openGratitudeJournal();
   });
   body.querySelector('[data-sounds]')?.addEventListener('click', async () => {
-    const { openSounds } = await import('./sounds.js?v=20251028');
+    const { openSounds } = await import('./sounds.js?v=20261121');
     openSounds();
   });
   body.querySelector('[data-compliments]')?.addEventListener('click', async () => {
-    const { openCompliments } = await import('./compliments.js?v=20251028');
+    const { openCompliments } = await import('./compliments.js?v=20261121');
     openCompliments();
   });
   body.querySelector('[data-quests]')?.addEventListener('click', async () => {
-    const { openQuests } = await import('./quests.js?v=20251028');
+    const { openQuests } = await import('./quests.js?v=20261121');
     openQuests();
   });
   body.querySelector('[data-daily]')?.addEventListener('click', async () => {
-    const { openDailyRewards } = await import('./daily-rewards.js?v=20251028');
+    const { openDailyRewards } = await import('./daily-rewards.js?v=20261121');
     openDailyRewards();
   });
   body.querySelector('[data-cards]')?.addEventListener('click', async () => {
-    const { openCards } = await import('./cards.js?v=20251028');
+    const { openCards } = await import('./cards.js?v=20261121');
     openCards();
   });
   body.querySelector('[data-bookmarks]')?.addEventListener('click', async () => {
-    const { openBookmarks } = await import('./bookmarks.js?v=20251028');
+    const { openBookmarks } = await import('./bookmarks.js?v=20261121');
     openBookmarks();
   });
   body.querySelector('[data-tournaments]')?.addEventListener('click', async () => {
-    const { openTournaments } = await import('./tournaments.js?v=20251028');
+    const { openTournaments } = await import('./tournaments.js?v=20261121');
     openTournaments();
   });
   body.querySelector('[data-confessions]')?.addEventListener('click', async () => {
-    const { openConfessions } = await import('./confessions.js?v=20251028');
+    const { openConfessions } = await import('./confessions.js?v=20261121');
     openConfessions();
   });
   body.querySelector('[data-wishlist]')?.addEventListener('click', async () => {
-    const { openWishlist } = await import('./extras2.js?v=20251028');
+    const { openWishlist } = await import('./extras2.js?v=20261121');
     openWishlist(fresh.id, true);
   });
   body.querySelector('[data-viewers]')?.addEventListener('click', async () => {
-    const { openProfileViewers } = await import('./extras2.js?v=20251028');
+    const { openProfileViewers } = await import('./extras2.js?v=20261121');
     openProfileViewers();
   });
   body.querySelector('[data-friends]')?.addEventListener('click', async () => {
-    const { openFriends } = await import('./friends.js?v=20251028');
+    const { openFriends } = await import('./friends.js?v=20261121');
     openFriends();
   });
   body.querySelector('[data-groups]')?.addEventListener('click', async () => {
-    const { openGroups } = await import('./groups.js?v=20251028');
+    const { openGroups } = await import('./groups.js?v=20261121');
     openGroups();
   });
   body.querySelector('[data-wheel]')?.addEventListener('click', async () => {
-    const { openWheel } = await import('./wheel.js?v=20251028');
+    const { openWheel } = await import('./wheel.js?v=20261121');
     openWheel();
   });
   body.querySelector('[data-leaderboard]')?.addEventListener('click', async () => {
-    const { openLeaderboard } = await import('./leaderboard.js?v=20251028');
+    const { openLeaderboard } = await import('./leaderboard.js?v=20261121');
     openLeaderboard();
   });
   body.querySelector('[data-events]')?.addEventListener('click', async () => {
-    const { openEvents } = await import('./leaderboard.js?v=20251028');
+    const { openEvents } = await import('./leaderboard.js?v=20261121');
     openEvents();
   });
   body.querySelector('[data-widgets]')?.addEventListener('click', async () => {
-    const { openWidgets } = await import('./widgets.js?v=20251028');
+    const { openWidgets } = await import('./widgets.js?v=20261121');
     openWidgets();
   });
   body.querySelector('[data-pixel]')?.addEventListener('click', async () => {
-    const { openPixelBattle } = await import('./pixel-battle.js?v=20251028');
+    const { openPixelBattle } = await import('./pixel-battle.js?v=20261121');
     openPixelBattle();
   });
   body.querySelector('[data-gifts]')?.addEventListener('click', async () => {
-    const { openMyGifts } = await import('./gifts.js?v=20251028');
+    const { openMyGifts } = await import('./gifts.js?v=20261120');
     openMyGifts(state.user.id, true);
   });
   body.querySelector('[data-shop]')?.addEventListener('click', async () => {
-    const { openGiftShop } = await import('./gifts.js?v=20251028');
+    const { openGiftShop } = await import('./gifts.js?v=20261120');
     openGiftShop(null, () => openProfile());
   });
   body.querySelector('[data-wallet]')?.addEventListener('click', async () => {
-    const { openWallet } = await import('./gifts.js?v=20251028');
+    const { openWallet } = await import('./gifts.js?v=20261120');
     openWallet();
   });
   body.querySelector('[data-notes]').onclick = async () => {
-    const { openNotifications } = await import('./notifications.js?v=20251028');
+    const { openNotifications } = await import('./notifications.js?v=20261121');
     openNotifications();
   };
   body.querySelector('[data-contacts]').onclick = openContacts;
@@ -979,7 +1066,7 @@ export async function render(root) {
 
   body.querySelector('[data-logout]').onclick = async () => {
     if (!(await confirmSheet({ title: 'Выйти из аккаунта', text: 'Сессия на этом устройстве закроется', confirm: 'Выйти', danger: true }))) return;
-    const { forget } = await import('../accounts.js?v=20251028');
+    const { forget } = await import('../accounts.js?v=20261121');
     forget(state.user?.id);
     await api.logout();
     setUser(null);
@@ -988,7 +1075,7 @@ export async function render(root) {
 }
 
 async function openZonePicker(done) {
-  const { MODES } = await import('./safe.js?v=20251028');
+  const { MODES } = await import('./safe.js?v=20261121');
   const body = el(`<div class="col" style="gap:6px">${Object.entries(MODES)
     .map(([key, mode]) => `<button class="list-item" data-zone="${key}" style="${moodStyle(key)}">
       <span class="mood-tag" style="${moodStyle(key)}"><i class="mood-dot"></i>${esc(MOODS[key]?.label || key)}</span>
@@ -1005,8 +1092,17 @@ async function openZonePicker(done) {
 }
 
 function openBannerMenu(user, done) {
+  const bannerOptions = isPremium(user) ? `
+    <div class="card" style="padding:12px">
+      <div class="strong small" style="margin-bottom:8px">Премиум-обложки</div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px">
+        ${PREMIUM_BANNER_PRESETS.map(({ label, hue }) => `<button class="btn btn-sm" type="button" data-banner-hue="${hue}" style="background:linear-gradient(135deg,hsl(${hue} 30% 26%),hsl(${(hue + 50) % 360} 28% 16%));color:#fff;border:1px solid rgba(255,255,255,.16)">${esc(label)}</button>`).join('')}
+      </div>
+      <div class="tiny muted" style="margin-top:7px">Обложку можно сменить в любой момент.</div>
+    </div>` : `<button class="list-item" data-premium-banners>${icon('spark', 18)}<span>6 премиум-обложек</span></button>`;
   const body = el(`
     <div class="col" style="gap:6px">
+      ${bannerOptions}
       <button class="list-item" data-pick>${icon('image', 18)}<span>Загрузить картинку</span></button>
       ${user?.banner ? `<button class="list-item" data-clear style="color:#c98b8b">${icon('trash', 18)}<span>Убрать баннер</span></button>` : ''}
       <p class="tiny muted" style="margin:6px 4px 0">Баннер виден всем в вашем профиле. Лучше широкая картинка.</p>
@@ -1040,6 +1136,25 @@ function openBannerMenu(user, done) {
       pickBtn.disabled = false;
     }
   };
+  body.querySelectorAll('[data-banner-hue]').forEach((button) => {
+    button.onclick = async () => {
+      try {
+        const result = await api.updateMe({ hue: Number(button.dataset.bannerHue), banner: null });
+        if (!result?.user) throw new Error('Не удалось сохранить обложку');
+        setUser(result.user);
+        sheet.close();
+        toast('Обложка обновлена');
+        done?.();
+      } catch (error) {
+        toast(error?.message || 'Не удалось сохранить обложку', 'err');
+      }
+    };
+  });
+  body.querySelector('[data-premium-banners]')?.addEventListener('click', async () => {
+    sheet.close();
+    const { openBilling } = await import('./settings.js?v=20261123');
+    openBilling?.();
+  });
   const clearBtn = body.querySelector('[data-clear]');
   if (clearBtn) clearBtn.onclick = () => apply(null);
 }
@@ -1450,7 +1565,7 @@ export function openUsernames(done) {
 }
 
 export async function openAccounts() {
-  const { savedAccounts, switchTo, forget, rememberCurrent, ACCOUNT_LIMIT } = await import('../accounts.js?v=20251028');
+  const { savedAccounts, switchTo, forget, rememberCurrent, ACCOUNT_LIMIT } = await import('../accounts.js?v=20261121');
   await rememberCurrent();
 
   const body = el('<div class="col" style="gap:8px"></div>');
@@ -1559,7 +1674,7 @@ function mediaTabs(chips, list, posts, postCard, refresh) {
 }
 
 export async function enterSafeZone(mood, done) {
-  const { openSafeZone } = await import('./safe.js?v=20251028');
+  const { openSafeZone } = await import('./safe.js?v=20261121');
   openSafeZone(mood, (minutes) => {
     toast(`Вы побыли здесь ${minutes} мин`);
     done?.();
@@ -1576,7 +1691,7 @@ function openMoodPicker(done) {
       const mood = button.dataset.mood;
       sheet.close();
 
-      const { HEAVY_MOODS } = await import('./safe.js?v=20251028');
+      const { HEAVY_MOODS } = await import('./safe.js?v=20261121');
       const heavy = HEAVY_MOODS.includes(mood);
       if (heavy) enterSafeZone(mood, done);
 
@@ -1632,7 +1747,7 @@ export async function openProfile(username) {
       api.recordProfileView(user.id).catch(() => {});
     }
     if (user?.id && state.user?.id !== user.id) {
-      import('./visitors.js?v=20251028').then(({ recordVisit }) => {
+      import('./visitors.js?v=20261121').then(({ recordVisit }) => {
         recordVisit(user.id, user.username, user.displayName);
       }).catch(() => {});
     }
@@ -1647,6 +1762,8 @@ export async function openProfile(username) {
           <span class="strong" style="font-size:19px">${esc(user.displayName)}</span>${badges(user)}
         </div>
         <div class="small muted">@${esc(user.username)}</div>
+        ${Array.isArray(user.aliases) && user.aliases.length ? `<div class="tiny muted" style="margin-top:3px">Также: ${user.aliases.map((name) => `@${esc(name)}`).join(', ')}</div>` : ''}
+        ${Array.isArray(user.collectionNumbers) && user.collectionNumbers.length ? `<div class="tiny muted" style="margin-top:3px">Номер: ${user.collectionNumbers.map(formatCollectionNumber).map(esc).join(' · ')}</div>` : ''}
         ${user.isModerator ? `<div style="display:flex;justify-content:center;margin-top:8px"><span class="rank-pill">${icon('shield', 13)}<span>${esc(rankName(user))}</span></span></div>` : ''}
         <div data-shelf></div>
         <div data-likes></div>
@@ -1698,7 +1815,7 @@ export async function openProfile(username) {
     {
       try {
         const { gifts } = await api.gifts(user.id);
-        const { giftShelf } = await import('./gifts.js?v=20251028');
+        const { giftShelf } = await import('./gifts.js?v=20261120');
         const shelf = body.querySelector('[data-shelf]');
         if (shelf) shelf.innerHTML = giftShelf(gifts);
       } catch {}
@@ -1708,7 +1825,7 @@ export async function openProfile(username) {
     {
       const musicHost = body.querySelector('[data-music-host]');
       if (musicHost) {
-        import('./profile-music.js?v=20251028').then(({ profileMusicWidget, bindMusicWidget }) => {
+        import('./profile-music.js?v=20261121').then(({ profileMusicWidget, bindMusicWidget }) => {
           musicHost.innerHTML = profileMusicWidget({ isMine: false, music: user.music || null });
           bindMusicWidget(musicHost, null);
         }).catch(() => {});
@@ -1716,7 +1833,7 @@ export async function openProfile(username) {
     }
 
     const list = body.querySelector('[data-posts]');
-    const { postCard } = await import('./feed.js?v=20251028');
+    const { postCard } = await import('./feed.js?v=20261126');
     mediaTabs(body.querySelector('[data-kinds]'), list, posts, postCard, () => openProfile(username));
 
     body.querySelector('[data-contact]').onclick = async () => {
@@ -1751,7 +1868,7 @@ export async function openProfile(username) {
         if (data.mine) thankBtn.disabled = true;
       }).catch(() => {});
       thankBtn.onclick = async () => {
-        const { promptSheet } = await import('../ui.js?v=20251028');
+        const { promptSheet } = await import('../ui.js?v=20261121');
         const note = await promptSheet({ title: 'Спасибо модератору', label: 'За что', placeholder: 'Можно оставить пустым', multiline: true, confirm: 'Отправить' });
         if (note === null) return;
         try {
@@ -1766,19 +1883,19 @@ export async function openProfile(username) {
     }
 
     body.querySelector('[data-gift]')?.addEventListener('click', async () => {
-      const { openGiftShop } = await import('./gifts.js?v=20251028');
+      const { openGiftShop } = await import('./gifts.js?v=20261120');
       openGiftShop(user, () => openProfile(username));
     });
     body.querySelector('[data-their-gifts]')?.addEventListener('click', async () => {
-      const { openMyGifts } = await import('./gifts.js?v=20251028');
+      const { openMyGifts } = await import('./gifts.js?v=20261120');
       openMyGifts(user.id, false);
     });
     body.querySelector('[data-info]')?.addEventListener('click', async () => {
-      const { openUserInfo } = await import('./userinfo.js?v=20251028');
+      const { openUserInfo } = await import('./userinfo.js?v=20261121');
       openUserInfo(user.id);
     });
     body.querySelector('[data-punish]')?.addEventListener('click', async () => {
-      const { openPunish } = await import('./mod.js?v=20251028');
+      const { openPunish } = await import('./mod.js?v=20261121');
       openPunish(user, () => openProfile(username));
     });
     body.querySelector('[data-block]')?.addEventListener('click', async () => {
@@ -1832,7 +1949,7 @@ export async function openProfile(username) {
         try {
           current = (await api.noteAbout(user.id)).note || '';
         } catch {}
-        const { promptSheet } = await import('../ui.js?v=20251028');
+        const { promptSheet } = await import('../ui.js?v=20261121');
         const text = await promptSheet({
           title: 'Заметка о человеке',
           label: 'Подсказка для себя: где познакомились, о чём говорили. Видно только вам, человек не узнает',
@@ -1853,7 +1970,7 @@ export async function openProfile(username) {
     }
 
     body.querySelector('[data-report]').onclick = async () => {
-      const { openReport } = await import('./feed.js?v=20251028');
+      const { openReport } = await import('./feed.js?v=20261126');
       openReport('user', user.id);
     };
     if (hasStory(user)) {
@@ -1864,7 +1981,7 @@ export async function openProfile(username) {
       try {
         const { chat } = await api.createChat({ kind: 'dm', members: [user.id] });
         view.remove();
-        const { openChat } = await import('./chats.js?v=20251028');
+        const { openChat } = await import('./chats.js?v=20261121');
         document.querySelector('[data-tab="chats"]')?.click();
         setTimeout(() => openChat(chat.id), 60);
       } catch (error) {
@@ -1875,3 +1992,4 @@ export async function openProfile(username) {
     body.innerHTML = emptyState('warn', 'Не открылось', error.message);
   }
 }
+

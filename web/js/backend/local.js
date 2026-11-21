@@ -240,9 +240,17 @@ function aliasesOf(user) {
   return [user.username, ...list.filter((name) => name !== user.username)];
 }
 
+function collectionNumbersOf(user) {
+  return Array.isArray(user?.collectionNumbers) ? user.collectionNumbers : [];
+}
+
 function ownerOf(name) {
   const clean = String(name || '').toLowerCase().replace(/^@/, '');
-  return state.users.find((u) => aliasesOf(u).includes(clean));
+  const digits = clean.replace(/\D/g, '');
+  return state.users.find((user) =>
+    aliasesOf(user).includes(clean) ||
+    (digits.length === 11 && collectionNumbersOf(user).includes(`+${digits}`))
+  );
 }
 
 export const RANKS = ['Стажёр', 'Младший модератор', 'Модератор', 'Старший модератор', 'Ведущий модератор', 'Начальник модераторов'];
@@ -279,9 +287,9 @@ export const GIFT_TYPES = [
   { id: 'maple', title: 'Кленовый лист', price: 130, rarity: 'rare', art: 'maple', hue: 18, season: 'autumn' },
   { id: 'plaid', title: 'Тёплый плед', price: 260, rarity: 'epic', art: 'plaid', hue: 8, season: 'autumn' },
   { id: 'cocoa', title: 'Какао с зефиром', price: 420, rarity: 'epic', art: 'cocoa', hue: 26, season: 'autumn' },
-  { id: 'phoenix', title: 'Феникс', price: 2500, rarity: 'legend', art: 'phoenix', hue: 18, isLimited: true },
-  { id: 'dragon', title: 'Дракон', price: 2200, rarity: 'legend', art: 'dragon', hue: 280, isLimited: true },
-  { id: 'unicorn', title: 'Единорог', price: 1800, rarity: 'legend', art: 'unicorn', hue: 320, isLimited: true },
+  { id: 'phoenix', title: 'Феникс', price: 5000, rarity: 'legend', art: 'phoenix', hue: 18, isLimited: true },
+  { id: 'dragon', title: 'Дракон', price: 5000, rarity: 'legend', art: 'dragon', hue: 280, isLimited: true },
+  { id: 'unicorn', title: 'Единорог', price: 4000, rarity: 'legend', art: 'unicorn', hue: 320, isLimited: true },
   { id: 'rose', title: 'Алая роза', price: 650, rarity: 'epic', art: 'rose', hue: 350, isLimited: true },
   { id: 'trophy', title: 'Кубок', price: 1000, rarity: 'legend', art: 'trophy', hue: 45 },
   { id: 'hourglass', title: 'Песочные часы', price: 550, rarity: 'epic', art: 'hourglass', hue: 40 },
@@ -300,7 +308,15 @@ export const GIFT_TYPES = [
   { id: 'fireplace', title: 'Камин', price: 350, rarity: 'epic', art: 'flame', hue: 20, season: 'winter' },
   { id: 'christmas_tree', title: 'Ёлка', price: 400, rarity: 'epic', art: 'star', hue: 140, season: 'winter' },
   { id: 'snowman', title: 'Снеговик', price: 250, rarity: 'rare', art: 'star', hue: 200, season: 'winter' },
-  { id: 'warm_scarf', title: 'Тёплый шарф', price: 180, rarity: 'rare', art: 'heart_hands', hue: 10, season: 'winter' }
+  { id: 'warm_scarf', title: 'Тёплый шарф', price: 180, rarity: 'rare', art: 'heart_hands', hue: 10, season: 'winter' },
+  { id: 'silver_orbit', title: 'Орбита в ладонях', price: 1400, rarity: 'epic', art: 'comet', hue: 190, silverOnly: true },
+  { id: 'silver_moonship', title: 'Лунный корабль', price: 2200, rarity: 'legend', art: 'moon', hue: 225, silverOnly: true },
+  { id: 'silver_nova', title: 'Мини-сверхновая', price: 1800, rarity: 'epic', art: 'spark', hue: 285, silverOnly: true },
+  { id: 'silver_tesseract', title: 'Тессеракт', price: 3200, rarity: 'legend', art: 'crystal', hue: 165, silverOnly: true },
+  { id: 'silver_wish_capsule', title: 'Капсула желаний', price: 1600, rarity: 'epic', art: 'spark', hue: 275, silverOnly: true },
+  { id: 'silver_meteor_chest', title: 'Метеоритный ларец', price: 2600, rarity: 'legend', art: 'comet', hue: 32, silverOnly: true },
+  { id: 'silver_connection_heart', title: 'Сердце связи', price: 1900, rarity: 'epic', art: 'heart', hue: 345, silverOnly: true },
+  { id: 'silver_aurora_lantern', title: 'Фонарь северного сияния', price: 2100, rarity: 'epic', art: 'flame', hue: 165, silverOnly: true }
 ];
 
 const ALIAS_WORDS = ['Ветер', 'Туман', 'Ветка', 'Камень', 'Иней', 'Свет', 'Тень', 'Роса', 'Пепел', 'Искра', 'Тихий', 'Дальний', 'Ночной', 'Снежный', 'Лесной', 'Серый', 'Мятный', 'Синий'];
@@ -358,6 +374,8 @@ function pub(user) {
   return {
     id: user.id,
     username: user.username,
+    aliases: aliasesOf(user).filter((name) => name !== user.username),
+    collectionNumbers: collectionNumbersOf(user),
     displayName: user.displayName,
     bio: user.bio,
     hue: user.hue,
@@ -914,6 +932,27 @@ export const local = {
     return { names: aliasesOf(user), limit: user.premiumUntil > Date.now() ? 8 : 3 };
   },
 
+  async myCollectionNumbers() {
+    return { numbers: collectionNumbersOf(need()) };
+  },
+
+  async buyCollectionNumber(prefix, digits) {
+    const user = need();
+    notMuted(user);
+    const allowed = ['+666', '+777', '+888', '+555', '+999'];
+    const cleanDigits = String(digits || '').replace(/\D/g, '');
+    if (!allowed.includes(prefix)) fail('Неизвестный формат номера');
+    if (!/^\d{8}$/.test(cleanDigits)) fail('Введите 8 цифр номера');
+    const number = prefix + cleanDigits;
+    if (state.users.some((person) => collectionNumbersOf(person).includes(number))) fail('Этот номер уже занят');
+    if ((user.coins || 0) < 5000) fail(`Не хватает монет: нужно 5000, у вас ${user.coins || 0}`);
+    user.coins -= 5000;
+    user.collectionNumbers = [...collectionNumbersOf(user), number];
+    state.coinLog.unshift({ id: state.coinLog.length + 1, userId: user.id, amount: -5000, reason: 'Коллекционный номер ' + number, createdAt: Date.now() });
+    save();
+    return { number, coins: user.coins };
+  },
+
   async addUsername(name) {
     const user = need();
     const clean = String(name || '').toLowerCase().replace(/^@/, '');
@@ -950,14 +989,15 @@ export const local = {
 
   async searchUsers(query) {
     const q = String(query || '').toLowerCase().replace(/^@/, '');
+    const digits = q.replace(/\D/g, '');
     return {
       users: state.users
-        .filter(
-          (u) =>
-            !q ||
-            aliasesOf(u).some((name) => name.includes(q)) ||
-            u.displayName.toLowerCase().includes(q) ||
-            u.bio.toLowerCase().includes(q)
+        .filter((u) =>
+          !q ||
+          aliasesOf(u).some((name) => name.includes(q)) ||
+          u.displayName.toLowerCase().includes(q) ||
+          u.bio.toLowerCase().includes(q) ||
+          (digits.length >= 4 && collectionNumbersOf(u).some((number) => number.replace(/\D/g, '').includes(digits)))
         )
         .slice(0, 40)
         .map(pub)
@@ -1474,6 +1514,38 @@ export const local = {
     return { ok: true };
   },
 
+  async moderateContent() {
+    return {
+      enabled: false, allowed: true, removed: false, reason: '', rule: '', punishment: '',
+      muted: false, muteUntil: 0, verified: false, approvalToken: null
+    };
+  },
+
+  async aiModerationState() {
+    needAdmin();
+    return { enabled: false, failOpen: true, reports: 0 };
+  },
+
+  async setAiModerationEnabled() {
+    needAdmin();
+    return { enabled: false, failOpen: true, reports: 0 };
+  },
+
+  async aiModerationReports() {
+    needAdmin();
+    return { reports: [] };
+  },
+
+  async resolveAiModerationReport() {
+    needAdmin();
+    return { ok: true };
+  },
+
+  async clearAiModerationReports() {
+    needAdmin();
+    return { ok: true };
+  },
+
   async modQueue() {
     const user = needMod();
     return {
@@ -1740,6 +1812,7 @@ export const local = {
             rarity: kind.rarity || 'common',
             art: kind.art || 'spark',
             hue: kind.hue ?? 220,
+            silverOnly: !!kind.silverOnly,
             note: row.note || '',
             pinned: !!row.pinned,
             createdAt: row.createdAt,
@@ -1756,6 +1829,8 @@ export const local = {
     notMuted(user);
     const kind = giftType(typeId);
     if (!kind) fail('Подарок не найден');
+    if (kind.silverOnly && String(user.username || '').toLowerCase() !== 'silver') fail('Этот подарок доступен только пользователю silver');
+    if (kind.silverOnly && user.id !== userId) fail('Пока этот подарок можно оставить только себе');
     if (!(kind.price > 0)) fail('Такой подарок не продаётся: его выдают за событие');
     const target = state.users.find((u) => u.id === userId);
     if (!target) fail('Человек не найден');
@@ -3559,3 +3634,4 @@ export const local = {
     groupsState = loadGroups();
   }
 };
+
