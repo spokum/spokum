@@ -1,4 +1,4 @@
-import { local } from './backend/local.js?v=20261122';
+import { local } from './backend/local.js?v=20261123';
 import { createRemote } from './backend/remote.js';
 
 let backend = local;
@@ -39,7 +39,7 @@ export async function initBackend() {
           console.warn('[СпокУм] Сервер недоступен — работаем в локальном режиме');
           return backend.mode; // stays 'local'
         }
-        const { createBackend } = await import('./backend/remote-db.js?v=20261122');
+        const { createBackend } = await import('./backend/remote-db.js?v=20261123');
         const made = await createBackend(supabaseUrl, supabaseKey);
         if (backend.mode !== 'supabase') backend = made;
         return backend.mode;
@@ -74,11 +74,7 @@ export function forget(key) {
 }
 
 export function isBeta(user) {
-  const who = user || state.user;
-  if (!who) return false;
-  if (who.isBeta) return true;
-  if (who.username === 'silver') return true;
-  return false;
+  return true;
 }
 
 const BETA_USERNAMES = new Set(['silver']);

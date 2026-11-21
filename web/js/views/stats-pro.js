@@ -101,7 +101,7 @@ async function showPremiumOnly(title) {
   body.querySelector('[data-billing]').onclick = async () => {
     sheet.close();
     try {
-      const { openBilling } = await import('./settings.js?v=20261122');
+      const { openBilling } = await import('./settings.js?v=20261123');
       openBilling();
     } catch {}
   };

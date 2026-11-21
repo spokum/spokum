@@ -115,7 +115,7 @@ export async function render(root) {
   const query = root.querySelector('[data-query]');
   root.querySelector('[data-search-toggle]').onclick = () => {
     if (state.user?.username  && api.searchAll) {
-      import('./search.js?v=20261122').then(({ openSearch }) => openSearch());
+      import('./search.js?v=20261123').then(({ openSearch }) => openSearch());
       return;
     }
     searchBox.hidden = !searchBox.hidden;
@@ -134,7 +134,7 @@ export async function render(root) {
   root.querySelector('[data-saved]').onclick = () => openSaved(root);
 
   if (api.touchStreak) {
-    import('./extras.js?v=20261122').then(async ({ refreshStreak }) => {
+    import('./extras.js?v=20261123').then(async ({ refreshStreak }) => {
       const result = await refreshStreak();
       const slot = root.querySelector('[data-streak]');
       if (slot && result?.days) {
@@ -181,7 +181,7 @@ async function loadSeason(root) {
     host.innerHTML = '';
   };
   host.querySelector('[data-open-season]').onclick = async () => {
-    const { openGiftShop } = await import('./gifts.js?v=20261122');
+    const { openGiftShop } = await import('./gifts.js?v=20261123');
     openGiftShop();
   };
 }
@@ -296,7 +296,7 @@ function renderComposer(root) {
   });
 
   card.querySelector('[data-voice]')?.addEventListener('click', async () => {
-    const { recordVoice } = await import('./chats.js?v=20261122');
+    const { recordVoice } = await import('./chats.js?v=20261123');
     recordVoice(async ({ media, duration }) => {
       try {
         await api.createPost({ text: draft.text.trim(), mood: draft.mood, sound: media, duration });
@@ -423,7 +423,7 @@ function renderComposer(root) {
   };
   const offer = card.querySelector('[data-offer]');
   const refreshOffer = async () => {
-    const { HEAVY_MOODS, MODES } = await import('./safe.js?v=20261122');
+    const { HEAVY_MOODS, MODES } = await import('./safe.js?v=20261123');
     if (!HEAVY_MOODS.includes(draft.mood)) {
       offer.innerHTML = '';
       return;
@@ -433,7 +433,7 @@ function renderComposer(root) {
       <span class="grow"><span class="small strong">${esc(mode.title)}</span><br><span class="tiny muted">${esc(mode.note)}</span></span>
       ${icon('forward', 15)}</button>`;
     offer.querySelector('[data-enter]').onclick = async () => {
-      const { enterSafeZone } = await import('./profile.js?v=20261122');
+      const { enterSafeZone } = await import('./profile.js?v=20261123');
       enterSafeZone(draft.mood);
     };
   };
@@ -462,7 +462,7 @@ function renderComposer(root) {
   };
 
   card.querySelector('[data-reels]').onclick = async () => {
-    const { publishReel } = await import('./videos.js?v=20261122');
+    const { publishReel } = await import('./videos.js?v=20261123');
     publishReel(() => {
       const { openTab } = window.__spokum || {};
       openTab?.('videos');
@@ -482,7 +482,7 @@ function renderComposer(root) {
       if (postText.trim() && localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         if (label) label.textContent = 'Проверяем';
         try {
-          const { moderatePost } = await import('./ai-moderation.js?v=20261122');
+          const { moderatePost } = await import('./ai-moderation.js?v=20261123');
           const verdict = await moderatePost(postText, { id: state.user?.id, username: state.user?.username });
           if (verdict?.removed) {
             toast('Пост снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');
@@ -614,7 +614,7 @@ function openSaved(root) {
       };
     });
     body.querySelector('[data-new]').onclick = async () => {
-      const { promptSheet } = await import('../ui.js?v=20261122');
+      const { promptSheet } = await import('../ui.js?v=20261123');
       const name = await promptSheet({ title: 'Новая папка', label: 'Как назовём', placeholder: 'Например: перечитать' });
       if (!name) return;
       addFolder(name);
@@ -1042,7 +1042,7 @@ export function postCard(post, refresh, options = {}) {
 
   card.querySelector('[data-share]').onclick = async () => {
     if (api.react) {
-      const { openShareCard } = await import('./share.js?v=20261122');
+      const { openShareCard } = await import('./share.js?v=20261123');
       return openShareCard(post);
     }
     const text = `${post.author.displayName} (@${post.author.username}): ${post.text || 'запись в СпокУме'}`;
@@ -1078,7 +1078,7 @@ export function postCard(post, refresh, options = {}) {
   };
 
   if (api.react) {
-    import('./extras.js?v=20261122')
+    import('./extras.js?v=20261123')
       .then(async ({ reactionRow, reactionsReady }) => {
         if (!(await reactionsReady())) return plainLike();
         const slot = card.querySelector('[data-reacts]');
@@ -1107,7 +1107,7 @@ export function postCard(post, refresh, options = {}) {
   };
 
   card.querySelector('[data-play]')?.addEventListener('click', async () => {
-    const { openVideo } = await import('./videos.js?v=20261122');
+    const { openVideo } = await import('./videos.js?v=20261123');
     openVideo(post, refresh);
   });
 
@@ -1216,7 +1216,7 @@ function openPostMenu(post, refresh, options) {
   });
   body.querySelector('[data-card]')?.addEventListener('click', async () => {
     sheet.close();
-    const { openShareCard } = await import('./share.js?v=20261122');
+    const { openShareCard } = await import('./share.js?v=20261123');
     openShareCard(post);
   });
   body.querySelector('[data-copy]').onclick = () => {
@@ -1237,10 +1237,10 @@ function openPostMenu(post, refresh, options) {
   });
   body.querySelector('[data-remove]')?.addEventListener('click', async () => {
     sheet.close();
-    const { promptSheet } = await import('../ui.js?v=20261122');
+    const { promptSheet } = await import('../ui.js?v=20261123');
     const reason = await promptSheet({ title: 'Причина снятия', label: 'Что нарушает пост', placeholder: 'Например: агрессия в адрес пользователя', multiline: true });
     if (!reason) return;
-    const { askProofShot } = await import('./mod.js?v=20261122');
+    const { askProofShot } = await import('./mod.js?v=20261123');
     const proof = await askProofShot(reason);
     if (!proof) return;
     try {
@@ -1374,7 +1374,7 @@ export async function openComments(post, refresh) {
         });
         menu.querySelector('[data-take]')?.addEventListener('click', async () => {
           inner.close();
-          const { promptSheet } = await import('../ui.js?v=20261122');
+          const { promptSheet } = await import('../ui.js?v=20261123');
           const reason = await promptSheet({ title: 'Причина снятия', label: 'Её увидят автор и админ', placeholder: 'Например: оскорбление', multiline: true });
           if (!reason) return;
           try {
@@ -1410,7 +1410,7 @@ export async function openComments(post, refresh) {
     try {
       if (localStorage.getItem('spokum.aiModeration.enabled') === '1') {
         try {
-          const { moderateComment } = await import('./ai-moderation.js?v=20261122');
+          const { moderateComment } = await import('./ai-moderation.js?v=20261123');
           const verdict = await moderateComment(text, { id: state.user?.id, username: state.user?.username });
           if (verdict?.removed) {
             toast('Комментарий снят модерацией: ' + (verdict.reason || 'нарушение правил'), 'err');

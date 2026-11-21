@@ -48,14 +48,14 @@ export async function render(root) {
       toast(beta && !paid
         ? 'Игра открыта бета-тестерам — скоро будет у всех'
         : 'Игра открыта по подписке СпокУм Премиум или для бета-тестеров', 'err');
-      const { openBilling } = await import('./settings.js?v=20261122');
+      const { openBilling } = await import('./settings.js?v=20261123');
       openBilling?.();
     };
     grid.appendChild(card);
   });
 
   root.querySelector('[data-game-achv]')?.addEventListener('click', async () => {
-    const { openGameAchievements } = await import('./game-achievements.js?v=20261122');
+    const { openGameAchievements } = await import('./game-achievements.js?v=20261123');
     openGameAchievements();
   });
 
@@ -128,7 +128,7 @@ function launch(game, done) {
     if (!recorded) {
       recorded = true;
       try {
-        const { recordGamePlay } = await import('./game-achievements.js?v=20261122');
+        const { recordGamePlay } = await import('./game-achievements.js?v=20261123');
         recordGamePlay(game.id, score);
       } catch {}
     }
@@ -142,7 +142,7 @@ function launch(game, done) {
         const purse = await api.grantCoins(earned, `Игра: ${game.title}`);
         if (purse?.added > 0) {
           toast(`+${purse.added} монет`);
-          const { setUser } = await import('../store.js?v=20261122');
+          const { setUser } = await import('../store.js?v=20261123');
           const { user } = await api.me();
           if (user) setUser(user);
         }
